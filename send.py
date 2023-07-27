@@ -13,8 +13,11 @@ async def send3times(fun, **kwargs):
     while time:
         try:
             r = await fun(**kwargs)
-        except TimeoutError:
-            print("Get TimeoutError")
+        except telegram.error.TimedOut as e:
+            print("Get TimeoutError", e)
+            time -= 1
+        except telegram.error.BadRequest as e:
+            print("Get BadRequest Error", e)
             time -= 1
         else:
             return r
