@@ -183,14 +183,17 @@ def back_data():
 
 @catch_errors
 def start(scraping: Following, has_send):
-    new_weibo, max_weibo_time = scrapy_latest(scraping, logger)
-    if len(new_weibo) == 0:
-        logger.info(f'{scraping.username} 没有新微博')
-        update_db(scraping.userid, max_weibo_time)
-        return
-    new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
-    with open('scrapy.data', mode='wb') as f1:
-        pickle.dump(new_weibo, f1)
+    with open('scrapy.data', mode='rb') as f1:
+        new_weibo = pickle.load(f1)
+    # new_weibo, max_weibo_time = scrapy_latest(scraping, logger)
+    # if len(new_weibo) == 0:
+    #     logger.info(f'{scraping.username} 没有新微博')
+    #     update_db(scraping.userid, max_weibo_time)
+    #     return
+    # new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
+    # with open('scrapy.data', mode='wb') as f1:
+    #     pickle.dump(new_weibo, f1)
+
     previous_weibo_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     error = False
     for weibo in new_weibo:
