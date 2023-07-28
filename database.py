@@ -30,7 +30,7 @@ def store_message_data(response):
             insert_statement = """INSERT INTO DOCUMENT (file_id, file_unique_id, file_size, file_name, file_type, 
             message_id, media_group_id, weibo_url) VALUES (:file_id, :file_unique_id,:file_size, :file_name, :file_type, 
             :message_id, :media_group_id, :weibo_url)"""
-            cursor.execute(insert_statement, message['VIDEO'])
+            cursor.execute(insert_statement, message['DOCUMENT'])
     conn.commit()
     cursor.close()
     conn.close()
