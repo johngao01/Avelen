@@ -84,7 +84,7 @@ async def send_album(bot, filetype, album: list, ):
         return result_lists
 
     albums = rearrange_files(album)
-    response_messages = []
+    messages = []
 
     for album in albums:
         medias = []
@@ -98,25 +98,25 @@ async def send_album(bot, filetype, album: list, ):
             else:
                 media = InputMediaDocument(open(path, mode='rb'), caption=caption)
             medias.append(media)
-        messages = await send3times(bot.send_media_group, media=medias, chat_id=DEVELOPER_CHAT_ID)
-        if messages is not None:
-            response_messages.extend(list(messages))
-    return response_messages
+        send_responses = await send3times(bot.send_media_group, media=medias, chat_id=DEVELOPER_CHAT_ID)
+        if send_responses is not None:
+            messages.extend(list(send_responses))
+    return messages
 
 
 async def send_message_after(tg_bot, data, messages):
     message = data['text_raw']
     for char in MARKDOWN_CHAR:
         message = message.replace(char, '\\' + char)
-    response_message = await tg_bot.sendMessage(
+    send_response = await tg_bot.sendMessage(
         DEVELOPER_CHAT_ID,
         "[{}]({})".format(data['username'], data['weibo_link']) + "：" + message,
         parse_mode=ParseMode.MARKDOWN,
     )
-    messages.append(response_message)
+    messages.append(send_response)
     results = []
-    for response_message in messages:
-        result = process_message(response_message, data['weibo_link'])
+    for send_response in messages:
+        result = process_message(send_response, data['weibo_link'])
         results.append(result)
     return results
 
@@ -164,10 +164,10 @@ async def send_video_or_photo(data):
     ext = path[-3:]
     print(path)
     if ext in ['mp4', 'mov', 'gif']:
-        response_message = await tg_bot.send_video(video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
+        send_response = await tg_bot.send_video(video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
     else:
-        response_message = await tg_bot.send_photo(photo=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
-    messages = [response_message]
+        send_response = await tg_bot.send_photo(photo=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
+    messages = [send_response]
     results = await send_message_after(tg_bot, data, messages)
     return results
 
