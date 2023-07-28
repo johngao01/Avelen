@@ -40,10 +40,7 @@ def catch_errors(func):
             # 或者，你可以将栈跟踪信息保存到一个字符串中
             detailed_error_info = traceback.format_exc()
             print(detailed_error_info)
-            with open(f'{script_directory}/error.txt', encoding='utf-8', mode='a') as error_txt:
-                error_txt.write(f"occur error at index: {f.userid}-{f.username}")
-                error_txt.write(detailed_error_info)
-                error_txt.write('\t')
+            sys.exit(1)
 
     return wrapper
 
@@ -112,7 +109,7 @@ def one_page_latest(user_id: str, page):
 
 def scrapy_latest(user: Following, scrapy_log: MyLogger):
     scrapy_log.info(
-        f'开始获取 {user.username} 截至 {repr(user.latest_time)} 微博，她的主页是 https://www.weibo.com/u/{user.userid}')
+        f'开始获取 {user.username} 截至 {str(user.latest_time)} 微博，她的主页是 https://www.weibo.com/u/{user.userid}')
     page = 1
     weibo_list = []
     keep = 5
@@ -183,17 +180,16 @@ def back_data():
 
 @catch_errors
 def start(scraping: Following, has_send):
-    with open('scrapy.data', mode='rb') as f1:
-        new_weibo = pickle.load(f1)
-    # new_weibo, max_weibo_time = scrapy_latest(scraping, logger)
-    # if len(new_weibo) == 0:
-    #     logger.info(f'{scraping.username} 没有新微博')
-    #     update_db(scraping.userid, max_weibo_time)
-    #     return
-    # new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
-    # with open('scrapy.data', mode='wb') as f1:
-    #     pickle.dump(new_weibo, f1)
-
+    # with open('scrapy.data', mode='rb') as f1:
+    #     new_weibo = pickle.load(f1)
+    new_weibo, max_weibo_time = scrapy_latest(scraping, logger)
+    if len(new_weibo) == 0:
+        logger.info(f'{scraping.username} 没有新微博')
+        update_db(scraping.userid, max_weibo_time)
+        return
+    new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
+    with open('scrapy.data', mode='wb') as f1:
+        pickle.dump(new_weibo, f1)
     previous_weibo_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     error = False
     for weibo in new_weibo:
@@ -201,16 +197,19 @@ def start(scraping: Following, has_send):
             continue
         logger.info(weibo['weibo_url'])
         r = handle_weibo(weibo['weibo_url'])
-        if type(r) is requests.Response and r.status_code == 200:
-            previous_weibo_time = weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
-            store_message_data(r)
+        if type(r) is requests.Response:
+            if r.status_code == 200:
+                previous_weibo_time = weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
+                store_message_data(r)
+            else:
+                update_db(scraping.userid, previous_weibo_time)
+                with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
+                    f1.write(f"处理 {weibo['weibo_url']} 失败\n")
+                    f1.write(f"{r.text}\n\n")
+                logger.error(f"处理 {weibo['weibo_url']} 失败")
+                sys.exit(1)
         else:
-            update_db(scraping.userid, previous_weibo_time)
-            with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
-                f1.write(f"处理 {weibo['weibo_url']} 失败\n")
-                f1.write(f"{r.text}\n\n")
-            logger.error(f"处理 {weibo['weibo_url']} 失败")
-            sys.exit(0)
+            continue
     if error:
         update_db(scraping.userid, max_weibo_time)
 
