@@ -6,6 +6,7 @@ from telegram.constants import ParseMode
 
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6324001282:AAG81Em95joxitrHldN_z2Cmxqjrijmz4no'
+MARKDOWN_CHAR = ['(', ')', '_']
 
 
 async def send3times(fun, **kwargs):
@@ -89,7 +90,7 @@ async def send_album(bot, filetype, album: list, ):
         medias = []
         for media in album:
             path, caption, file_size = media
-            print(path)
+            print(path, filetype)
             if filetype == 'video':
                 media = InputMediaVideo(open(path, mode='rb'), caption=caption)
             elif filetype == 'photo':
@@ -104,15 +105,18 @@ async def send_album(bot, filetype, album: list, ):
 
 
 async def send_message_after(tg_bot, data, messages):
+    message = data['text_raw']
+    for char in MARKDOWN_CHAR:
+        message = message.replace(char, '\\' + char)
     response_message = await tg_bot.sendMessage(
         DEVELOPER_CHAT_ID,
-        "[{}]({})".format(data['username'], data['weibo_link']) + "：" + data['text_raw'],
+        "[{}]({})".format(data['username'], data['weibo_link']) + "：" + message,
         parse_mode=ParseMode.MARKDOWN,
     )
     messages.append(response_message)
     results = []
-    for message in messages:
-        result = process_message(message, data['weibo_link'])
+    for response_message in messages:
+        result = process_message(response_message, data['weibo_link'])
         results.append(result)
     return results
 
@@ -171,6 +175,8 @@ async def send_video_or_photo(data):
 async def message_send(data):
     tg_bot = Bot(token=TOKEN)
     message = data['message']
+    for char in MARKDOWN_CHAR:
+        message = message.replace(char, '\\' + char)
     send_response = await tg_bot.sendMessage(DEVELOPER_CHAT_ID, message, parse_mode=ParseMode.MARKDOWN)
     result = process_message(send_response, data['weibo_link'])
     return result
