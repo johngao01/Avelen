@@ -6,7 +6,7 @@ from telegram.constants import ParseMode
 
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6324001282:AAG81Em95joxitrHldN_z2Cmxqjrijmz4no'
-MARKDOWN_CHAR = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+MARKDOWN_CHAR = ['_', '*', '[', '`', ]
 
 
 async def send3times(fun, **kwargs):
