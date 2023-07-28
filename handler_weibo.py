@@ -281,3 +281,8 @@ def handle_weibo(weibo_url):
             if video_url:
                 r = handler_video_weibo(weibo_info, post_data, video_url)
                 return r
+
+
+def test_weibo(weibo_url):
+    response = handle_weibo(weibo_url)
+    print(response.text)
