@@ -192,7 +192,6 @@ def start(scraping: Following, has_send):
     with open('scrapy.data', mode='wb') as f1:
         pickle.dump(new_weibo, f1)
     previous_weibo_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
-    error = False
     for weibo in new_weibo:
         if weibo['weibo_url'] in has_send:
             continue
@@ -211,8 +210,7 @@ def start(scraping: Following, has_send):
                 sys.exit(1)
         else:
             continue
-    if error:
-        update_db(scraping.userid, max_weibo_time)
+    update_db(scraping.userid, max_weibo_time)
 
 
 if __name__ == '__main__':

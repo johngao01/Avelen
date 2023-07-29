@@ -132,7 +132,7 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
                 else:
                     response = requests.get(livephoto_url, headers=weibo_info['header'])
                     livephoto_content = response.content
-                    size = livephoto_content
+                    size = len(livephoto_content)
                     save_path = save_content(weibo_info['save_dir'], media_name, livephoto_content)
                 duration = get_duration_from_cv2(save_path)
                 print(index, save_path, str(duration), convert_bytes_to_human_readable(size))
