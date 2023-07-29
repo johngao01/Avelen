@@ -131,6 +131,7 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
                     else:
                         latest_edit_time = standardize_date(weibo_info['created_at'])
                     weibo_info['weibo_time'] = latest_edit_time
+                    save_json(weibo_edit_count(weibo_info), user.userid, weibo_id, weibo_info)
                     weibo_url = "https://www.weibo.com" + "/" + user.userid + "/" + weibo_id
                     if latest_edit_time > max_weibo_time:
                         max_weibo_time = latest_edit_time

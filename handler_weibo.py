@@ -26,6 +26,30 @@ MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
 WEB_HOOK_URL = 'http://localhost:5000'
 
 
+def weibo_edit_count(weibo_info):
+    if 'edit_count' in weibo_info:
+        edit_count = weibo_info['edit_count']
+    elif 'edit_config' in weibo_info:
+        edited = weibo_info['edit_config'].get('edited')
+        if edited is False:
+            edit_count = 0
+        else:
+            edit_count = weibo_info['edit_count']
+    else:
+        edit_count = 0
+    return edit_count
+
+
+def save_json(edit_count, userid, idstr, weibo):
+    if edit_count == 0:
+        json_path = os.path.join(download_save_root_directory, 'json', userid, idstr + '.json')
+    else:
+        json_path = os.path.join(download_save_root_directory, 'json', userid, idstr + "_" + str(edit_count) + '.json')
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    with open(json_path, mode='w', encoding='utf8') as json_write:
+        json.dump(weibo, json_write, ensure_ascii=False, indent=4)
+
+
 def get_duration_from_cv2(filename):
     cap = cv2.VideoCapture(filename)
     if cap.isOpened():
@@ -175,6 +199,7 @@ def weibo_data(weibo_link):
     data = response.json()
     user_id = data['user']['idstr']
     weibo_id = data['idstr']
+    save_json(weibo_edit_count(data), user_id, weibo_id, data)
     create_time = standardize_date(data['created_at'])
     if 'message' in data and data['message'] == '暂无权限查看':
         return
