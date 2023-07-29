@@ -47,20 +47,20 @@ def process_message(message: telegram.Message, weibo_data):
                 'height': message.video.height, 'width': message.video.width, 'duration': message.video.duration or 0,
                 'file_name': message.video.file_name, 'file_size': message.video.file_size or 0,
                 'file_type': message.video.mime_type or 'mp4', 'message_id': message.message_id,
-                'media_group_id': message.media_group_id, 'weibo_url': weibo_url}
+                'media_group_id': message.media_group_id, 'weibo_url': weibo_data['weibo_link']}
         message_data['VIDEO'] = file
     if message.photo:
         for photo_size in message.photo:
             file = {'file_id': photo_size.file_id, 'file_unique_id': photo_size.file_unique_id,
                     'width': photo_size.width, 'height': photo_size.height, 'file_size': photo_size.file_size or 0,
                     'file_name': message_data['CAPTION'], 'message_id': message.message_id,
-                    'media_group_id': message.media_group_id, 'weibo_url': weibo_url}
+                    'media_group_id': message.media_group_id, 'weibo_url': weibo_data['weibo_link']}
             message_data['PHOTO'][photo_size.file_id] = file
     if message.document:
         file = {'file_id': message.document.file_id, 'file_unique_id': message.document.file_unique_id,
                 'file_name': message.document.file_name, 'file_type': message.document.mime_type or '',
                 'file_size': message.document.file_size or 0, 'message_id': message.message_id,
-                'media_group_id': message.media_group_id, 'weibo_url': weibo_url}
+                'media_group_id': message.media_group_id, 'weibo_url': weibo_data['weibo_link']}
         message_data['DOCUMENT'] = file
     return message_data
 
