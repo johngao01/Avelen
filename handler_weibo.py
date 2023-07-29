@@ -23,7 +23,7 @@ MAX_PHOTO_TOTAL_PIXEL = 10000
 MAX_VIDEO_SIZE = 50 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
 
-WEB_HOOK_URL = 'http://154.40.52.119:5000'
+WEB_HOOK_URL = 'http://localhost:5000'
 
 
 def get_duration_from_cv2(filename):
