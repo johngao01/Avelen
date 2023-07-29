@@ -42,9 +42,10 @@ def weibo_edit_count(weibo_info):
 
 def save_json(edit_count, userid, idstr, weibo):
     if edit_count == 0:
-        json_path = os.path.join(download_save_root_directory, 'json', userid, idstr + '.json')
+        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', userid, idstr + '.json')
     else:
-        json_path = os.path.join(download_save_root_directory, 'json', userid, idstr + "_" + str(edit_count) + '.json')
+        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', userid,
+                                 idstr + "_" + str(edit_count) + '.json')
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, mode='w', encoding='utf8') as json_write:
         json.dump(weibo, json_write, ensure_ascii=False, indent=4)
