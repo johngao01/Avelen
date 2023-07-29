@@ -7,8 +7,11 @@ create table if not exists messages
     FORM_USER      TEXT,
     CHAT           TEXT,
     MEDIA_GROUP_ID TEXT,
-    weibo_url      TEXT,
-    TEXT_RAW       TEXT
+    TEXT_RAW       TEXT,
+    WEIBO_URL      TEXT,
+    USERID         TEXT,
+    WEIBO_IDSTR    TEXT,
+    MBLOGID        TEXT
 );
 
 create table if not exists photo

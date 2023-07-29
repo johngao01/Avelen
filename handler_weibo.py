@@ -199,6 +199,7 @@ def weibo_data(weibo_link):
     data = response.json()
     user_id = data['user']['idstr']
     weibo_id = data['idstr']
+    mblogid = data['mblogid']
     save_json(weibo_edit_count(data), user_id, weibo_id, data)
     create_time = standardize_date(data['created_at'])
     if 'message' in data and data['message'] == '暂无权限查看':
@@ -216,6 +217,9 @@ def weibo_data(weibo_link):
     post_data = {
         'username': data['user']['screen_name'],
         'weibo_link': weibo_link,
+        'userid': user_id,
+        'idstr': weibo_id,
+        'mblogid': mblogid,
         'text_raw': data['text_raw'],
     }
     return weibo_info, post_data

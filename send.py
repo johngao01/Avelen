@@ -24,7 +24,7 @@ async def send3times(fun, **kwargs):
             return r
 
 
-def process_message(message: telegram.Message, weibo_url):
+def process_message(message: telegram.Message, weibo_data):
     message_data = {
         'MESSAGE_ID': message.message_id,
         'CAPTION': message.caption or '',
@@ -33,8 +33,11 @@ def process_message(message: telegram.Message, weibo_url):
         'FORM_USER': message.from_user.id,
         'CHAT': message.chat.id,
         'MEDIA_GROUP_ID': message.media_group_id or '',
-        'WEIBO_URL': weibo_url,
-        'TEXT_RAW': message.text or '',
+        'TEXT_RAW': weibo_data['text_raw'],
+        'WEIBO_URL': weibo_data['weibo_link'],
+        'USERID': weibo_data['userid'],
+        'WEIBO_IDSTR': weibo_data['idstr'],
+        'MBLOGID': weibo_data['mblogid'],
         'PHOTO': {},
         'VIDEO': {},
         'DOCUMENT': {}
@@ -116,7 +119,7 @@ async def send_message_after(tg_bot, data, messages):
     messages.append(send_response)
     results = []
     for send_response in messages:
-        result = process_message(send_response, data['weibo_link'])
+        result = process_message(send_response, data)
         results.append(result)
     return results
 
@@ -179,7 +182,7 @@ async def message_send(data):
         message = message.replace(char, '\\' + char)
     send_response = await send3times(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=message,
                                      parse_mode=ParseMode.MARKDOWN)
-    result = process_message(send_response, data['weibo_link'])
+    result = process_message(send_response, data)
     return result
 
 
@@ -190,5 +193,5 @@ async def send_document(data):
     path = file['media']
     send_response = await send3times(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
                                      caption=caption)
-    result = process_message(send_response, data['weibo_link'])
+    result = process_message(send_response, data)
     return result
