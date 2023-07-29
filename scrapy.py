@@ -172,8 +172,9 @@ def back_data():
     # 获取当前时间的时间戳（以秒为单位）
     current_timestamp = datetime.now().timestamp()
     # 将时间戳转换为字符串
-    timestamp_str = str(current_timestamp)
-    cmd = "cp weibo.sqlite.db " + '/root/download/backup/weibo.sqlite.db_' + timestamp_str
+    timestamp_str = int(current_timestamp)
+    os.makedirs('/root/download/backup', exist_ok=True)
+    cmd = "cp weibo.sqlite.db " + f'/root/download/backup/{timestamp_str}_weibo.sqlite.db'
     print(cmd)
     os.system(cmd)
 
@@ -222,3 +223,4 @@ if __name__ == '__main__':
     for following in all_followings:
         f = Following(*following)
         start(f, send_weibo_url)
+    back_data()
