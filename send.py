@@ -10,7 +10,7 @@ TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 MARKDOWN_CHAR = ['_', '*', '[', '`', ]
 
 
-async def send_retry(fun, **kwargs):
+async def retry_send(fun, **kwargs):
     time = 5
     while time:
         try:
@@ -108,7 +108,7 @@ async def send_album(bot, filetype, album: list, ):
             else:
                 media = InputMediaDocument(open(path, mode='rb'), caption=caption)
             medias.append(media)
-        send_responses = await send3times(bot.send_media_group, media=medias, chat_id=DEVELOPER_CHAT_ID)
+        send_responses = await retry_send(bot.send_media_group, media=medias, chat_id=DEVELOPER_CHAT_ID)
         if send_responses is not None:
             messages.extend(list(send_responses))
     return messages
@@ -150,7 +150,7 @@ async def send_medias(data):
         elif filetype == 'document':
             documents.append([path, caption, size])
         elif filetype == 'url':
-            send_response = await send3times(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=file['send_url'],
+            send_response = await retry_send(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=file['send_url'],
                                              parse_mode=ParseMode.MARKDOWN)
             messages.append(send_response)
     if len(photos) > 0:
@@ -174,9 +174,9 @@ async def send_video_or_photo(data):
     ext = path[-3:]
     print(path)
     if ext in ['mp4', 'mov', 'gif']:
-        send_response = await send3times(fun=tg_bot.send_video, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
+        send_response = await retry_send(fun=tg_bot.send_video, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
     else:
-        send_response = await send3times(fun=tg_bot.send_photo, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
+        send_response = await retry_send(fun=tg_bot.send_photo, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
     messages = [send_response]
     results = await send_message_after(tg_bot, data, messages)
     return results
@@ -187,7 +187,7 @@ async def message_send(data):
     message = data['message']
     for char in MARKDOWN_CHAR:
         message = message.replace(char, '\\' + char)
-    send_response = await send3times(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=message,
+    send_response = await retry_send(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=message,
                                      parse_mode=ParseMode.MARKDOWN)
     result = process_message(send_response, data)
     return result
@@ -198,7 +198,7 @@ async def send_document(data):
     file = data['files']
     caption = file['caption']
     path = file['media']
-    send_response = await send3times(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
+    send_response = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
                                      caption=caption)
     result = process_message(send_response, data)
     return result
