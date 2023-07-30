@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import traceback
 
 from flask import Flask, request, jsonify
@@ -8,7 +7,13 @@ from flask import Flask, request, jsonify
 import send
 
 app = Flask(__name__)
-script_directory = os.path.dirname(os.path.abspath(__file__))
+
+
+def get_data_send_hello():
+    data = request.get_data(as_text=True)  # Get the request data as a string
+    data = json.loads(data)
+    print(data['weibo_link'], data['text_raw'].replace('\n', '\t'))
+    return data
 
 
 def catch_errors(func):
@@ -27,9 +32,7 @@ def catch_errors(func):
 @app.route('/send-album', methods=['POST'], endpoint='send_album')
 @catch_errors
 async def send_long_weibo():
-    data = request.get_data(as_text=True)  # Get the request data as a string
-    data = json.loads(data)
-    print(data['weibo_link'], data['text_raw'].replace('\n', '\t'))
+    data = get_data_send_hello()
     result = {
         'messages': await send.send_medias(data)
     }
@@ -39,9 +42,7 @@ async def send_long_weibo():
 @app.route('/photo-or-video', methods=['POST'], endpoint='send_pv')
 @catch_errors
 async def send_pv():
-    data = request.get_data(as_text=True)  # Get the request data as a string
-    data = json.loads(data)
-    print(data['weibo_link'], data['text_raw'].replace('\n', '\t'))
+    data = get_data_send_hello()
     result = {
         'messages': await send.send_video_or_photo(data)
     }
@@ -51,9 +52,7 @@ async def send_pv():
 @app.route('/send_message', methods=['POST'], endpoint='send_message')
 @catch_errors
 async def send_message():
-    data = request.get_data(as_text=True)
-    data = json.loads(data)
-    print(data['weibo_link'], data['text_raw'].replace('\n', '\t'))
+    data = get_data_send_hello()
     response_message = await send.message_send(data)
     result = {
         'messages': [response_message]
@@ -64,9 +63,7 @@ async def send_message():
 @app.route('/send_document', methods=['POST'], endpoint='send_document')
 @catch_errors
 async def send_document():
-    data = request.get_data(as_text=True)
-    data = json.loads(data)
-    print(data['weibo_link'], data['text_raw'].replace('\n', '\t'))
+    data = get_data_send_hello()
     response_message = await send.send_document(data)
     result = {
         'messages': [response_message]
