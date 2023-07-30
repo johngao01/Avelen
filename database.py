@@ -10,11 +10,10 @@ def store_message_data(response):
     messages = response['messages']
     for message in messages:
         insert_statement = """
-            INSERT INTO messages (MESSAGE_ID, CAPTION, CHAT_ID, DATE_TIME, FORM_USER, CHAT, MEDIA_GROUP_ID, WEIBO_URL
-            ,TEXT_RAW) VALUES (:MESSAGE_ID, :CAPTION, :CHAT_ID, :DATE_TIME, :FORM_USER, :CHAT, :MEDIA_GROUP_ID, :WEIBO_URL, 
-            :TEXT_RAW)"""
+            INSERT INTO messages (MESSAGE_ID, CAPTION, CHAT_ID, DATE_TIME, FORM_USER, CHAT, MEDIA_GROUP_ID, TEXT_RAW, 
+            WEIBO_URL, USERID, WEIBO_IDSTR, MBLOGID) VALUES (:MESSAGE_ID, :CAPTION, :CHAT_ID, :DATE_TIME, :FORM_USER,
+            :CHAT,:MEDIA_GROUP_ID,:TEXT_RAW,:WEIBO_URL,:USERID,:WEIBO_IDSTR,:MBLOGID)"""
         cursor.execute(insert_statement, message)
-
         if message['VIDEO']:
             insert_statement = """INSERT INTO video (file_id, file_unique_id, width, height, duration, file_size, 
             file_name, file_type, message_id, media_group_id, weibo_url) VALUES (:file_id, :file_unique_id, :width, 
