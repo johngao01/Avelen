@@ -1,0 +1,93 @@
+import hashlib
+import logging
+import os
+from datetime import datetime
+
+import cv2
+
+script_directory = os.path.dirname(os.path.abspath(__file__))
+download_save_root_directory = '/root/download'
+
+
+class MyLogger(logging.Logger):
+    def __init__(self, name, filename, stream=True, mode='a', log_time=True):
+        self.log_time = log_time
+        super().__init__(name)
+        filepath = f'{filename}.log'
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        file_handler = logging.FileHandler(filepath, mode=mode, encoding='utf-8')
+        file_handler.setLevel(logging.NOTSET)
+        f_format = logging.Formatter("%(asctime)s : %(message)s") if log_time else logging.Formatter("%(message)s")
+        file_handler.setFormatter(f_format)
+        self.addHandler(file_handler)
+        if stream:
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(logging.INFO)
+            stream_handler.setFormatter(f_format)
+            self.addHandler(stream_handler)
+        self.log_history = []
+
+    def _log(self, level, msg, args, **kwargs):
+        super()._log(level, msg, args, **kwargs)
+        if self.log_time:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            msg = f'{timestamp} - {msg}'
+        self.log_history.append(msg)
+
+    def log(self, level, msg, *args, **kwargs):
+        self._log(level, msg, args, **kwargs)
+
+
+def back_data():
+    # 获取当前时间的时间戳（以秒为单位）
+    current_timestamp = datetime.now().timestamp()
+    # 将时间戳转换为字符串
+    timestamp_str = int(current_timestamp)
+    os.makedirs('/root/download/backup', exist_ok=True)
+    cmd = "cp weibo.sqlite.db " + f'/root/download/backup/{timestamp_str}_weibo.sqlite.db'
+    print(cmd)
+    os.system(cmd)
+
+
+def convert_bytes_to_human_readable(num_bytes):
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if num_bytes < 1024.0:
+            return f"{num_bytes:.2f}{unit}"
+        num_bytes /= 1024.0
+
+
+def get_duration_from_cv2(filepath):
+    """
+    获取视频文件文件的持续时间
+    :param filepath: 文件地址
+    :return: 文件持续时间，错误文件则返回0
+    """
+    cap = cv2.VideoCapture(filepath)
+    if cap.isOpened():
+        rate = cap.get(5)
+        frame_num = cap.get(7)
+        duration = frame_num / rate
+        return duration
+    return 0
+
+
+def bytes2md5(r_bytes):
+    """
+    计算bytes数据的MD5值
+    :param r_bytes: 字节行数据，请求下载文件的响应或者打开文件读取到的二进制数据
+    :return: MD5值
+    """
+    file_hash = hashlib.md5()
+    file_hash.update(r_bytes)
+    return file_hash.hexdigest()
+
+
+def save_content(save_path, content: bytes):
+    """
+    保存内容到本地
+    :param save_path: 文件保存地址
+    :param content: 媒体内容
+    :return: 文件地址
+    """
+    with open(save_path, mode='wb') as f:
+        f.write(content)

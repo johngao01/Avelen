@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 import telegram
@@ -5,20 +6,26 @@ from telegram import Bot, InputMediaVideo, InputMediaPhoto, InputMediaDocument
 from telegram.constants import ParseMode
 
 DEVELOPER_CHAT_ID = 708424141
-TOKEN = '6324001282:AAG81Em95joxitrHldN_z2Cmxqjrijmz4no'
+TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 MARKDOWN_CHAR = ['_', '*', '[', '`', ]
 
 
-async def send3times(fun, **kwargs):
+async def send_retry(fun, **kwargs):
     time = 5
     while time:
         try:
             r = await fun(**kwargs)
         except telegram.error.TimedOut as e:
             print("Get TimeoutError", e)
+            await asyncio.sleep(10)
             time -= 1
         except telegram.error.BadRequest as e:
             print("Get BadRequest Error", e)
+            await asyncio.sleep(10)
+            time -= 1
+        except telegram.error.RetryAfter as e:
+            print("Get RetryAfter Error", e)
+            await asyncio.sleep(10)
             time -= 1
         else:
             return r

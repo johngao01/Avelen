@@ -1,12 +1,11 @@
-import hashlib
+import datetime
 import json
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 
-import cv2
 import requests
 from PIL import Image
+
+from utils import *
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 download_save_root_directory = '/root/download'
@@ -24,9 +23,27 @@ MAX_VIDEO_SIZE = 50 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
 
 WEB_HOOK_URL = 'http://localhost:5000'
+TIME_OUT = 30
+logger = MyLogger('scrapy', 'logger', mode='a')
+
+
+def standardize_date(created_at):
+    """
+    将微博的创建时间标准格式化
+    :param created_at: 微博的创建时间
+    :return:
+    """
+    created_at = created_at.replace("+0800 ", "")
+    ts = datetime.strptime(created_at, "%c")
+    return ts
 
 
 def weibo_edit_count(weibo_info):
+    """
+    获取微博的修改次数
+    :param weibo_info: 微博数据
+    :return: 微博的修改次数
+    """
     if 'edit_count' in weibo_info:
         edit_count = weibo_info['edit_count']
     elif 'edit_config' in weibo_info:
@@ -40,7 +57,15 @@ def weibo_edit_count(weibo_info):
     return edit_count
 
 
-def save_json(edit_count, userid, idstr, weibo):
+def save_json(edit_count, userid, idstr, json_data):
+    """
+    将微博数据存储在本地保存为json文件
+    :param edit_count: 微博的修改次数
+    :param userid: 微博的用户id
+    :param idstr: 微博的id
+    :param json_data: 微博的数据
+    :return:
+    """
     if edit_count == 0:
         json_path = os.path.join(download_save_root_directory, 'weibo', 'json', userid, idstr + '.json')
     else:
@@ -48,44 +73,7 @@ def save_json(edit_count, userid, idstr, weibo):
                                  idstr + "_" + str(edit_count) + '.json')
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, mode='w', encoding='utf8') as json_write:
-        json.dump(weibo, json_write, ensure_ascii=False, indent=4)
-
-
-def get_duration_from_cv2(filename):
-    cap = cv2.VideoCapture(filename)
-    if cap.isOpened():
-        rate = cap.get(5)
-        frame_num = cap.get(7)
-        duration = frame_num / rate
-        return duration
-    return 0
-
-
-def save_content(save_dir: str, media_name: str, content: bytes) -> str:
-    """
-    保存内容到本地
-    :param save_dir: 保存目录
-    :param media_name: 媒体名字
-    :param content: 媒体内容
-    :return: 文件地址
-    """
-    save_path = os.path.join(save_dir, media_name)
-    with open(save_path, mode='wb') as f:
-        f.write(content)
-    return save_path
-
-
-def bytes2md5(r_bytes):
-    file_hash = hashlib.md5()
-    file_hash.update(r_bytes)
-    return file_hash.hexdigest()
-
-
-def convert_bytes_to_human_readable(num_bytes):
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if num_bytes < 1024.0:
-            return f"{num_bytes:.2f}{unit}"
-        num_bytes /= 1024.0
+        json.dump(json_data, json_write, ensure_ascii=False, indent=4)
 
 
 def download_image(weibo_info, photo_url, pic, pic_id, index):
@@ -100,7 +88,7 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
     """
     photo_video = []
     file_type = photo_url.split('/')[-1].split('?')[0].split('.')[-1]
-    media_name = weibo_info['create_time'] + "_" + weibo_info['id'] + "_" + str(index) + "." + file_type
+    media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + "_" + str(index) + "." + file_type
     save_path = os.path.join(weibo_info['save_dir'], media_name)
     if os.path.exists(save_path):
         with open(save_path, mode='rb') as f:
@@ -108,15 +96,15 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
     else:
         response = requests.get(photo_url, headers=weibo_info['header'])
         if response.status_code != 200:
-            print("禁止访问的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
+            logger.info("禁止访问的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
             return photo_video
         pic_content = response.content
-        save_path = save_content(weibo_info['save_dir'], media_name, pic_content)
+        save_content(save_path, pic_content)
     md5value = bytes2md5(pic_content)
     if pic_content:
         size = len(pic_content)
         if md5value in del_file:
-            print("和谐的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
+            logger.info("和谐的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
         else:
             file_data = {
                 'media': save_path,
@@ -125,8 +113,9 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
             }
             if file_type == 'jpg':
                 img = Image.open(save_path)
-                print(index, save_path, str(img.width) + "*" + str(img.height),
-                      convert_bytes_to_human_readable(size))
+                msg = '\t'.join([str(index), save_path, str(img.width) + "*" + str(img.height),
+                                 convert_bytes_to_human_readable(size)])
+                logger.info(msg)
                 if img.width + img.height > MAX_PHOTO_TOTAL_PIXEL:
                     if size < MAX_DOCUMENT_SIZE:
                         file_data.update({'type': 'document'})
@@ -150,7 +139,7 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
                 photo_video.append(file_data)
             if pic.get('type') == 'livephoto':
                 livephoto_url = pic.get('video')
-                media_name = weibo_info['create_time'] + "_" + weibo_info['id'] + "_" + str(index) + '.mov'
+                media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + "_" + str(index) + '.mov'
                 save_path = os.path.join(weibo_info['save_dir'], media_name)
                 if os.path.exists(save_path):
                     size = os.path.getsize(save_path)
@@ -158,9 +147,10 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
                     response = requests.get(livephoto_url, headers=weibo_info['header'])
                     livephoto_content = response.content
                     size = len(livephoto_content)
-                    save_path = save_content(weibo_info['save_dir'], media_name, livephoto_content)
+                    save_content(save_path, livephoto_content)
                 duration = get_duration_from_cv2(save_path)
-                print(index, save_path, str(duration), convert_bytes_to_human_readable(size))
+                msg = '\t'.join([str(index), save_path, str(duration), convert_bytes_to_human_readable(size)])
+                logger.info(msg)
                 if duration:
                     file_data = {
                         'media': save_path,
@@ -180,13 +170,6 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
         return photo_video
 
 
-def standardize_date(created_at):
-    created_at = created_at.replace("+0800 ", "")
-    ts = datetime.strptime(created_at, "%c")
-    full_created_at = ts.strftime("%Y%m%d")
-    return full_created_at
-
-
 def weibo_data(weibo_link):
     weibo_header = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -202,7 +185,7 @@ def weibo_data(weibo_link):
     weibo_id = data['idstr']
     mblogid = data['mblogid']
     save_json(weibo_edit_count(data), user_id, weibo_id, data)
-    create_time = standardize_date(data['created_at'])
+    create_date = standardize_date(data['created_at'])
     if 'message' in data and data['message'] == '暂无权限查看':
         return
     weibo_header['referer'] = f'https://weibo.com/{user_id}/{weibo_id}'
@@ -210,7 +193,7 @@ def weibo_data(weibo_link):
         'data': data,
         'url': weibo_link,
         'id': weibo_id,
-        'create_time': create_time,
+        'create_date': create_date.strftime("%Y%m%d"),
         'save_dir': os.path.join(download_save_root_directory, 'weibo', data['user']['screen_name'], data['idstr']),
         'header': weibo_header.update({'referer': f'https://weibo.com/{user_id}/{weibo_id}'})
     }
@@ -243,13 +226,13 @@ def handler_photo_weibo(weibo_info, post_data):
                 if result:
                     photo_video.extend(result)
             except Exception as e:
-                print("下载出错：", e)
+                logger.info("下载出错：" + str(e))
     post_data.update({'files': photo_video})
     if len(post_data) >= 2:
-        r = requests.post(WEB_HOOK_URL + '/send-album', data=json.dumps(post_data), headers=headers)
+        r = requests.post(WEB_HOOK_URL + '/send-album', data=json.dumps(post_data), timeout=TIME_OUT)
         return r
     else:
-        r = requests.post(WEB_HOOK_URL + '/photo-or-video', data=json.dumps({'message': post_data}))
+        r = requests.post(WEB_HOOK_URL + '/photo-or-video', data=json.dumps({'message': post_data}), timeout=TIME_OUT)
         return r
 
 
@@ -280,20 +263,22 @@ def get_video_url(page_info):
 
 def handler_video_weibo(weibo_info, post_data, video_url):
     video_content = requests.get(video_url, weibo_info['header']).content
-    media_name = weibo_info['create_time'] + "_" + weibo_info['id'] + ".mp4"
-    save_path = save_content(weibo_info['save_dir'], media_name, video_content)
-    print(1, save_path, convert_bytes_to_human_readable(len(video_content)))
+    media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
+    save_path = os.path.join(weibo_info['save_dir'], media_name)
+    save_content(save_path, video_content)
+    msg = '\t'.join(['1', save_path, convert_bytes_to_human_readable(len(video_content))])
+    logger.info(msg)
     if len(video_content) > MAX_VIDEO_SIZE:
         post_data.update({'message': "文件太大，[请单击我查看]({})".format(video_url)})
-        r = requests.post(WEB_HOOK_URL + '/send_message', data=json.dumps(post_data))
+        r = requests.post(WEB_HOOK_URL + '/send_message', data=json.dumps(post_data), timeout=TIME_OUT)
         return r
     elif video_content:
         post_data.update({'files': {'media': save_path, 'caption': media_name}})
-        r = requests.post(WEB_HOOK_URL + '/photo-or-video', data=json.dumps(post_data))
+        r = requests.post(WEB_HOOK_URL + '/photo-or-video', data=json.dumps(post_data), timeout=TIME_OUT)
         return r
     else:
         post_data.update({'message': f"获取[微博视频]({weibo_info['url']})失败"})
-        r = requests.post(WEB_HOOK_URL + '/send_message', data=json.dumps(post_data))
+        r = requests.post(WEB_HOOK_URL + '/send_message', data=json.dumps(post_data), timeout=TIME_OUT)
         return r
 
 
@@ -301,6 +286,7 @@ def handle_weibo(weibo_url):
     weibo_info, post_data = weibo_data(weibo_url)
     if len(weibo_info['data'].get('pic_ids')) > 0 and weibo_info['data'].get('pic_ids') \
             and weibo_info['data'].get('pic_infos'):
+        logger.info(weibo_url + '\t' + '图片微博')
         r = handler_photo_weibo(weibo_info, post_data)
         return r
     else:
@@ -309,8 +295,13 @@ def handle_weibo(weibo_url):
         if page_info:
             video_url = get_video_url(page_info)
             if video_url:
+                logger.info(weibo_url + '\t' + '视频微博')
                 r = handler_video_weibo(weibo_info, post_data, video_url)
                 return r
+            else:
+                logger.info(weibo_url + '\t' + '文字微博')
+        else:
+            logger.info(weibo_url + '\t' + '文字微博')
 
 
 def test_weibo(weibo_url):

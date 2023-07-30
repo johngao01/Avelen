@@ -1,4 +1,3 @@
-import logging
 import pickle
 import sys
 import time
@@ -31,66 +30,12 @@ headers = {
 }
 
 
-def catch_errors(func):
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception:
-            traceback.print_exc()
-            # 或者，你可以将栈跟踪信息保存到一个字符串中
-            detailed_error_info = traceback.format_exc()
-            print(detailed_error_info)
-            sys.exit(1)
-
-    return wrapper
-
-
 class Following:
     def __init__(self, userid, username, scrapy_type, latest_time):
         self.userid = userid
         self.username = username
         self.scrapy_type = scrapy_type
         self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
-
-
-def standardize_date(created_at):
-    created_at = created_at.replace("+0800 ", "")
-    ts = datetime.strptime(created_at, "%c")
-    return ts
-
-
-class MyLogger(logging.Logger):
-    def __init__(self, name, filename, stream=True, mode='a', log_time=True):
-        self.log_time = log_time
-        super().__init__(name)
-        filepath = f'{filename}.log'
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        file_handler = logging.FileHandler(filepath, mode=mode, encoding='utf-8')
-        file_handler.setLevel(logging.NOTSET)
-        f_format = logging.Formatter("%(asctime)s : %(message)s") if log_time else logging.Formatter("%(message)s")
-        file_handler.setFormatter(f_format)
-        self.addHandler(file_handler)
-        if stream:
-            stream_handler = logging.StreamHandler()
-            stream_handler.setLevel(logging.INFO)
-            stream_handler.setFormatter(f_format)
-            self.addHandler(stream_handler)
-        self.log_history = []
-        self.download_log = []
-
-    def _log(self, level, msg, args, **kwargs):
-        super()._log(level, msg, args, **kwargs)
-        if self.log_time:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            msg = f'{timestamp} - {msg}'
-        self.log_history.append(msg)
-
-    def log(self, level, msg, *args, **kwargs):
-        self._log(level, msg, args, **kwargs)
-
-    def download_info(self, msg, *args, **kwargs):
-        self.download_log.append(msg)
-        self.info(msg, *args, **kwargs)
 
 
 def one_page_latest(user_id: str, page):
@@ -169,18 +114,6 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
     return weibo_list, max_weibo_time.strftime('%Y-%m-%d %H:%M:%S')
 
 
-def back_data():
-    # 获取当前时间的时间戳（以秒为单位）
-    current_timestamp = datetime.now().timestamp()
-    # 将时间戳转换为字符串
-    timestamp_str = int(current_timestamp)
-    os.makedirs('/root/download/backup', exist_ok=True)
-    cmd = "cp weibo.sqlite.db " + f'/root/download/backup/{timestamp_str}_weibo.sqlite.db'
-    print(cmd)
-    os.system(cmd)
-
-
-@catch_errors
 def start(scraping: Following, has_send):
     # with open('scrapy.data', mode='rb') as f1:
     #     new_weibo = pickle.load(f1)
@@ -196,7 +129,6 @@ def start(scraping: Following, has_send):
     for weibo in new_weibo:
         if weibo['weibo_url'] in has_send:
             continue
-        logger.info(weibo['weibo_url'])
         r = handle_weibo(weibo['weibo_url'])
         if type(r) is requests.Response:
             if r.status_code == 200:
@@ -216,10 +148,14 @@ def start(scraping: Following, has_send):
 
 if __name__ == '__main__':
     back_data()
-    logger = MyLogger('scrapy', 'logger', mode='w')
     all_followings = get_all_following()
     send_weibo_url = get_send_weibo()
-    for following in all_followings:
-        f = Following(*following)
-        start(f, send_weibo_url)
-    back_data()
+    try:
+        for following in all_followings:
+            f = Following(*following)
+            start(f, send_weibo_url)
+    except Exception as e:
+        detailed_error_info = traceback.format_exc()
+        logger.info(detailed_error_info)
+    finally:
+        back_data()
