@@ -1,6 +1,8 @@
 import datetime
 import json
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from time import sleep
 
 import requests
 from PIL import Image
@@ -25,6 +27,19 @@ MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
 WEB_HOOK_URL = 'http://localhost:5000'
 TIME_OUT = 30
 logger = MyLogger('scrapy', 'logger', mode='a')
+
+
+def request_webhook(method, post_data):
+    time = 3
+    try:
+        r = requests.post(WEB_HOOK_URL + method, data=json.dumps(post_data))
+    except requests.exceptions.RequestException:
+        logger.error(traceback.format_exc())
+        logger.info("time sleep 15 seconds")
+        sleep(15)
+        time -= 1
+    else:
+        return r
 
 
 def standardize_date(created_at):
@@ -229,10 +244,10 @@ def handler_photo_weibo(weibo_info, post_data):
                 logger.info("下载出错：" + str(e))
     post_data.update({'files': photo_video})
     if len(post_data) >= 2:
-        r = requests.post(WEB_HOOK_URL + '/send-album', data=json.dumps(post_data), timeout=TIME_OUT)
+        r = request_webhook('/send-album', post_data)
         return r
     else:
-        r = requests.post(WEB_HOOK_URL + '/photo-or-video', data=json.dumps({'message': post_data}), timeout=TIME_OUT)
+        r = request_webhook('/photo-or-video', post_data)
         return r
 
 
@@ -270,15 +285,16 @@ def handler_video_weibo(weibo_info, post_data, video_url):
     logger.info(msg)
     if len(video_content) > MAX_VIDEO_SIZE:
         post_data.update({'message': "文件太大，[请单击我查看]({})".format(video_url)})
-        r = requests.post(WEB_HOOK_URL + '/send_message', data=json.dumps(post_data), timeout=TIME_OUT)
+        r = request_webhook('/send_message', post_data)
         return r
     elif video_content:
+
         post_data.update({'files': {'media': save_path, 'caption': media_name}})
-        r = requests.post(WEB_HOOK_URL + '/photo-or-video', data=json.dumps(post_data), timeout=TIME_OUT)
+        r = request_webhook('/photo-or-video', post_data)
         return r
     else:
         post_data.update({'message': f"获取[微博视频]({weibo_info['url']})失败"})
-        r = requests.post(WEB_HOOK_URL + '/send_message', data=json.dumps(post_data), timeout=TIME_OUT)
+        r = request_webhook('/send_message', post_data)
         return r
 
 
