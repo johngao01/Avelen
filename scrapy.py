@@ -134,6 +134,7 @@ def start(scraping: Following, has_send):
                     f1.write(f"处理 {weibo['weibo_url']} 失败\n")
                     f1.write(f"{r.text}\n\n")
                 logger.error(f"处理 {weibo['weibo_url']} 失败")
+                os.system('cp weibo.sqlite.db weibo.sqlite.back')
                 sys.exit(1)
         else:
             continue
@@ -151,3 +152,5 @@ if __name__ == '__main__':
     except Exception as e:
         detailed_error_info = traceback.format_exc()
         logger.info(detailed_error_info)
+    finally:
+        os.system('cp weibo.sqlite.db weibo.sqlite.back')
