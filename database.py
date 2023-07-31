@@ -77,3 +77,27 @@ def update_db(user_id, latest_weibo_time):
     conn.commit()
     cursor.close()
     conn.close()
+
+
+def get_weibo_file(weibo_url):
+    conn = sqlite3.connect('weibo.sqlite.db')
+    cursor = conn.cursor()
+    sql = f"select CAPTION from messages where weibo_url='{weibo_url}'"
+    cursor.execute(sql)
+    data = [item[0] for item in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return data
+
+
+def delete_weibo_data(weibo_url):
+    conn = sqlite3.connect('weibo.sqlite.db')
+    cursor = conn.cursor()
+    weibo_url = "'" + weibo_url + "'"
+    cursor.execute(f'delete from messages where weibo_url={weibo_url};')
+    cursor.execute(f'delete from photo where weibo_url={weibo_url};')
+    cursor.execute(f'delete from video where weibo_url={weibo_url};')
+    cursor.execute(f'delete from document where weibo_url={weibo_url};')
+    conn.commit()
+    cursor.close()
+    conn.close()
