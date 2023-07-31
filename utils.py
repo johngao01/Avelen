@@ -38,17 +38,6 @@ class MyLogger(logging.Logger):
         self._log(level, msg, args, **kwargs)
 
 
-def back_data():
-    # 获取当前时间的时间戳（以秒为单位）
-    current_timestamp = datetime.now().timestamp()
-    # 将时间戳转换为字符串
-    timestamp_str = int(current_timestamp)
-    os.makedirs('/root/download/backup', exist_ok=True)
-    cmd = "cp weibo.sqlite.db " + f'/root/download/backup/{timestamp_str}_weibo.sqlite.db'
-    print(cmd)
-    os.system(cmd)
-
-
 def convert_bytes_to_human_readable(num_bytes):
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if num_bytes < 1024.0:

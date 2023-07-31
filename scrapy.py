@@ -141,7 +141,6 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    back_data()
     all_followings = get_all_following()
     send_weibo_url = get_send_weibo()
     try:
@@ -151,5 +150,3 @@ if __name__ == '__main__':
     except Exception as e:
         detailed_error_info = traceback.format_exc()
         logger.info(detailed_error_info)
-    finally:
-        back_data()
