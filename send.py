@@ -15,6 +15,7 @@ async def retry_send(fun, **kwargs):
     while time:
         try:
             r = await fun(**kwargs)
+            return r
         except telegram.error.TimedOut as e:
             print("Get TimeoutError", e)
             await asyncio.sleep(10)
@@ -27,8 +28,6 @@ async def retry_send(fun, **kwargs):
             print("Get RetryAfter Error", e)
             await asyncio.sleep(10)
             time -= 1
-        else:
-            return r
 
 
 def process_message(message: telegram.Message, weibo_data):
