@@ -298,8 +298,12 @@ def handler_video_weibo(weibo_info, post_data, video_url):
         return r
 
 
-def handle_weibo(weibo_url):
+def handle_weibo(weibo_url, userid=None):
     weibo_info, post_data = weibo_data(weibo_url)
+    if userid:
+        # 剔除快转微博
+        if weibo_info['data']['user']['idstr'] != userid:
+            return
     if len(weibo_info['data'].get('pic_ids')) > 0 and weibo_info['data'].get('pic_ids') \
             and weibo_info['data'].get('pic_infos'):
         logger.info(weibo_url + '\t' + '图片微博')
@@ -318,8 +322,3 @@ def handle_weibo(weibo_url):
                 logger.info(weibo_url + '\t' + '文字微博')
         else:
             logger.info(weibo_url + '\t' + '文字微博')
-
-
-def test_weibo(weibo_url):
-    response = handle_weibo(weibo_url)
-    print(response.text)
