@@ -65,7 +65,7 @@ async def del_weibo_files(weibo_files):
                 os.remove(path)
 
 
-async def delete_weibo_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def delete_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     weibo_url = await get_weibo_url(update)
     weibo_files = get_weibo_file(weibo_url)
@@ -76,19 +76,10 @@ async def delete_weibo_all_data(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
         logger.info(f"删除id为{message_id}的message")
     delete_weibo_data(weibo_url)
-    return weibo_url
-
-
-async def delete_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    weibo_url = await delete_weibo_all_data(update, context)
-    await context.bot.send_message(text=f'删除[微博]({weibo_url})信息成功', chat_id=DEVELOPER_CHAT_ID,
-                                   parse_mode=ParseMode.MARKDOWN)
 
 
 async def resend_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    weibo_url = await get_weibo_url(update)
-    weibo_files = get_weibo_file(weibo_url)
-    await del_weibo_files(weibo_files)
+    weibo_url = await delete_weibo(update, context)
     r = handle_weibo(weibo_url)
     store_message_data(r)
 
