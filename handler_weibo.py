@@ -243,6 +243,8 @@ def handler_photo_weibo(weibo_info, post_data):
             except Exception as e:
                 logger.info("下载出错：" + str(e))
     post_data.update({'files': photo_video})
+    if len(post_data['files']) == 0:
+        return
     if len(post_data) >= 2:
         r = request_webhook('/send-album', post_data)
         return r
