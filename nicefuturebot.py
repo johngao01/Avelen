@@ -84,13 +84,6 @@ async def resend_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     store_message_data(r)
 
 
-async def edit_commands(application):
-    command = [BotCommand("backup", "备份数据"), BotCommand("resend_weibo", "重发微博"),
-               BotCommand("delete", "删除微博")]
-    await application.bot.set_my_commands(commands=command)
-    # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
-
-
 async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weibo_link = update.message.text
     logger.info(weibo_link)
@@ -121,13 +114,20 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     store_message_data(message)
 
 
+async def edit_commands(application):
+    command = [BotCommand("backup", "备份数据"), BotCommand("resend_weibo", "重发微博"),
+               BotCommand("delete_weibo", "删除微博")]
+    await application.bot.set_my_commands(commands=command)
+    # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
+
+
 def main() -> None:
-    weibo_filter = filters.Regex('^https://(m.|www.)?weibo.*')
+    weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
     application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
         edit_commands).build()
     application.add_handler(CommandHandler("backup", backup))
     application.add_handler(CommandHandler("resend_weibo", resend_weibo))
-    application.add_handler(CommandHandler("delete", delete_weibo))
+    application.add_handler(CommandHandler("delete_weibo", delete_weibo))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_error_handler(error_handler)
     application.run_polling()
