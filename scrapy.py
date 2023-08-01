@@ -123,7 +123,7 @@ def start(scraping: Following, has_send):
     for weibo in new_weibo:
         if weibo['weibo_url'] in has_send:
             continue
-        r = handle_weibo(weibo['weibo_url'])
+        r = handle_weibo(weibo['weibo_url'], scraping.userid)
         if type(r) is requests.Response:
             if r.status_code == 200:
                 previous_weibo_time = weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
