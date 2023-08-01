@@ -300,9 +300,14 @@ def handler_video_weibo(weibo_info, post_data, video_url):
 
 def handle_weibo(weibo_url, userid=None):
     weibo_info, post_data = weibo_data(weibo_url)
+    if isinstance(weibo_info['data'].get('retweeted_status'), dict) and isinstance(
+            weibo_info['data'].get('retweeted_status').get('user'), dict):
+        logger.info(weibo_url + '\t' + '转发微博')
+        return
     if userid:
         # 剔除快转微博
         if weibo_info['data']['user']['idstr'] != userid:
+            logger.info(weibo_url + '\t' + '转发微博')
             return
     if len(weibo_info['data'].get('pic_ids')) > 0 and weibo_info['data'].get('pic_ids') \
             and weibo_info['data'].get('pic_infos'):
