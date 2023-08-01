@@ -46,15 +46,26 @@ def get_all_following():
     return data
 
 
-def get_send_weibo():
+def exec_sql_get_data(sql):
     conn = sqlite3.connect('weibo.sqlite.db')
     cursor = conn.cursor()
-    sql = '''SELECT distinct weibo_url FROM messages;'''
     cursor.execute(sql)
     data = [item[0] for item in cursor.fetchall()]
     cursor.close()
     conn.close()
     return data
+
+
+def get_send_weibo():
+    return exec_sql_get_data('''SELECT distinct weibo_url FROM messages;''')
+
+
+def get_weibo_file(weibo_url):
+    return exec_sql_get_data(f"select CAPTION from messages where weibo_url='{weibo_url}'")
+
+
+def get_weibo_messages(weibo_url):
+    return exec_sql_get_data(f"select MESSAGE_ID from messages where weibo_url='{weibo_url}'")
 
 
 def init_db():
@@ -77,17 +88,6 @@ def update_db(user_id, latest_weibo_time):
     conn.commit()
     cursor.close()
     conn.close()
-
-
-def get_weibo_file(weibo_url):
-    conn = sqlite3.connect('weibo.sqlite.db')
-    cursor = conn.cursor()
-    sql = f"select CAPTION from messages where weibo_url='{weibo_url}'"
-    cursor.execute(sql)
-    data = [item[0] for item in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return data
 
 
 def delete_weibo_data(weibo_url):
