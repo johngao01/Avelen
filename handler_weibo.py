@@ -185,6 +185,14 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
         return photo_video
 
 
+def weibo_pic_infos(weibo_dict):
+    pic_infos = {}
+    for item in weibo_dict['mix_media_info']['items']:
+        if item['type'] == 'pic':
+            pic_infos[item['id']] = item['data']
+    return pic_infos
+
+
 def weibo_data(weibo_link):
     weibo_header = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -224,11 +232,10 @@ def weibo_data(weibo_link):
     return weibo_info, post_data
 
 
-def handler_photo_weibo(weibo_info, post_data):
+def handler_photo_weibo(weibo_info, pic_infos, post_data):
     photo_video = []
     data = weibo_info['data']
     pic_ids = data.get('pic_ids')
-    pic_infos = data.get('pic_infos')
     with ThreadPoolExecutor() as executor:
         # 使用线程池来执行下载任务
         future_to_url = {
@@ -302,22 +309,30 @@ def handler_video_weibo(weibo_info, post_data, video_url):
 
 def handle_weibo(weibo_url, userid=None):
     weibo_info, post_data = weibo_data(weibo_url)
-    if isinstance(weibo_info['data'].get('retweeted_status'), dict) and isinstance(
-            weibo_info['data'].get('retweeted_status').get('user'), dict):
+    weibo_dict = weibo_info['data']
+    if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
+            weibo_dict.get('retweeted_status').get('user'), dict):
         logger.info(weibo_url + '\t' + '转发微博')
         return
     if userid:
         # 剔除快转微博
-        if weibo_info['data']['user']['idstr'] != userid:
+        if weibo_dict['user']['idstr'] != userid:
             logger.info(weibo_url + '\t' + '转发微博')
             return
-    if len(weibo_info['data'].get('pic_ids')) > 0 and weibo_info['data'].get('pic_ids') \
-            and weibo_info['data'].get('pic_infos'):
-        logger.info(weibo_url + '\t' + '图片微博')
-        r = handler_photo_weibo(weibo_info, post_data)
-        return r
+    if type(weibo_dict.get('pic_ids')) is list and len(weibo_dict.get('pic_ids')) > 0:
+        if 'mix_media_info' in weibo_dict:
+            logger.info(weibo_url + '\t' + '图片微博')
+            pic_infos = weibo_pic_infos(weibo_dict)
+            r = handler_photo_weibo(weibo_info, pic_infos, post_data)
+            return r
+        elif 'pic_infos' in weibo_dict:
+            logger.info(weibo_url + '\t' + '图片微博')
+            r = handler_photo_weibo(weibo_info, weibo_dict['pic_infos'], post_data)
+            return r
+        else:
+            logger.info(weibo_url + '\t' + '图片微博')
     else:
-        data = weibo_info['data']
+        data = weibo_dict
         page_info = data.get('page_info')
         if page_info:
             video_url = get_video_url(page_info)
