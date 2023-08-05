@@ -107,16 +107,24 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
     # Finally, send the message
-    message = await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
-    store_message_data(message)
-    message = await context.bot.send_message(chat_id=update.effective_chat.id,
-                                             text="抱歉，出现了一些错误，无法获得相应的内容")
-    store_message_data(message)
+    await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="抱歉，出现了一些错误，无法获得相应的内容")
+
+
+async def rm_lock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    with open('logger.log', mode='r', encoding='utf-8') as f:
+        text = f.readlines()[-3:]
+    text = '\n'.join(text)
+    logger.info(text)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+    if os.path.exists('start.lock'):
+        logger.info("删除锁文件")
+        os.system('rm -r start.lock')
 
 
 async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"), BotCommand("resend_weibo", "重发微博"),
-               BotCommand("delete_weibo", "删除微博")]
+               BotCommand("delete_weibo", "删除微博"), BotCommand("rm_lock", "删除锁文件")]
     await application.bot.set_my_commands(commands=command)
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
@@ -128,6 +136,7 @@ def main() -> None:
     application.add_handler(CommandHandler("backup", backup))
     application.add_handler(CommandHandler("resend_weibo", resend_weibo))
     application.add_handler(CommandHandler("delete_weibo", delete_weibo))
+    application.add_handler(CommandHandler("rm_lock", rm_lock_file))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_error_handler(error_handler)
     application.run_polling()
