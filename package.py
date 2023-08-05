@@ -26,7 +26,6 @@ end = time.time()
 print(f"Zip Files Cost {end - start} Second")
 result = subprocess.run('curl -4 ip.sb', shell=True, capture_output=True, text=True)
 ipv4 = result.stdout.strip()
-print('Zip Download Link: ', f"http://{ipv4}:9999/media.zip")
 
 print("clear empty folder start --------------->")
 for root, dirs, files in os.walk(folder, topdown=False):
@@ -38,3 +37,5 @@ for root, dirs, files in os.walk(folder, topdown=False):
                 print(f"Deleted empty folder: {folder_to_check}")
             except OSError as e:
                 print(f"Error deleting folder: {folder_to_check} - {e}")
+
+print('Zip Download Link: ', f"http://{ipv4}:9999/media.zip")
