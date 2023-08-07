@@ -1,7 +1,6 @@
 import html
 import re
 import sys
-
 from telegram import Update, BotCommand
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -68,20 +67,25 @@ async def del_weibo_files(weibo_files):
 async def delete_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     weibo_url = await get_weibo_url(update)
-    weibo_files = get_weibo_file(weibo_url)
-    weibo_messages = get_weibo_messages(weibo_url)
-    weibo_messages.append(message_id)
-    await del_weibo_files(weibo_files)
+    if weibo_url:
+        weibo_files = get_weibo_file(weibo_url)
+        weibo_messages = get_weibo_messages(weibo_url)
+        weibo_messages.append(message_id)
+        await del_weibo_files(weibo_files)
+        delete_weibo_data(weibo_url)
+        return weibo_url
+    else:
+        weibo_messages = [message_id]
     for message_id in weibo_messages:
         await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
         logger.info(f"删除id为{message_id}的message")
-    delete_weibo_data(weibo_url)
 
 
 async def resend_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weibo_url = await delete_weibo(update, context)
-    r = handle_weibo(weibo_url)
-    store_message_data(r)
+    if weibo_url:
+        r = handle_weibo(weibo_url)
+        store_message_data(r)
 
 
 async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
