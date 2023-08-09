@@ -1,6 +1,7 @@
 import html
 import re
 import sys
+
 from telegram import Update, BotCommand
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -47,6 +48,7 @@ async def get_weibo_url(update):
     if not message:
         return
     text = message.text_markdown
+    logger.info(text)
     weibo_url = re.findall(r'\((.*?)\)', text)
     if not weibo_url:
         return
@@ -68,17 +70,18 @@ async def delete_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     weibo_url = await get_weibo_url(update)
     if weibo_url:
+        logger.info("weibo_url：" + weibo_url)
         weibo_files = get_weibo_file(weibo_url)
         weibo_messages = get_weibo_messages(weibo_url)
         weibo_messages.append(message_id)
         await del_weibo_files(weibo_files)
         delete_weibo_data(weibo_url)
-        return weibo_url
     else:
         weibo_messages = [message_id]
     for message_id in weibo_messages:
         await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
         logger.info(f"删除id为{message_id}的message")
+    return weibo_url
 
 
 async def resend_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
