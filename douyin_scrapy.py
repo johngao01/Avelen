@@ -21,7 +21,7 @@ class Scrapy:
 
     def scrapy_aweme(self):
         scrapy_logger.info(
-            f'开始获取 {self.username} 截至 {str(self.last_one_time)} 抖音，她的主页是 https://www.douyin.com/user/{self.user_sec_uid}')
+            f'开始获取 {self.username} 截至 {str(self.last_one_time)} 抖音，她的主页是 {user_url}{self.user_sec_uid}')
         while True:
             url = 'https://www.douyin.com/aweme/v1/web/aweme/post/?device_platform=webapp&aid=6383&channel=channel_pc_web&sec_user_id=' + self.user_sec_uid + '&max_cursor=' + str(
                 self.max_cursor) + '&locate_query=false&show_live_replay_strategy=1&count=50&publish_video_strategy_type=2&pc_client_type=1&version_code=170400&version_name=17.4.0&cookie_enabled=true&screen_width=1536&screen_height=864&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=108.0.5359.95&browser_online=true&engine_name=Blink&engine_version=108.0.5359.95&os_name=Windows&os_version=10&cpu_core_num=8&device_memory=8&platform=PC&downlink=10&effective_type=4g&round_trip_time=250'
@@ -57,6 +57,8 @@ class Scrapy:
                 scrapy_logger.info(scrapy_info)
                 break
             if not data_json['has_more']:
+                scrapy_info += f"，获取新抖音结束。"
+                scrapy_logger.info(scrapy_info)
                 break
 
 

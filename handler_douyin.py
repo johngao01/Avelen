@@ -191,7 +191,7 @@ def handler_video_douyin(aweme: Aweme):
         save_path = aweme_video.save_path()
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, video_content)
-        scrapy_logger.info('\t'.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
+        scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
                                       os.path.relpath(save_path, '/root/download/douyin/')]))
         if not result:
             aweme.post_data.update({'message': f"获取[抖音视频]({aweme.aweme_info['url']})失败"})
