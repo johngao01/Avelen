@@ -43,18 +43,18 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     chat_id=DEVELOPER_CHAT_ID)
 
 
-async def get_weibo_url(update):
+async def get_url(update):
     message = update.message.reply_to_message
     if not message:
         return
     text = message.text_markdown
     logger.info(text)
-    weibo_url = re.findall(r'\((.*?)\)', text)
-    if not weibo_url:
+    url = re.findall(r'\((.*?)\)', text)
+    if not url:
         return
-    weibo_url = weibo_url[0]
-    logger.info(weibo_url)
-    return weibo_url
+    url = url[0]
+    logger.info(url)
+    return url
 
 
 async def del_weibo_files(weibo_files):
@@ -66,29 +66,34 @@ async def del_weibo_files(weibo_files):
                 os.remove(path)
 
 
-async def delete_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
-    weibo_url = await get_weibo_url(update)
-    if weibo_url:
-        logger.info("weibo_url：" + weibo_url)
-        weibo_files = get_weibo_file(weibo_url)
-        weibo_messages = get_weibo_messages(weibo_url)
+    url = await get_url(update)
+    if url:
+        logger.info("url：" + url)
+        weibo_files = get_weibo_file(url)
+        weibo_messages = get_weibo_messages(url)
         weibo_messages.append(message_id)
         await del_weibo_files(weibo_files)
-        delete_weibo_data(weibo_url)
+        delete_weibo_data(url)
     else:
         weibo_messages = [message_id]
     for message_id in weibo_messages:
         await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
         logger.info(f"删除id为{message_id}的message")
-    return weibo_url
+    return url
 
 
-async def resend_weibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    weibo_url = await delete_weibo(update, context)
-    if weibo_url:
-        r = handle_weibo(weibo_url)
-        store_message_data(r)
+async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = await delete(update, context)
+    if url:
+        if 'weibo' in url:
+            r = handle_weibo(url)
+            store_message_data(r)
+        elif 'douyin' in url:
+            pass
+        else:
+            pass
 
 
 async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -130,8 +135,8 @@ async def rm_lock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_commands(application):
-    command = [BotCommand("backup", "备份数据"), BotCommand("resend_weibo", "重发微博"),
-               BotCommand("delete_weibo", "删除微博"), BotCommand("rm_lock", "删除锁文件")]
+    command = [BotCommand("backup", "备份数据"), BotCommand("resend", "重发"),
+               BotCommand("delete", "删除"), BotCommand("rm_lock", "删除锁文件")]
     await application.bot.set_my_commands(commands=command)
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
@@ -141,8 +146,8 @@ def main() -> None:
     application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
         edit_commands).build()
     application.add_handler(CommandHandler("backup", backup))
-    application.add_handler(CommandHandler("resend_weibo", resend_weibo))
-    application.add_handler(CommandHandler("delete_weibo", delete_weibo))
+    application.add_handler(CommandHandler("resend", resend))
+    application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("rm_lock", rm_lock_file))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_error_handler(error_handler)
