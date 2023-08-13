@@ -3,7 +3,7 @@ import subprocess
 import time
 import zipfile
 
-folder = r'/root/download/weibo/'
+folder = r'/root/download/'
 
 z = zipfile.ZipFile("/media/media.zip", 'a')
 os.chdir(folder)
