@@ -61,6 +61,8 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
         page_add = 0
         # 此方法获取的信息不能下载v+内容，但不需要cookie
         info = one_page_latest(user_id=user.userid, page=page)
+        if info is None:
+            continue
         if info['ok']:
             cards = info['data']['cards']
             cards_num = len(cards)
@@ -134,7 +136,7 @@ def start(scraping: Following, has_send):
                     f1.write(f"处理 {weibo['weibo_url']} 失败\n")
                     f1.write(f"{r.text}\n\n")
                 logger.error(f"处理 {weibo['weibo_url']} 失败")
-                os.system('cp weibo.sqlite.db weibo.sqlite.back')
+                os.system('cp sqlite.db sqlite.back')
                 sys.exit(1)
         else:
             continue
@@ -142,8 +144,8 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    all_followings = get_all_following()
-    send_weibo_url = get_send_weibo()
+    all_followings = get_all_following('weibo')
+    send_weibo_url = get_send_url('weibo')
     try:
         for following in all_followings:
             f = Following(*following)
@@ -153,4 +155,4 @@ if __name__ == '__main__':
         detailed_error_info = traceback.format_exc()
         logger.info(detailed_error_info)
     finally:
-        os.system('cp weibo.sqlite.db weibo.sqlite.back')
+        os.system('cp sqlite.db sqlite.back')

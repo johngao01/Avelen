@@ -12,7 +12,7 @@ app = Flask(__name__)
 def get_data_send_hello():
     data = request.get_data(as_text=True)  # Get the request data as a string
     data = json.loads(data)
-    print(data['weibo_link'], data['text_raw'].replace('\n', '\t'))
+    send.logger.info(data['username'], data['url'], data['text_raw'].replace('\n', '\t'), data['create_time'])
     return data
 
 

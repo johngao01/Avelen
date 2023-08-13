@@ -14,6 +14,6 @@ touch "$LOCKFILE"
 
 # 在这里执行你的任务
 cd "${script_dir}" || exit
-python3 scrapy.py
+python3 weibo_scrapy.py
 # 删除锁文件
 rm "$LOCKFILE"

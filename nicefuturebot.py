@@ -39,7 +39,7 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await echo(update, context)
         return
-    await context.bot.send_document(document=open('/root/pythonproject/weibo_tg_bot/weibo.sqlite.db', 'rb'),
+    await context.bot.send_document(document=open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb'),
                                     chat_id=DEVELOPER_CHAT_ID)
 
 

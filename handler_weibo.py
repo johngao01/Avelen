@@ -1,16 +1,10 @@
 import datetime
-import json
-import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from time import sleep
 
-import requests
 from PIL import Image
 
 from utils import *
 
-script_directory = os.path.dirname(os.path.abspath(__file__))
-download_save_root_directory = '/root/download'
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                   'Chrome/104.0.0.0 Safari/537.36',
@@ -19,27 +13,7 @@ headers = {
 }
 del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736']
 
-MAX_PHOTO_SIZE = 10 * 1024 * 1024
-MAX_PHOTO_TOTAL_PIXEL = 10000
-MAX_VIDEO_SIZE = 50 * 1024 * 1024
-MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
-
-WEB_HOOK_URL = 'http://localhost:5000'
-TIME_OUT = 30
-logger = MyLogger('scrapy', 'logger', mode='a')
-
-
-def request_webhook(method, post_data):
-    time = 3
-    try:
-        r = requests.post(WEB_HOOK_URL + method, data=json.dumps(post_data))
-    except requests.exceptions.RequestException:
-        logger.error(traceback.format_exc())
-        logger.info("time sleep 15 seconds")
-        sleep(15)
-        time -= 1
-    else:
-        return r
+logger = MyLogger('scrapy', 'scrapy_weibo', mode='a')
 
 
 def standardize_date(created_at):
@@ -208,7 +182,7 @@ def weibo_data(weibo_link):
     weibo_id = data['idstr']
     mblogid = data['mblogid']
     save_json(weibo_edit_count(data), user_id, weibo_id, data)
-    create_date = standardize_date(data['created_at'])
+    create_time = standardize_date(data['created_at'])
     if 'message' in data and data['message'] == '暂无权限查看':
         return
     weibo_header['referer'] = f'https://weibo.com/{user_id}/{weibo_id}'
@@ -216,17 +190,18 @@ def weibo_data(weibo_link):
         'data': data,
         'url': weibo_link,
         'id': weibo_id,
-        'create_date': create_date.strftime("%Y%m%d"),
+        'create_date': create_time.strftime("%Y%m%d"),
         'save_dir': os.path.join(download_save_root_directory, 'weibo', data['user']['screen_name'], data['idstr']),
         'header': weibo_header.update({'referer': f'https://weibo.com/{user_id}/{weibo_id}'})
     }
     os.makedirs(weibo_info['save_dir'], exist_ok=True)
     post_data = {
         'username': data['user']['screen_name'],
-        'weibo_link': weibo_link,
+        'url': weibo_link,
         'userid': user_id,
         'idstr': weibo_id,
         'mblogid': mblogid,
+        'create_time': create_time.strftime("%Y-%m-%d %H:%M:%S"),
         'text_raw': data['text_raw'],
     }
     return weibo_info, post_data
@@ -253,10 +228,10 @@ def handler_photo_weibo(weibo_info, pic_infos, post_data):
     if len(post_data['files']) == 0:
         return
     if len(post_data) >= 2:
-        r = request_webhook('/send-album', post_data)
+        r = request_webhook('/send-album', post_data, logger)
         return r
     else:
-        r = request_webhook('/photo-or-video', post_data)
+        r = request_webhook('/photo-or-video', post_data, logger)
         return r
 
 
@@ -294,16 +269,16 @@ def handler_video_weibo(weibo_info, post_data, video_url):
     logger.info(msg)
     if len(video_content) > MAX_VIDEO_SIZE:
         post_data.update({'message': "文件太大，[请单击我查看]({})".format(video_url)})
-        r = request_webhook('/send_message', post_data)
+        r = request_webhook('/send_message', post_data, logger)
         return r
     elif video_content:
 
         post_data.update({'files': {'media': save_path, 'caption': media_name}})
-        r = request_webhook('/photo-or-video', post_data)
+        r = request_webhook('/photo-or-video', post_data, logger)
         return r
     else:
         post_data.update({'message': f"获取[微博视频]({weibo_info['url']})失败"})
-        r = request_webhook('/send_message', post_data)
+        r = request_webhook('/send_message', post_data, logger)
         return r
 
 

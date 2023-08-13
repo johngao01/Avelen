@@ -1,12 +1,23 @@
 import hashlib
+import json
 import logging
 import os
+import traceback
 from datetime import datetime
+from time import sleep
 
 import cv2
+import requests
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 download_save_root_directory = '/root/download'
+MAX_PHOTO_SIZE = 10 * 1024 * 1024
+MAX_PHOTO_TOTAL_PIXEL = 10000
+MAX_VIDEO_SIZE = 50 * 1024 * 1024
+MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
+
+WEB_HOOK_URL = 'http://localhost:5000'
+TIME_OUT = 30
 
 
 class MyLogger(logging.Logger):
@@ -78,5 +89,23 @@ def save_content(save_path, content: bytes):
     :param content: 媒体内容
     :return: 文件地址
     """
-    with open(save_path, mode='wb') as f:
-        f.write(content)
+    try:
+        with open(save_path, mode='wb') as f:
+            f.write(content)
+        return True
+    except OSError as e:
+        print(e)
+        return False
+
+
+def request_webhook(method, post_data, logger):
+    time = 3
+    try:
+        r = requests.post(WEB_HOOK_URL + method, data=json.dumps(post_data))
+    except requests.exceptions.RequestException:
+        logger.error(traceback.format_exc())
+        logger.info("time sleep 15 seconds")
+        sleep(15)
+        time -= 1
+    else:
+        return r

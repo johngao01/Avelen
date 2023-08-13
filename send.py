@@ -1,10 +1,12 @@
 import asyncio
+import logging
 from datetime import datetime
 
 import telegram
 from telegram import Bot, InputMediaVideo, InputMediaPhoto, InputMediaDocument
 from telegram.constants import ParseMode
 
+logger = logging.getLogger('webhook')
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 MARKDOWN_CHAR = ['_', '*', '[', '`', ]
@@ -17,20 +19,20 @@ async def retry_send(fun, **kwargs):
             r = await fun(**kwargs)
             return r
         except telegram.error.TimedOut as e:
-            print("Get TimeoutError", e)
-            await asyncio.sleep(10)
+            logger.error("Get TimeoutError" + str(e))
+            await asyncio.sleep(20)
             time -= 1
         except telegram.error.BadRequest as e:
-            print("Get BadRequest Error", e)
-            await asyncio.sleep(10)
+            logger.error("Get BadRequest Error" + str(e))
+            await asyncio.sleep(20)
             time -= 1
         except telegram.error.RetryAfter as e:
-            print("Get RetryAfter Error", e)
-            await asyncio.sleep(10)
+            logger.error("Get RetryAfter Error" + str(e))
+            await asyncio.sleep(20)
             time -= 1
 
 
-def process_message(message: telegram.Message, weibo_data):
+def process_message(message: telegram.Message, data):
     message_data = {
         'MESSAGE_ID': message.message_id,
         'CAPTION': message.caption or '',
@@ -39,11 +41,11 @@ def process_message(message: telegram.Message, weibo_data):
         'FORM_USER': message.from_user.id,
         'CHAT': message.chat.id,
         'MEDIA_GROUP_ID': message.media_group_id or '',
-        'TEXT_RAW': weibo_data['text_raw'],
-        'WEIBO_URL': weibo_data['weibo_link'],
-        'USERID': weibo_data['userid'],
-        'WEIBO_IDSTR': weibo_data['idstr'],
-        'MBLOGID': weibo_data['mblogid'],
+        'TEXT_RAW': data['text_raw'],
+        'URL': data['url'],
+        'USERID': data['userid'],
+        'IDSTR': data['idstr'],
+        'MBLOGID': data['mblogid'],
         'PHOTO': {},
         'VIDEO': {},
         'DOCUMENT': {}
@@ -53,20 +55,20 @@ def process_message(message: telegram.Message, weibo_data):
                 'height': message.video.height, 'width': message.video.width, 'duration': message.video.duration or 0,
                 'file_name': message.video.file_name, 'file_size': message.video.file_size or 0,
                 'file_type': message.video.mime_type or 'mp4', 'message_id': message.message_id,
-                'media_group_id': message.media_group_id, 'weibo_url': weibo_data['weibo_link']}
+                'media_group_id': message.media_group_id, 'url': data['url']}
         message_data['VIDEO'] = file
     if message.photo:
         for photo_size in message.photo:
             file = {'file_id': photo_size.file_id, 'file_unique_id': photo_size.file_unique_id,
                     'width': photo_size.width, 'height': photo_size.height, 'file_size': photo_size.file_size or 0,
                     'file_name': message_data['CAPTION'], 'message_id': message.message_id,
-                    'media_group_id': message.media_group_id, 'weibo_url': weibo_data['weibo_link']}
+                    'media_group_id': message.media_group_id, 'url': data['url']}
             message_data['PHOTO'][photo_size.file_id] = file
     if message.document:
         file = {'file_id': message.document.file_id, 'file_unique_id': message.document.file_unique_id,
                 'file_name': message.document.file_name, 'file_type': message.document.mime_type or '',
                 'file_size': message.document.file_size or 0, 'message_id': message.message_id,
-                'media_group_id': message.media_group_id, 'weibo_url': weibo_data['weibo_link']}
+                'media_group_id': message.media_group_id, 'url': data['url']}
         message_data['DOCUMENT'] = file
     return message_data
 
@@ -99,7 +101,7 @@ async def send_album(bot, filetype, album: list, ):
         medias = []
         for media in album:
             path, caption, file_size = media
-            print(path, filetype)
+            logger.info(path + "\t" + filetype)
             if filetype == 'video':
                 media = InputMediaVideo(open(path, mode='rb'), caption=caption)
             elif filetype == 'photo':
@@ -119,7 +121,7 @@ async def send_message_after(tg_bot, data, messages):
         message = message.replace(char, '\\' + char)
     send_response = await tg_bot.sendMessage(
         DEVELOPER_CHAT_ID,
-        "[{}]({})".format(data['username'], data['weibo_link']) + "：" + message,
+        "[{}]({})".format(data['username'], data['url']) + "：" + message,
         parse_mode=ParseMode.MARKDOWN,
     )
     messages.append(send_response)
@@ -171,7 +173,7 @@ async def send_video_or_photo(data):
     caption = file['caption']
     path = file['media']
     ext = path[-3:]
-    print(path)
+    logger.info(path + "\t" + ext)
     if ext in ['mp4', 'mov', 'gif']:
         send_response = await retry_send(fun=tg_bot.send_video, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
     else:
