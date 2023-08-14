@@ -124,7 +124,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def rm_lock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    with open('logger.log', mode='r', encoding='utf-8') as f:
+    with open('scrapy_weibo.log', mode='r', encoding='utf-8') as f:
         text = f.readlines()[-3:]
     text = '\n'.join(text)
     logger.info(text)
