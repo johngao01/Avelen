@@ -125,21 +125,29 @@ def start(scraping: Following, has_send):
     for weibo in new_weibo:
         if weibo['weibo_url'] in has_send:
             continue
-        r = handle_weibo(weibo['weibo_url'], scraping.userid)
-        if type(r) is requests.Response:
-            if r.status_code == 200:
-                previous_weibo_time = weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
-                store_message_data(r)
-            else:
-                update_db(scraping.userid, previous_weibo_time)
-                with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
-                    f1.write(f"处理 {weibo['weibo_url']} 失败\n")
-                    f1.write(f"{r.text}\n\n")
-                logger.error(f"处理 {weibo['weibo_url']} 失败")
-                os.system('cp sqlite.db sqlite.back')
-                sys.exit(1)
+        try:
+            r = handle_weibo(weibo['weibo_url'], scraping.userid)
+        except Exception:
+            with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
+                f1.write(f"处理 {weibo['weibo_url']} 失败\n")
+            logger.error(f"处理 {weibo['weibo_url']} 失败")
+            logger.error(traceback.format_exc())
+            update_db(scraping.userid, previous_weibo_time)
         else:
-            continue
+            if type(r) is requests.Response:
+                if r.status_code == 200:
+                    previous_weibo_time = weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
+                    store_message_data(r)
+                else:
+                    update_db(scraping.userid, previous_weibo_time)
+                    with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
+                        f1.write(f"处理 {weibo['weibo_url']} 失败\n")
+                        f1.write(f"{r.text}\n\n")
+                    logger.error(f"处理 {weibo['weibo_url']} 失败")
+                    os.system('cp sqlite.db sqlite.back')
+                    sys.exit(1)
+            else:
+                continue
     update_db(scraping.userid, max_weibo_time)
 
 
