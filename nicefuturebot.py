@@ -134,9 +134,14 @@ async def rm_lock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.system('rm -r start.lock')
 
 
+async def start_scrapy_douyin():
+    os.system('python3 douyin.scrapy.py')
+
+
 async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"), BotCommand("resend", "重发"),
-               BotCommand("delete", "删除"), BotCommand("rm_lock", "删除锁文件")]
+               BotCommand("delete", "删除"), BotCommand("rm_lock", "删除锁文件"),
+               BotCommand("scrapy_douyin", "开始爬取抖音")]
     await application.bot.set_my_commands(commands=command)
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
@@ -149,6 +154,7 @@ def main() -> None:
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("rm_lock", rm_lock_file))
+    application.add_handler(CommandHandler("scrapy_douyin", start_scrapy_douyin))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_error_handler(error_handler)
     application.run_polling()
