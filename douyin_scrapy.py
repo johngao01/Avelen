@@ -99,7 +99,7 @@ if __name__ == '__main__':
     try:
         for f in all_followings:
             start(Following(*f), send_url)
-        scrapy_logger.info("本次任务结束")
+        scrapy_logger.info("本次任务结束\n\n")
     except Exception as e:
         detailed_error_info = traceback.format_exc()
         scrapy_logger.info(detailed_error_info)

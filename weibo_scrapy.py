@@ -158,7 +158,7 @@ if __name__ == '__main__':
         for following in all_followings:
             f = Following(*following)
             start(f, send_weibo_url)
-        logger.info("本次任务结束")
+        logger.info("本次任务结束\n\n")
     except Exception as e:
         detailed_error_info = traceback.format_exc()
         logger.info(detailed_error_info)
