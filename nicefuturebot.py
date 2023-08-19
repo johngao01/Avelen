@@ -123,39 +123,32 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await context.bot.send_message(chat_id=update.effective_chat.id, text="抱歉，出现了一些错误，无法获得相应的内容")
 
 
-async def rm_lock_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    with open('scrapy_weibo.log', mode='r', encoding='utf-8') as f:
-        text = f.readlines()[-3:]
-    text = '\n'.join(text)
-    logger.info(text)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
-    if os.path.exists('start.lock'):
-        logger.info("删除锁文件")
-        os.system('rm -r start.lock')
-
-
-async def start_scrapy_douyin():
-    os.system('python3 douyin.scrapy.py')
+async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message_id = update.message.message_id
+    logger.info("start scrapy douyin")
+    os.system('python3 douyin_scrapy.py')
+    logger.info("scrapy douyin end")
+    await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
 
 
 async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"), BotCommand("resend", "重发"),
-               BotCommand("delete", "删除"), BotCommand("rm_lock", "删除锁文件"),
-               BotCommand("scrapy_douyin", "开始爬取抖音")]
+               BotCommand("delete", "删除"), BotCommand("scrapy_douyin", "开始爬取抖音")]
     await application.bot.set_my_commands(commands=command)
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
 
 def main() -> None:
     weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
+    douyin_filter = filters.Regex('^https://(v.|www.)?douyin.com/[0-9A-Za-z]+/')
     application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
         edit_commands).build()
     application.add_handler(CommandHandler("backup", backup))
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
-    application.add_handler(CommandHandler("rm_lock", rm_lock_file))
     application.add_handler(CommandHandler("scrapy_douyin", start_scrapy_douyin))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
+    # application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
     application.add_error_handler(error_handler)
     application.run_polling()
 
