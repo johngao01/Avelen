@@ -125,10 +125,11 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
+    logger.info(message_id)
     logger.info("start scrapy douyin")
     os.system('python3 douyin_scrapy.py')
-    logger.info("scrapy douyin end")
     await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
+    logger.info("scrapy douyin end")
 
 
 async def edit_commands(application):
