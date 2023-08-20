@@ -198,7 +198,10 @@ class Following:
         self.user_sec_uid = userid
         self.username = username
         self.scrapy_type = scrapy_type
-        self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
+        if latest_time is None or latest_time == '':
+            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
+        else:
+            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
 
 
 class Aweme:
