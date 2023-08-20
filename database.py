@@ -83,7 +83,7 @@ def update_db(user_id, latest_time):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     sql = f'UPDATE FOLLOWINGS SET latest_time={repr(latest_time)} WHERE USERID={repr(user_id)}'
-    print(sql)
+    # print(sql)
     cursor.execute(sql)
     conn.commit()
     cursor.close()
