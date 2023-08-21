@@ -92,6 +92,7 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
     md5value = bytes2md5(pic_content)
     if pic_content:
         size = len(pic_content)
+        human_readable_size = convert_bytes_to_human_readable(size)
         if md5value in del_file:
             logger.info("和谐的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
         else:
@@ -102,8 +103,7 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
             }
             if file_type == 'jpg':
                 img = Image.open(save_path)
-                msg = '\t'.join([str(index), save_path, str(img.width) + "*" + str(img.height),
-                                 convert_bytes_to_human_readable(size)])
+                msg = '\t'.join([str(index), save_path, str(img.width) + "*" + str(img.height), human_readable_size])
                 logger.info(msg)
                 if img.width + img.height > MAX_PHOTO_TOTAL_PIXEL:
                     if size < MAX_DOCUMENT_SIZE:
@@ -118,13 +118,15 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
                         file_data.update({'type': 'document'})
                     else:
                         file_data.update(
-                            {'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({photo_url})"})
+                            {'type': 'document',
+                             'send_url': f"{media_name}太大({human_readable_size})，[请单击我查看]({photo_url})"})
                 photo_video.append(file_data)
             else:
                 if size < MAX_VIDEO_SIZE:
                     file_data.update({'type': 'video'})
                 else:
-                    file_data.update({'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({photo_url})"})
+                    file_data.update({'type': 'document',
+                                      'send_url': f"{media_name}太大({human_readable_size})，[请单击我查看]({photo_url})"})
                 photo_video.append(file_data)
             if pic.get('type') == 'livephoto':
                 livephoto_url = pic.get('video')
@@ -150,7 +152,8 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
                         file_data.update({'type': 'video'})
                     else:
                         file_data.update(
-                            {'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({livephoto_url})"})
+                            {'type': 'document',
+                             'send_url': f"{media_name}太大({human_readable_size})，[请单击我查看]({livephoto_url})"})
                     photo_video.append(file_data)
                 else:
                     os.remove(save_path)
@@ -265,14 +268,15 @@ def handler_video_weibo(weibo_info, post_data, video_url):
     media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
     save_path = os.path.join(weibo_info['save_dir'], media_name)
     save_content(save_path, video_content)
-    msg = '\t'.join(['1', save_path, convert_bytes_to_human_readable(len(video_content))])
+    size = len(video_content)
+    human_readable_size = convert_bytes_to_human_readable(size)
+    msg = '\t'.join(['1', save_path, human_readable_size])
     logger.info(msg)
-    if len(video_content) > MAX_VIDEO_SIZE:
-        post_data.update({'message': "文件太大，[请单击我查看]({})".format(video_url)})
+    if size > MAX_VIDEO_SIZE:
+        post_data.update({'message': "文件太大({})，[请单击我查看]({})".format(human_readable_size, video_url)})
         r = request_webhook('/send_message', post_data, logger)
         return r
     elif video_content:
-
         post_data.update({'files': {'media': save_path, 'caption': media_name}})
         r = request_webhook('/photo-or-video', post_data, logger)
         return r
