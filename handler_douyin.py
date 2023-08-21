@@ -12,9 +12,8 @@ scrapy_logger = MyLogger('douyin', 'scrapy_douyin', mode='a')
 
 with open('cookies.txt', mode='r', encoding='utf8') as cookie_file:
     cookies = cookie_file.read()
-headers = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                  'Chrome/104.0.0.0 Safari/537.36',
+douyin_headers = {
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183',
     'Cookie': cookies
 }
 
@@ -260,7 +259,7 @@ class Aweme:
             'id': self.aweme_id,
             'create_date': self.create_time.strftime("%Y%m%d"),
             'save_dir': os.path.join(download_save_root_directory, 'douyin'),
-            'header': headers.update({'referer': self.aweme_url})
+            'header': douyin_headers.update({'referer': self.aweme_url})
         }
         self.post_data = {
             'username': self.username,
@@ -378,9 +377,9 @@ class AwemeMedia:
 
 def download_media(url, content_type, referer=None, **kwargs):
     if referer:
-        headers.update({'referer': referer})
+        douyin_headers.update({'referer': referer})
     try:
-        resp = requests.get(url, headers=headers, **kwargs)
+        resp = requests.get(url, headers=douyin_headers, **kwargs)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(e)
@@ -396,29 +395,37 @@ def download_media(url, content_type, referer=None, **kwargs):
 
 def handler_video_douyin(aweme: Aweme):
     aweme_video = aweme.aweme_video()
-    download_response = download_media(aweme_video.download_url, aweme_video.content_type, aweme_video.download_referer,
-                                       stream=True)
-    if download_response:
+    media_name = aweme_video.save_name
+    save_path = aweme_video.save_path()
+    if os.path.exists(save_path):
+        with open(save_path, mode='rb') as f:
+            video_content = f.read()
+        video_size = os.path.getsize(save_path)
+    else:
+        download_response = download_media(aweme_video.download_url, aweme_video.content_type,
+                                           aweme_video.download_referer,
+                                           stream=True)
         video_content = download_response.content
-        media_name = aweme_video.save_name
-        save_path = aweme_video.save_path()
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, video_content)
-        scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
-                                      os.path.relpath(save_path, '/root/download/douyin/')]))
         if not result:
             aweme.post_data.update({'message': f"获取[抖音视频]({aweme.aweme_info['url']})失败"})
             r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
             return r
-        if len(video_content) > MAX_VIDEO_SIZE:
-            aweme.post_data.update({'message': "文件太大，[请单击我查看]({})".format(video_url)})
-            r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
-            return r
-        elif video_content:
-            aweme.post_data.update({'files': {'media': save_path, 'caption': media_name}})
-            r = request_webhook('/photo-or-video', aweme.post_data, scrapy_logger)
-            return r
-        else:
-            aweme.post_data.update({'message': f"获取[抖音视频]({aweme.aweme_info['url']})失败"})
-            r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
-            return r
+        video_size = len(video_content)
+    human_readable_size = convert_bytes_to_human_readable(video_size)
+    scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
+                                  os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
+    if video_size > MAX_VIDEO_SIZE:
+        aweme.post_data.update(
+            {'message': "文件太大({})，[请单击我查看]({})".format(human_readable_size, aweme_video.download_url)})
+        r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
+        return r
+    elif video_content:
+        aweme.post_data.update({'files': {'media': save_path, 'caption': media_name}})
+        r = request_webhook('/photo-or-video', aweme.post_data, scrapy_logger)
+        return r
+    else:
+        aweme.post_data.update({'message': f"获取[抖音视频]({aweme.aweme_info['url']})失败"})
+        r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
+        return r
