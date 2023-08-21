@@ -1,7 +1,10 @@
 import os.path
 import time
+from hashlib import md5
 from re import sub
+from time import time
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 
 from utils import *
 
@@ -24,173 +27,210 @@ note_url = 'https://www.douyin.com/note/'
 user_url = 'https://www.douyin.com/user/'
 
 
-class XBogus:
-    def __init__(self) -> None:
+class NewXBogus:
+    __string = "Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJnryx9HVGcaStCe="
+    __array = [None for _ in range(
+        48)] + list(range(10)) + [None for _ in range(39)] + list(range(10, 16))
+    __canvas = {
+        23: 1256363761,
+        20: None,
+        174: 1256363761,
+    }
+    __params = {
+        23: 14,
+        174: 4,
+        20: None,
+    }
+    __index = {
+        23: 0,
+        174: 1,
+        20: None,
+    }
 
-        self.Array = [
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, None, None, None, None, None, None, None, None, None, None, None,
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-            None, None, None, None, None, None, None, None, None, None, None, None, 10, 11, 12, 13, 14, 15
+    @staticmethod
+    def disturb_array(
+            a, b, e, d, c, f, t, n, o, i, r, _, x, u, s, l, v, h, g
+    ):
+        array = [0] * 19
+        array[0] = a
+        array[10] = b
+        array[1] = e
+        array[11] = d
+        array[2] = c
+        array[12] = f
+        array[3] = t
+        array[13] = n
+        array[4] = o
+        array[14] = i
+        array[5] = r
+        array[15] = _
+        array[6] = x
+        array[16] = u
+        array[7] = s
+        array[17] = l
+        array[8] = v
+        array[18] = h
+        array[9] = g
+        return array
+
+    @staticmethod
+    def generate_garbled_1(
+            a,
+            b,
+            e,
+            d,
+            c,
+            f,
+            t,
+            n,
+            o,
+            i,
+            r,
+            _,
+            x,
+            u,
+            s,
+            l,
+            v,
+            h,
+            g):
+        array = [0] * 19
+        array[0] = a
+        array[1] = r
+        array[2] = b
+        array[3] = _
+        array[4] = e
+        array[5] = x
+        array[6] = d
+        array[7] = u
+        array[8] = c
+        array[9] = s
+        array[10] = f
+        array[11] = l
+        array[12] = t
+        array[13] = v
+        array[14] = n
+        array[15] = h
+        array[16] = o
+        array[17] = g
+        array[18] = i
+        return "".join(map(chr, map(int, array)))
+
+    @staticmethod
+    def generate_num(text):
+        return [
+            ord(text[i]) << 16 | ord(text[i + 1]) << 8 | ord(text[i + 2]) << 0
+            for i in range(0, 21, 3)
         ]
-        self.character = "Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJnryx9HVGcaStCe="
-
-    def md5_str_to_array(self, md5_str):
-        """
-        将字符串使用md5哈希算法转换为整数数组。
-        Convert a string to an array of integers using the md5 hashing algorithm.
-        """
-        if isinstance(md5_str, str) and len(md5_str) > 32:
-            return [ord(char) for char in md5_str]
-        else:
-            array = []
-            idx = 0
-            while idx < len(md5_str):
-                array.append((self.Array[ord(md5_str[idx])] << 4) | self.Array[ord(md5_str[idx + 1])])
-                idx += 2
-            return array
-
-    def md5_encrypt(self, url_path):
-        """
-        使用多轮md5哈希算法对URL路径进行加密。
-        Encrypt the URL path using multiple rounds of md5 hashing.
-        """
-        hashed_url_path = self.md5_str_to_array(self.md5(self.md5_str_to_array(self.md5(url_path))))
-        return hashed_url_path
-
-    def md5(self, input_data):
-        """
-        计算输入数据的md5哈希值。
-        Calculate the md5 hash value of the input data.
-        """
-        if isinstance(input_data, str):
-            array = self.md5_str_to_array(input_data)
-        elif isinstance(input_data, list):
-            array = input_data
-        else:
-            raise ValueError("Invalid input type. Expected str or list.")
-
-        md5_hash = hashlib.md5()
-        md5_hash.update(bytes(array))
-        return md5_hash.hexdigest()
 
     @staticmethod
-    def encoding_conversion(self, a, b, c, e, d, t, f, r, n, o, i, _, x, u, s, l, v, h, p):
-        """
-        第一次编码转换。
-        Perform encoding conversion.
-        """
-        y = [a, int(i)]
-        y.extend([b, _, c, x, e, u, d, s, t, l, f, v, r, h, n, p, o])
-        re = bytes(y).decode('ISO-8859-1')
-        return re
-
-    @staticmethod
-    def encoding_conversion2(self, a, b, c):
-        """
-        第三次编码转换。
-        Perform an encoding conversion on the given input values and return the result.
-        """
+    def generate_garbled_2(a, b, c):
         return chr(a) + chr(b) + c
 
     @staticmethod
-    def rc4_encrypt(key, data):
-        """
-        使用RC4算法对数据进行加密。
-        Encrypt data using the RC4 algorithm.
-        """
-        S = list(range(256))
-        j = 0
-        encrypted_data = bytearray()
+    def generate_garbled_3(a, b):
+        d = list(range(256))
+        c = 0
+        f = ""
+        for a_idx in range(256):
+            d[a_idx] = a_idx
+        for b_idx in range(256):
+            c = (c + d[b_idx] + ord(a[b_idx % len(a)])) % 256
+            e = d[b_idx]
+            d[b_idx] = d[c]
+            d[c] = e
+        t = 0
+        c = 0
+        for b_idx in range(len(b)):
+            t = (t + 1) % 256
+            c = (c + d[t]) % 256
+            e = d[t]
+            d[t] = d[c]
+            d[c] = e
+            f += chr(ord(b[b_idx]) ^ d[(d[t] + d[c]) % 256])
+        return f
 
-        # 初始化 S 盒
-        # Initialize the S box
-        for i in range(256):
-            j = (j + S[i] + key[i % len(key)]) % 256
-            S[i], S[j] = S[j], S[i]
+    def calculate_md5(self, input_string):
+        if isinstance(input_string, str):
+            array = self.md5_to_array(input_string)
+        elif isinstance(input_string, list):
+            array = input_string
+        else:
+            raise TypeError
 
-        # 生成密文
-        # Generate the ciphertext
-        i = j = 0
-        for byte in data:
-            i = (i + 1) % 256
-            j = (j + S[i]) % 256
-            S[i], S[j] = S[j], S[i]
-            encrypted_byte = byte ^ S[(S[i] + S[j]) % 256]
-            encrypted_data.append(encrypted_byte)
+        md5_hash = md5()
+        md5_hash.update(bytes(array))
+        return md5_hash.hexdigest()
 
-        return encrypted_data
+    def md5_to_array(self, md5_str):
+        if isinstance(md5_str, str) and len(md5_str) > 32:
+            return [ord(char) for char in md5_str]
+        else:
+            return [
+                (self.__array[ord(md5_str[index])] << 4)
+                | self.__array[ord(md5_str[index + 1])]
+                for index in range(0, len(md5_str), 2)
+            ]
 
-    def calculation(self, a1, a2, a3):
-        """
-        对给定的输入值执行位运算计算，并返回结果。
-        Perform a calculation using bitwise operations on the given input values and return the result.
-        """
-        x1 = (a1 & 255) << 16
-        x2 = (a2 & 255) << 8
-        x3 = x1 | x2 | a3
-        return self.character[(x3 & 16515072) >> 18] + self.character[(x3 & 258048) >> 12] + self.character[
-            (x3 & 4032) >> 6] + self.character[
-            x3 & 63]
+    def process_url_path(self, url_path):
+        return self.md5_to_array(
+            self.calculate_md5(self.md5_to_array(self.calculate_md5(url_path)))
+        )
 
-    def get_xbogus(self, url_path):
-        """
-        获取 X-Bogus 值。
-        Get the X-Bogus value.
-        """
-        array1 = self.md5_str_to_array("d88201c9344707acde7261b158656c0e")
-        array2 = self.md5_str_to_array(
-            self.md5(self.md5_str_to_array("d41d8cd98f00b204e9800998ecf8427e")))
-        url_path_array = self.md5_encrypt(url_path)
+    def generate_str(self, num):
+        string = [num & 16515072, num & 258048, num & 4032, num & 63]
+        string = [i >> j for i, j in zip(string, range(18, -1, -6))]
+        return "".join([self.__string[i] for i in string])
 
-        timer = int(time.time())
-        ct = 536919696
-        array3 = []
-        array4 = []
-        xb_ = ""
-
-        new_array = [
-            64, 0.00390625, 1, 8,
-            url_path_array[14], url_path_array[15], array2[14], array2[15], array1[14], array1[15],
-            timer >> 24 & 255, timer >> 16 & 255, timer >> 8 & 255, timer & 255,
-            ct >> 24 & 255, ct >> 16 & 255, ct >> 8 & 255, ct & 255
+    # @run_time
+    def generate_x_bogus(
+            self,
+            query: list,
+            version: int,
+            code: tuple,
+            timestamp: int):
+        array = [
+            64,
+            0.00390625,
+            1,
+            self.__params[version],
+            query[-2],
+            query[-1],
+            69,
+            63,
+            *code,
+            timestamp >> 24 & 255,
+            timestamp >> 16 & 255,
+            timestamp >> 8 & 255,
+            timestamp >> 0 & 255,
+            self.__canvas[version] >> 24 & 255,
+            self.__canvas[version] >> 16 & 255,
+            self.__canvas[version] >> 8 & 255,
+            self.__canvas[version] >> 0 & 255,
+            None,
         ]
+        zero = 0
+        for i in array[:-1]:
+            if isinstance(i, float):
+                i = int(i)
+            zero ^= i
+        array[-1] = zero
+        garbled = self.generate_garbled_1(*self.disturb_array(*array))
+        garbled = self.generate_garbled_2(
+            2, 255, self.generate_garbled_3("ÿ", garbled))
+        return "".join(self.generate_str(i)
+                       for i in self.generate_num(garbled))
 
-        xor_result = new_array[0]
-        for i in range(1, len(new_array)):
-            # a = xor_result
-            b = new_array[i]
-            if isinstance(b, float):
-                b = int(b)
-            xor_result ^= b
-
-        new_array.append(xor_result)
-
-        idx = 0
-        while idx < len(new_array):
-            array3.append(new_array[idx])
-            try:
-                array4.append(new_array[idx + 1])
-            except IndexError:
-                pass
-            idx += 2
-
-        merge_array = array3 + array4
-
-        garbled_code = self.encoding_conversion2(
-            2, 255, self.rc4_encrypt("ÿ".encode('ISO-8859-1'),
-                                     self.encoding_conversion(*merge_array).encode('ISO-8859-1')).decode('ISO-8859-1'))
-
-        idx = 0
-        while idx < len(garbled_code):
-            xb_ += self.calculation(ord(garbled_code[idx]), ord(
-                garbled_code[idx + 1]), ord(garbled_code[idx + 2]))
-            idx += 3
-        params = '%s&X-Bogus=%s' % (url_path, xb_)
-        xb = xb_
-        return params, xb
+    def get_x_bogus(
+            self,
+            query: dict,
+            user_agent: tuple,
+            version=23,
+            test_time=None):
+        timestamp = int(test_time or time())
+        query = self.process_url_path(urlencode(query))
+        return self.generate_x_bogus(
+            query, version, user_agent[self.__index[version]], timestamp)
 
 
 class Following:
