@@ -11,6 +11,7 @@ from telegram.ext import (
 )
 
 from database import *
+from handler_douyin import *
 from handler_weibo import *
 
 DEVELOPER_CHAT_ID = 708424141
@@ -100,7 +101,13 @@ async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weibo_link = update.message.text
     logger.info(weibo_link)
     r = handle_weibo(weibo_link)
-    store_message_data(r)
+    if type(r) is requests.Response:
+        if r.status_code == 200:
+            store_message_data(r)
+        else:
+            logger.error(f"处理微博 {weibo_link} 失败")
+    else:
+        logger.error(f"处理微博 {weibo_link} 失败")
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -136,12 +143,55 @@ async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"), BotCommand("resend", "重发"),
                BotCommand("delete", "删除"), BotCommand("scrapy_douyin", "开始爬取抖音")]
     await application.bot.set_my_commands(commands=command)
-    # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
+    await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
+
+
+async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    link_message = update.message.text
+    if link_message.startswith("https://www."):
+        link = link_message
+        aweme_id = re.search(r'(\d{19})', link_message).group(1)
+    else:
+        link = re.search('https://v.douyin.com/[A-Za-z0-9]+/', link_message).group(0)
+        r = requests.get(url=link, headers=headers, allow_redirects=False)
+        aweme_id = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})/?', r.text).group(2)
+    logger.info(link)
+    params = {
+        "aweme_id": aweme_id,
+        "aid": "6383",
+        "cookie_enabled": "true",
+        "platform": "PC",
+        "downlink": "10"
+    }
+    new_xb = NewXBogus()
+    params['X-Bogus'] = new_xb.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
+    api_post_url = 'https://www.douyin.com/aweme/v1/web/aweme/detail/?'
+    rs = requests.get(api_post_url, params=params, headers=douyin_headers, timeout=5)
+    if rs.text == '':
+        logger.error(f"处理抖音 {link} 失败")
+        await context.bot.send_message("获取失败", chat_id=update.effective_chat.id)
+        return
+    response_json = json.loads(rs.text)
+    aweme = response_json['aweme_detail']
+    aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
+    user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], 1, '')
+    aweme = Aweme(user, aweme)
+    if aweme.is_video:
+        r = handler_video_douyin(aweme)
+    else:
+        return
+    if type(r) is requests.Response:
+        if r.status_code == 200:
+            store_message_data(r)
+        else:
+            logger.error(f"处理抖音 {link} 失败")
+    else:
+        logger.error(f"处理抖音 {link} 失败")
 
 
 def main() -> None:
     weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
-    douyin_filter = filters.Regex('^https://(v.|www.)?douyin.com/[0-9A-Za-z]+/')
+    douyin_filter = filters.Regex('https://(v.|www.)?douyin.*')
     application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
         edit_commands).build()
     application.add_handler(CommandHandler("backup", backup))
@@ -149,7 +199,7 @@ def main() -> None:
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("scrapy_douyin", start_scrapy_douyin))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
-    # application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
+    application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
     application.add_error_handler(error_handler)
     application.run_polling()
 
