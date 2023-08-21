@@ -9,7 +9,7 @@ from telegram.constants import ParseMode
 logger = logging.getLogger('webhook')
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
-MARKDOWN_CHAR = ['_', '*', '[', '`', ]
+MARKDOWN_CHAR = ['*', '`']
 
 
 async def retry_send(fun, **kwargs):
@@ -188,10 +188,10 @@ async def message_send(data):
     message = data['message']
     for char in MARKDOWN_CHAR:
         message = message.replace(char, '\\' + char)
-    send_response = await retry_send(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=message,
-                                     parse_mode=ParseMode.MARKDOWN)
-    result = process_message(send_response, data)
-    return result
+    messages = [await retry_send(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=message,
+                                 parse_mode=ParseMode.MARKDOWN)]
+    results = await send_message_after(tg_bot, data, messages)
+    return results
 
 
 async def send_document(data):
@@ -199,7 +199,7 @@ async def send_document(data):
     file = data['files']
     caption = file['caption']
     path = file['media']
-    send_response = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
-                                     caption=caption)
-    result = process_message(send_response, data)
-    return result
+    messages = [await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
+                                 caption=caption)]
+    results = await send_message_after(tg_bot, data, messages)
+    return results

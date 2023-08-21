@@ -55,7 +55,7 @@ async def send_message():
     data = get_data_send_hello()
     response_message = await send.message_send(data)
     result = {
-        'messages': [response_message]
+        'messages': response_message
     }
     return jsonify(result)
 
@@ -66,7 +66,7 @@ async def send_document():
     data = get_data_send_hello()
     response_message = await send.send_document(data)
     result = {
-        'messages': [response_message]
+        'messages': response_message
     }
     return jsonify(result)
 
