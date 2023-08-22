@@ -89,15 +89,3 @@ def update_db(user_id, latest_time):
     cursor.close()
     conn.close()
 
-
-def delete_weibo_data(url):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    url = "'" + url + "'"
-    cursor.execute(f'delete from messages where url={url};')
-    cursor.execute(f'delete from photo where url={url};')
-    cursor.execute(f'delete from video where url={url};')
-    cursor.execute(f'delete from document where url={url};')
-    conn.commit()
-    cursor.close()
-    conn.close()

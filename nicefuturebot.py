@@ -76,7 +76,6 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
         weibo_messages = get_weibo_messages(url)
         weibo_messages.append(message_id)
         await del_weibo_files(weibo_files)
-        delete_weibo_data(url)
     else:
         weibo_messages = [message_id]
     for message_id in weibo_messages:
