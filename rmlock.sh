@@ -39,7 +39,7 @@ while true; do
     if [ $? -eq 1 ]; then
         echo "程序可能卡死，正在重启..."
 #        pkill -f weibo_scrapy.py
-        rm $LOG_FILE
+        rm $LOCK_FILE
     else
         echo "程序正常运行"
     fi
