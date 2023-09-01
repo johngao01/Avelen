@@ -75,7 +75,7 @@ def start(scraping: Following, has_send):
         if aweme.is_video:
             r = handler_video_douyin(aweme)
         else:
-            continue
+            r = handler_note_douyin(aweme)
         if type(r) is requests.Response:
             if r.status_code == 200:
                 previous_time = aweme.create_time_str
