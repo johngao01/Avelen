@@ -7,6 +7,8 @@ from telegram import Bot, InputMediaVideo, InputMediaPhoto, InputMediaDocument
 from telegram.constants import ParseMode
 
 logger = logging.getLogger('webhook')
+# 设置Logger对象的级别为INFO
+logger.setLevel(logging.INFO)
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 MARKDOWN_CHAR = ['*', '`', '[', '_', '`']
