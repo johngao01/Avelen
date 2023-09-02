@@ -129,7 +129,7 @@ def start(scraping: Following, has_send):
         if weibo['weibo_url'] in has_send:
             continue
         try:
-            r = handle_weibo(weibo['weibo_url'], scraping.userid)
+            r = handle_weibo(weibo['weibo_url'], scraping.userid, scraping.username)
         except Exception:
             with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
                 f1.write(f"处理 {weibo['weibo_url']} 失败\n")

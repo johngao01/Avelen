@@ -56,10 +56,9 @@ def save_json(edit_count, userid, idstr, json_data):
     :return:
     """
     if edit_count == 0:
-        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', userid, idstr + '.json')
+        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', idstr + '.json')
     else:
-        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', userid,
-                                 idstr + "_" + str(edit_count) + '.json')
+        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', idstr + "_" + str(edit_count) + '.json')
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, mode='w', encoding='utf8') as json_write:
         json.dump(json_data, json_write, ensure_ascii=False, indent=4)
@@ -170,7 +169,7 @@ def weibo_pic_infos(weibo_dict):
     return pic_infos
 
 
-def weibo_data(weibo_link):
+def weibo_data(weibo_link, username):
     weibo_header = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                       'Chrome/104.0.0.0 Safari/537.36',
@@ -189,12 +188,16 @@ def weibo_data(weibo_link):
     if 'message' in data and data['message'] == '暂无权限查看':
         return
     weibo_header['referer'] = f'https://weibo.com/{user_id}/{weibo_id}'
+    if username:
+        save_dir = os.path.join(download_save_root_directory, 'weibo', username)
+    else:
+        save_dir = os.path.join(download_save_root_directory, 'weibo', data['user']['screen_name'])
     weibo_info = {
         'data': data,
         'url': weibo_link,
         'id': weibo_id,
         'create_date': create_time.strftime("%Y%m%d"),
-        'save_dir': os.path.join(download_save_root_directory, 'weibo', data['user']['screen_name'], data['idstr']),
+        'save_dir': save_dir,
         'header': weibo_header.update({'referer': f'https://weibo.com/{user_id}/{weibo_id}'})
     }
     os.makedirs(weibo_info['save_dir'], exist_ok=True)
@@ -286,8 +289,8 @@ def handler_video_weibo(weibo_info, post_data, video_url):
         return r
 
 
-def handle_weibo(weibo_url, userid=None):
-    weibo_info, post_data = weibo_data(weibo_url)
+def handle_weibo(weibo_url, userid=None, username=None):
+    weibo_info, post_data = weibo_data(weibo_url, username)
     weibo_dict = weibo_info['data']
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
