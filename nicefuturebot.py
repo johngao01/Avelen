@@ -178,7 +178,7 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if aweme.is_video:
         r = handler_video_douyin(aweme)
     else:
-        return
+        r = handler_note_douyin(aweme)
     if type(r) is requests.Response:
         if r.status_code == 200:
             store_message_data(r)
