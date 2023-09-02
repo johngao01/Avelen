@@ -9,7 +9,7 @@ from telegram.constants import ParseMode
 logger = logging.getLogger('webhook')
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
-MARKDOWN_CHAR = ['*', '`']
+MARKDOWN_CHAR = ['*', '`', '[', '_', '`']
 
 
 async def retry_send(fun, **kwargs):
