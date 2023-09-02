@@ -21,15 +21,15 @@ async def retry_send(fun, **kwargs):
             r = await fun(**kwargs)
             return r
         except telegram.error.TimedOut as e:
-            logger.error("Get TimeoutError" + str(e))
+            logger.error("Get TimeoutError：" + str(e))
             await asyncio.sleep(20)
             time -= 1
         except telegram.error.BadRequest as e:
-            logger.error("Get BadRequest Error" + str(e))
+            logger.error("Get BadRequest Error：" + str(e))
             await asyncio.sleep(20)
             time -= 1
         except telegram.error.RetryAfter as e:
-            logger.error("Get RetryAfter Error" + str(e))
+            logger.error("Get RetryAfter Error：" + str(e))
             await asyncio.sleep(20)
             time -= 1
 
