@@ -12,10 +12,11 @@ class Scrapy:
         self.max_cursor = 0
         self.max_time = datetime(2000, 12, 31, 12, 12, 12)
         self.page = 1
+        self.new_xbogus = NewXBogus()
         self.header = {
-            'referer': 'https://www.douyin.com/' + self.user_sec_uid,
+            'referer': 'https://www.douyin.com/',
             'cookie': cookies,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.5359.95 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
         }
         self.awemes = []
 
@@ -23,9 +24,24 @@ class Scrapy:
         scrapy_logger.info(
             f'开始获取 {self.username} 截至 {str(self.last_one_time)} 抖音，她的主页是 {user_url}{self.user_sec_uid}')
         while True:
-            url = 'https://www.douyin.com/aweme/v1/web/aweme/post/?device_platform=webapp&aid=6383&channel=channel_pc_web&sec_user_id=' + self.user_sec_uid + '&max_cursor=' + str(
-                self.max_cursor) + '&locate_query=false&show_live_replay_strategy=1&count=50&publish_video_strategy_type=2&pc_client_type=1&version_code=170400&version_name=17.4.0&cookie_enabled=true&screen_width=1536&screen_height=864&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=108.0.5359.95&browser_online=true&engine_name=Blink&engine_version=108.0.5359.95&os_name=Windows&os_version=10&cpu_core_num=8&device_memory=8&platform=PC&downlink=10&effective_type=4g&round_trip_time=250'
-            resp = requests.get(url, headers=self.header)
+            params = {
+                "device_platform": "webapp",
+                "aid": "6383",
+                "channel": "channel_pc_web",
+                "sec_user_id": self.user_sec_uid,
+                "max_cursor": self.max_cursor,
+                "count": "18",
+                "cookie_enabled": "true",
+                "platform": "PC",
+                "downlink": "10",
+                # "webid": self.__web,
+            }
+            params['X-Bogus'] = self.new_xbogus.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
+            resp = requests.get(url='https://www.douyin.com/aweme/v1/web/aweme/post/', headers=self.header,
+                                params=params)
+            if resp.text == '':
+                scrapy_logger.error('爬取失败，空响应')
+                exit(1)
             resp = resp.text.encode('utf-8').decode('utf-8')
             data_json = json.loads(resp)
             page_add = 0
