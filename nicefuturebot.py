@@ -2,6 +2,7 @@ import html
 import re
 import sys
 
+import telegram.error
 from telegram import Update, BotCommand
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -44,6 +45,13 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     chat_id=DEVELOPER_CHAT_ID)
 
 
+async def delete_message(context, message_id, chat_id):
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except telegram.error.TelegramError:
+        pass
+
+
 async def get_url(update):
     message = update.message.reply_to_message
     if not message:
@@ -79,7 +87,7 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         weibo_messages = [message_id]
     for message_id in weibo_messages:
-        await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
+        await delete_message(context, message_id, DEVELOPER_CHAT_ID)
         logger.info(f"删除id为{message_id}的message")
     return url
 
@@ -134,7 +142,7 @@ async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info(message_id)
     logger.info("start scrapy douyin")
     os.system('python3 douyin_scrapy.py')
-    await context.bot.delete_message(chat_id=DEVELOPER_CHAT_ID, message_id=message_id)
+    await delete_message(context, message_id, DEVELOPER_CHAT_ID)
     logger.info("scrapy douyin end")
 
 
