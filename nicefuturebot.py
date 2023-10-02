@@ -106,6 +106,7 @@ async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weibo_link = update.message.text
+    message_id = update.message.message_id
     logger.info(weibo_link)
     r = handle_weibo(weibo_link)
     if type(r) is requests.Response:
@@ -115,6 +116,7 @@ async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"处理微博 {weibo_link} 失败")
     else:
         logger.error(f"处理微博 {weibo_link} 失败")
+    await delete_message(context, message_id, DEVELOPER_CHAT_ID)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -155,6 +157,7 @@ async def edit_commands(application):
 
 async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     link_message = update.message.text
+    message_id = update.message.message_id
     if link_message.startswith("https://www."):
         link = link_message
         aweme_id = re.search(r'(\d{19})', link_message).group(1)
@@ -194,6 +197,7 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"处理抖音 {link} 失败")
     else:
         logger.error(f"处理抖音 {link} 失败")
+    await delete_message(context, message_id, DEVELOPER_CHAT_ID)
 
 
 def main() -> None:
