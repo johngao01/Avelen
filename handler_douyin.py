@@ -1,5 +1,6 @@
 import os.path
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import md5
 from re import sub
 from time import time
@@ -391,6 +392,43 @@ def download_media(url, content_type, referer=None, **kwargs):
             return None
 
 
+def download(media: AwemeMedia, aweme_post_data, logger):
+    media_name = media.save_name
+    save_path = media.save_path()
+    if os.path.exists(save_path):
+        with open(save_path, mode='rb') as f:
+            media_content = f.read()
+        media_size = os.path.getsize(save_path)
+    else:
+        download_response = download_media(media.download_url, media.content_type,
+                                           media.download_referer,
+                                           stream=True)
+        media_content = download_response.content
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        result = save_content(save_path, media_content)
+        if not result:
+            logger.info('  '.join([media.content_id, media_name, media.download_url, '下载失败']))
+            return
+        media_size = len(media_content)
+    human_readable_size = convert_bytes_to_human_readable(media_size)
+    if media.content_type == 'video':
+        logger.info('  '.join([aweme_post_data['username'], aweme_post_data['url'], aweme_post_data['create_time'],
+                               os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
+    else:
+        logger.info('  '.join([os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
+    photo_data = {
+        'media': save_path,
+        'caption': media_name,
+        'size': media_size
+    }
+    if media_size > MAX_VIDEO_SIZE:
+        photo_data.update(
+            {'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({media.download_url})"})
+    elif media_content:
+        photo_data.update({'type': 'video'}) if media.content_type == 'video' else photo_data.update({'type': 'photo'})
+    return photo_data
+
+
 def handler_video_douyin(aweme: Aweme):
     aweme_video = aweme.aweme_video()
     media_name = aweme_video.save_name
@@ -432,39 +470,17 @@ def handler_video_douyin(aweme: Aweme):
 def handler_note_douyin(aweme: Aweme):
     aweme_photos = aweme.aweme_photos()
     photos = []
-    for photo in aweme_photos:
-        media_name = photo.save_name
-        save_path = photo.save_path()
-        if os.path.exists(save_path):
-            with open(save_path, mode='rb') as f:
-                photo_content = f.read()
-            photo_size = os.path.getsize(save_path)
-        else:
-            download_response = download_media(photo.download_url, photo.content_type,
-                                               photo.download_referer,
-                                               stream=True)
-            photo_content = download_response.content
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            result = save_content(save_path, photo_content)
-            if not result:
-                aweme.post_data.update({'message': f"获取[抖音图片]({aweme.aweme_info['url']})失败"})
-                r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
-                return r
-            photo_size = len(photo_content)
-        human_readable_size = convert_bytes_to_human_readable(photo_size)
-        scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
-                                      os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
-        photo_data = {
-            'media': save_path,
-            'caption': media_name,
-            'size': photo_size
-        }
-        if photo_size > MAX_VIDEO_SIZE:
-            photo_data.update(
-                {'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({photo.download_url})"})
-        elif photo_content:
-            photo_data.update({'type': 'photo'})
-        photos.append(photo_data)
+    with ThreadPoolExecutor() as executor:
+        # 使用线程池来执行下载任务
+        future_to_url = {
+            executor.submit(download, photo, aweme.post_data, scrapy_logger) for photo in aweme_photos}
+        for future in as_completed(future_to_url):
+            try:
+                result = future.result()
+                if result:
+                    photos.append(result)
+            except Exception as e:
+                scrapy_logger.info("下载出错：" + str(e))
     aweme.post_data.update({'files': photos})
     r = request_webhook('/send-album', aweme.post_data, scrapy_logger)
     return r
