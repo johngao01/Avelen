@@ -312,7 +312,7 @@ class Aweme:
         if self.is_video:
             return self._node['video']
         else:
-            return self._node.get('image_infos') or self._node.get('images')
+            return self._node.get('image_infos') or self._node.get('images') or self._node.get('image_post_info')
 
     def aweme_video(self) -> 'AwemeMedia':
         return AwemeMedia(self, 1, self._node['video'])
