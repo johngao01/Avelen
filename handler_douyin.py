@@ -17,8 +17,6 @@ douyin_headers = {
     'Cookie': cookies
 }
 
-video = [0, 4, 51, 55, 58, 61]
-images = [2, 68, 150]
 video_aweme_detail_url = 'https://www.douyin.com/aweme/v1/web/aweme/detail/?'
 domain = 'https://www.douyin.com/'
 video_url = 'https://www.douyin.com/video/'
@@ -295,9 +293,9 @@ class Aweme:
         return self.create_time.strftime("%Y-%m-%d %H:%M:%S")
 
     def judge_is_video(self):
-        if self.aweme_type in video:
-            return True
-        elif self.aweme_type in images:
+        if self._node.get('images'):
+            return False
+        elif self._node.get('image_post_info'):
             return False
         else:
             return True
