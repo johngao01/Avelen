@@ -298,6 +298,8 @@ class Aweme:
             return False
         elif self._node.get('image_post_info'):
             return False
+        elif self._node.get('image_infos'):
+            return False
         else:
             return True
 
