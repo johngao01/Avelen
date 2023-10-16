@@ -5,7 +5,7 @@ import zipfile
 
 folder = r'/root/download/'
 
-z = zipfile.ZipFile("/media/media.zip", 'a')
+z = zipfile.ZipFile("/media/media.zip", 'w')
 os.chdir(folder)
 
 start = time.time()
