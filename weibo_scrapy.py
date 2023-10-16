@@ -120,7 +120,7 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
 def start(scraping: Following, has_send):
     new_weibo, max_weibo_time = scrapy_latest(scraping, logger)
     if len(new_weibo) == 0:
-        logger.info(f'{scraping.username} 没有新微博')
+        logger.info(f'{scraping.username} 没有新微博\n')
         update_db(scraping.userid, max_weibo_time)
         return
     new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
@@ -151,6 +151,7 @@ def start(scraping: Following, has_send):
                     sys.exit(1)
             else:
                 continue
+    logger.info(f'\n')
     update_db(scraping.userid, max_weibo_time)
 
 
