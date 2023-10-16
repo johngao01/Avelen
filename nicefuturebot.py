@@ -37,19 +37,21 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
 
 
-async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id != DEVELOPER_CHAT_ID:
-        await echo(update, context)
-        return
-    await context.bot.send_document(document=open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb'),
-                                    chat_id=DEVELOPER_CHAT_ID)
-
-
 async def delete_message(context, message_id, chat_id):
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
     except telegram.error.TelegramError:
         pass
+
+
+async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await echo(update, context)
+        return
+    message_id = update.message.message_id
+    await context.bot.send_document(document=open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb'),
+                                    chat_id=DEVELOPER_CHAT_ID)
+    await delete_message(context, message_id=message_id, chat_id=DEVELOPER_CHAT_ID)
 
 
 async def get_url(update):
