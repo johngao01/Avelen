@@ -1,6 +1,9 @@
 import html
 import re
 import sys
+from re import compile
+from urllib.parse import parse_qs
+from urllib.parse import urlparse
 
 import telegram.error
 from telegram import Update, BotCommand
@@ -157,16 +160,96 @@ async def edit_commands(application):
     await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
 
+async def live_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def get_live_data(params, api):
+        new_xb = NewXBogus()
+        params['X-Bogus'] = new_xb.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
+        if not share:
+            live_headers.update({'Cookie': cookies})
+        response = requests.get(api, params=params, headers=live_headers)
+        if response.text == '':
+            return
+        data = response.json()
+        data = data["data"]["room"] if share else data["data"]["data"][0]
+        if data["status"] == 4:
+            await context.bot.send_message(text="当前直播已结束", chat_id=update.effective_chat.id)
+            return
+        nickname = data["owner"]["nickname"]
+        title = data["title"]
+        stream_urls = data["stream_url"]["flv_pull_url"]
+        viewer = data['user_count'] if 'user_count' in data else data['room_view_stats']['display_value']
+        await context.bot.send_message(text='\t'.join([nickname, title, str(viewer)]), chat_id=update.effective_chat.id)
+        for clarity in ['FULL_HD1', 'HD1', 'SD1', 'SD2']:
+            if clarity in stream_urls:
+                await context.bot.send_message(text=stream_urls[clarity], chat_id=update.effective_chat.id)
+                break
+
+    async def get_share_live_data():
+        response = requests.get(link, headers=live_headers, allow_redirects=False)
+        params = urlparse(response.headers['Location'])
+        url_list = params.path.rstrip("/").split("/")
+        query_params = parse_qs(params.query)
+        room_id = url_list[-1]
+        user_sec_id = query_params.get('sec_user_id', '')
+        params = {
+            "type_id": "0",
+            "live_id": "1",
+            "room_id": room_id,
+            "sec_user_id": user_sec_id[0],
+            "app_id": "1128",
+        }
+        await get_live_data(params, live_share_api)
+
+    async def get_live_url_data(room_id):
+        params = {
+            "aid": "6383",
+            "app_name": "douyin_web",
+            "device_platform": "web",
+            "cookie_enabled": "true",
+            "web_rid": room_id,
+        }
+        await get_live_data(params, live_api)
+
+    share = True
+    share_text = update.message.text
+    share_link = compile(r".*?(https://v\.douyin\.com/[A-Za-z0-9]+?/).*?")
+    live_link = compile(r".*?https://live\.douyin\.com/([0-9]+).*?")  # 直播链接
+    live_api = "https://live.douyin.com/webcast/room/web/enter/"  # 直播API
+    live_share_api = "https://webcast.amemv.com/webcast/room/reflow/info/"  # 直播分享短链接API
+    live_headers = {
+        "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183',
+    }
+    link = share_link.findall(share_text)
+    if link:
+        link = link[0]
+        await get_share_live_data()
+    else:
+        live_room_id = live_link.findall(share_text)
+        if live_room_id:
+            share = False
+            live_room_id = live_room_id[0]
+            await get_live_url_data(live_room_id)
+
+
 async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     link_message = update.message.text
     message_id = update.message.message_id
-    if link_message.startswith("https://www."):
+    if link_message.startswith("https://www.") or link_message.startswith("https://live."):
         link = link_message
+        logger.info(link)
+        if link.startswith('https://live.douyin.com/'):
+            await live_douyin(update, context)
+            return
         aweme_id = re.search(r'(\d{19})', link_message).group(1)
     else:
         link = re.search('https://v.douyin.com/[A-Za-z0-9]+/', link_message).group(0)
         r = requests.get(url=link, headers=headers, allow_redirects=False)
-        aweme_id = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})/?', r.text).group(2)
+        link = r.headers.get('Location')
+        logger.info(link)
+        if link.startswith('https://webcast.amemv.com/douyin/webcast/reflow/'):
+            await live_douyin(update, context)
+            return
+        aweme_id = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})/?', link).group(2)
     logger.info(link)
     params = {
         "aweme_id": aweme_id,
@@ -181,7 +264,7 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rs = requests.get(api_post_url, params=params, headers=douyin_headers, timeout=5)
     if rs.text == '':
         logger.error(f"处理抖音 {link} 失败")
-        await context.bot.send_message("获取失败", chat_id=update.effective_chat.id)
+        await context.bot.send_message(update.effective_chat.id, "获取失败")
         return
     response_json = json.loads(rs.text)
     aweme = response_json['aweme_detail']
@@ -204,7 +287,7 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main() -> None:
     weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
-    douyin_filter = filters.Regex('https://(v.|www.)?douyin.*')
+    douyin_filter = filters.Regex('https://(v.|www.|live.)?douyin.*')
     application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
         edit_commands).build()
     application.add_handler(CommandHandler("backup", backup))
