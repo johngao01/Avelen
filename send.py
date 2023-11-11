@@ -1,5 +1,5 @@
-import asyncio
 import logging
+import traceback
 from datetime import datetime
 
 import telegram
@@ -8,29 +8,26 @@ from telegram.constants import ParseMode
 
 logger = logging.getLogger('webhook')
 # 设置Logger对象的级别为INFO
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.NOTSET)
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 MARKDOWN_CHAR = ['*', '`', '[', '_', '`']
 
 
-async def retry_send(fun, **kwargs):
+async def retry_send(fun, **kwargs) -> list:
     time = 5
     while time:
         try:
-            r = await fun(**kwargs)
+            r = await fun(**kwargs, read_timeout=42, connect_timeout=20, pool_timeout=20)
             return r
-        except telegram.error.TimedOut as e:
-            logger.error("Get TimeoutError：" + str(e))
-            await asyncio.sleep(20)
+        except telegram.error.TimedOut:
+            logger.error("Get TimeoutError：\n" + traceback.format_exc())
             time -= 1
-        except telegram.error.BadRequest as e:
-            logger.error("Get BadRequest Error：" + str(e))
-            await asyncio.sleep(20)
+        except telegram.error.BadRequest:
+            logger.error("Get BadRequest Error：\n" + traceback.format_exc())
             time -= 1
-        except telegram.error.RetryAfter as e:
-            logger.error("Get RetryAfter Error：" + str(e))
-            await asyncio.sleep(20)
+        except telegram.error.RetryAfter:
+            logger.error("Get RetryAfter Error：\n" + traceback.format_exc())
             time -= 1
 
 
@@ -75,7 +72,7 @@ def process_message(message: telegram.Message, data):
     return message_data
 
 
-async def send_album(bot, filetype, album: list, ):
+async def send_album(bot, filetype, album: list):
     def rearrange_files(file_list):
         result_lists = []
         current_list = []
