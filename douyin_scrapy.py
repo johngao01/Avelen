@@ -45,7 +45,7 @@ class Scrapy:
             resp = resp.text.encode('utf-8').decode('utf-8')
             data_json = json.loads(resp)
             page_add = 0
-            if data_json['aweme_list'] is None:
+            if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
             self.max_cursor = data_json['max_cursor']
             page_awemes = data_json['aweme_list']

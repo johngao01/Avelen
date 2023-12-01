@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 
 DB_NAME = 'sqlite.db'
@@ -38,7 +39,9 @@ def store_message_data(response):
 def get_all_following(platform):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    sql = f'''SELECT userid, username, scrapy_type, latest_time FROM FOLLOWINGS where douyin_weibo='{platform}';'''
+    sql = f'''SELECT userid, username, scrapy_type, latest_time 
+              FROM FOLLOWINGS 
+              where douyin_weibo='{platform}' order by scrapy_time;'''
     cursor.execute(sql)
     data = [item for item in cursor.fetchall()]
     cursor.close()
@@ -82,10 +85,10 @@ def init_db():
 def update_db(user_id, latest_time):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    sql = f'UPDATE FOLLOWINGS SET latest_time={repr(latest_time)} WHERE USERID={repr(user_id)}'
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sql = f'UPDATE FOLLOWINGS SET latest_time={repr(latest_time)},scrapy_time={repr(now)} WHERE USERID={repr(user_id)}'
     # print(sql)
     cursor.execute(sql)
     conn.commit()
     cursor.close()
     conn.close()
-
