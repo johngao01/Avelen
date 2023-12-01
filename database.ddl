@@ -29,11 +29,17 @@ create table if not exists photo
 
 create table if not exists followings
 (
-    USERID          TEXT,
-    USERNAME        TEXT,
-    SCRAPY_TYPE     INTEGER default 0,
-    LAST_WEIBO_TIME TEXT
+    USERID       TEXT
+        constraint followings_pk
+            primary key,
+    USERNAME     TEXT,
+    SCRAPY_TYPE  INTEGER default 0,
+    LATEST_TIME  TEXT,
+    douyin_weibo TEXT,
+    scrapy_time  TEXT
 );
+
+
 
 create table if not exists video
 (
