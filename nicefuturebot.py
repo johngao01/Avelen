@@ -158,7 +158,7 @@ async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"), BotCommand("resend", "重发"),
                BotCommand("delete", "删除"), BotCommand("scrapy_douyin", "开始爬取抖音")]
     await application.bot.set_my_commands(commands=command)
-    await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
+    # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
 
 async def live_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
