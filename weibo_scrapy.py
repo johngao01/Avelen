@@ -148,7 +148,6 @@ def start(scraping: Following, has_send):
                         f1.write(f"{r.text}\n\n")
                     logger.error(f"处理 {weibo['weibo_url']} 失败")
                     os.system('cp sqlite.db sqlite.back')
-                    sys.exit(1)
             else:
                 continue
     logger.info(f'\n')

@@ -69,11 +69,11 @@ class Scrapy:
             else:
                 scrapy_info += f"，本页没有新抖音,共有{len(self.awemes)}个新抖音"
             if page_latest_time <= self.last_one_time:
-                scrapy_info += f"，获取新抖音完成。"
+                scrapy_info += f"，获取新抖音完成。\n"
                 scrapy_logger.info(scrapy_info)
                 break
             if not data_json['has_more']:
-                scrapy_info += f"，获取新抖音结束。"
+                scrapy_info += f"，获取新抖音结束。\n"
                 scrapy_logger.info(scrapy_info)
                 break
 
@@ -103,7 +103,6 @@ def start(scraping: Following, has_send):
                     f1.write(f"{r.text}\n\n")
                 scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
                 os.system('cp sqlite.db sqlite.back')
-                sys.exit(1)
         else:
             continue
     update_db(scraping.user_sec_uid, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
