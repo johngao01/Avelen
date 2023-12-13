@@ -54,6 +54,7 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     await context.bot.send_document(document=open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb'),
                                     chat_id=DEVELOPER_CHAT_ID)
+    await context.bot.send_document(document=open('/etc/x-ui/x-ui.db', 'rb'), chat_id=DEVELOPER_CHAT_ID)
     await delete_message(context, message_id=message_id, chat_id=DEVELOPER_CHAT_ID)
 
 
