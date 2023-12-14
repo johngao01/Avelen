@@ -51,8 +51,6 @@ class Scrapy:
             page_add = 0
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
-            if data_json['status_code'] == 0:
-                return
             self.max_cursor = data_json['max_cursor']
             page_awemes = data_json['aweme_list']
             page_latest_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的抖音的时间
@@ -81,7 +79,7 @@ class Scrapy:
             scrapy_logger.info(scrapy_info)
             self.page += 1
             if not data_json['has_more']:
-                scrapy_info += f"，获取新抖音结束。\n"
+                scrapy_info += f"，获取新抖音结束。"
                 scrapy_logger.info(scrapy_info)
                 break
 
@@ -92,27 +90,32 @@ def start(scraping: Following, has_send):
     new_aweme = sorted(scrapy.awemes, key=lambda item: item['create_time'])
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     for aweme in new_aweme:
+        error = 0
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
             continue
         aweme.save_json()
-        if aweme.is_video:
-            r = handler_video_douyin(aweme)
-        else:
-            r = handler_note_douyin(aweme)
-        if type(r) is requests.Response:
-            if r.status_code == 200:
-                previous_time = aweme.create_time_str
-                store_message_data(r)
+        while True:
+            if aweme.is_video:
+                r = handler_video_douyin(aweme)
             else:
-                update_db(scraping.user_sec_uid, previous_time)
-                with open('error.txt', mode='a', encoding='utf-8') as f1:
-                    f1.write(f"处理 {aweme.aweme_url} 失败\n")
-                    f1.write(f"{r.text}\n\n")
-                scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
-                copy2('sqlite.db', 'sqlite.back')
-        else:
-            continue
+                r = handler_note_douyin(aweme)
+            if type(r) is requests.Response:
+                if r.status_code == 200:
+                    previous_time = aweme.create_time_str
+                    store_message_data(r)
+                    break
+                else:
+                    error += 1
+                    if error > 3:
+                        update_db(scraping.user_sec_uid, previous_time)
+                        with open('error.txt', mode='a', encoding='utf-8') as f1:
+                            f1.write(f"处理 {aweme.aweme_url} 失败\n")
+                            f1.write(f"{r.text}\n\n")
+                        scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
+                        break
+            else:
+                break
     update_db(scraping.user_sec_uid, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 

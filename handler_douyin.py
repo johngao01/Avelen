@@ -402,10 +402,17 @@ def download(media: AwemeMedia, aweme_post_data, logger):
             media_content = f.read()
         media_size = os.path.getsize(save_path)
     else:
-        download_response = download_media(media.download_url, media.content_type,
-                                           media.download_referer,
-                                           stream=True)
-        media_content = download_response.content
+        print(media.download_url)
+        while True:
+            try:
+                download_response = download_media(media.download_url, media.content_type,
+                                                   media.download_referer,
+                                                   stream=True)
+                media_content = download_response.content
+                break
+            except Exception:
+                logger.waring('  '.join([media.download_url, '下载失败，重试']))
+                continue
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, media_content)
         if not result:
@@ -440,10 +447,15 @@ def handler_video_douyin(aweme: Aweme):
             video_content = f.read()
         video_size = os.path.getsize(save_path)
     else:
-        download_response = download_media(aweme_video.download_url, aweme_video.content_type,
-                                           aweme_video.download_referer,
-                                           stream=True)
-        video_content = download_response.content
+        while True:
+            try:
+                download_response = download_media(aweme_video.download_url, aweme_video.content_type,
+                                                   aweme_video.download_referer,
+                                                   stream=True)
+                video_content = download_response.content
+                break
+            except Exception:
+                scrapy_logger.warning('  '.join([aweme_video.download_url,'下载失败，重试']))
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, video_content)
         if not result:
