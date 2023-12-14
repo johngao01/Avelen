@@ -79,6 +79,7 @@ class Scrapy:
                 scrapy_logger.info(scrapy_info)
                 break
             scrapy_logger.info(scrapy_info)
+            self.page += 1
             if not data_json['has_more']:
                 scrapy_info += f"，获取新抖音结束。\n"
                 scrapy_logger.info(scrapy_info)
