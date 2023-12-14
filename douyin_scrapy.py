@@ -42,8 +42,12 @@ class Scrapy:
             if resp.text == '':
                 scrapy_logger.error('爬取失败，空响应')
                 exit(1)
-            resp = resp.text.encode('utf-8').decode('utf-8')
-            data_json = json.loads(resp)
+            try:
+                resp = resp.text.encode('utf-8').decode('utf-8')
+                data_json = json.loads(resp)
+            except Exception:
+                print(resp)
+                continue
             page_add = 0
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
@@ -72,6 +76,7 @@ class Scrapy:
                 scrapy_info += f"，获取新抖音完成。\n"
                 scrapy_logger.info(scrapy_info)
                 break
+            scrapy_logger.info(scrapy_info)
             if not data_json['has_more']:
                 scrapy_info += f"，获取新抖音结束。\n"
                 scrapy_logger.info(scrapy_info)

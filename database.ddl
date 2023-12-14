@@ -10,7 +10,7 @@ create table if not exists messages
     TEXT_RAW       TEXT,
     WEIBO_URL      TEXT,
     USERID         TEXT,
-    WEIBO_IDSTR    TEXT,
+    IDSTR          TEXT,
     MBLOGID        TEXT
 );
 
@@ -24,7 +24,7 @@ create table if not exists photo
     file_name      TEXT,
     message_id     TEXT,
     media_group_id TEXT,
-    weibo_url      TEXT
+    url            TEXT
 );
 
 create table if not exists followings
@@ -53,7 +53,7 @@ create table if not exists video
     file_type      TEXT,
     message_id     TEXT,
     media_group_id TEXT,
-    weibo_url      TEXT
+    url      TEXT
 );
 
 create table if not exists document
@@ -65,5 +65,5 @@ create table if not exists document
     file_size      TEXT,
     message_id     TEXT,
     media_group_id TEXT,
-    weibo_url      TEXT
+    url      TEXT
 );
