@@ -51,6 +51,8 @@ class Scrapy:
             page_add = 0
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
+            if data_json['status_code'] == 0:
+                return
             self.max_cursor = data_json['max_cursor']
             page_awemes = data_json['aweme_list']
             page_latest_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的抖音的时间
