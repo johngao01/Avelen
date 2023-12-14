@@ -1,4 +1,4 @@
-import sys
+from shutil import copy2
 import time
 
 import urllib3
@@ -147,7 +147,7 @@ def start(scraping: Following, has_send):
                         f1.write(f"处理 {weibo['weibo_url']} 失败\n")
                         f1.write(f"{r.text}\n\n")
                     logger.error(f"处理 {weibo['weibo_url']} 失败")
-                    os.system('cp sqlite.db sqlite.back')
+                    copy2('sqlite.db', 'sqlite.back')
             else:
                 continue
     logger.info(f'\n')
@@ -166,4 +166,4 @@ if __name__ == '__main__':
         detailed_error_info = traceback.format_exc()
         logger.info(detailed_error_info)
     finally:
-        os.system('cp sqlite.db sqlite.back')
+        copy2('sqlite.db', 'sqlite.back')

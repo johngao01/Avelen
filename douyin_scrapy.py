@@ -1,4 +1,4 @@
-import sys
+from shutil import copy2
 
 from database import *
 from handler_douyin import *
@@ -102,7 +102,7 @@ def start(scraping: Following, has_send):
                     f1.write(f"处理 {aweme.aweme_url} 失败\n")
                     f1.write(f"{r.text}\n\n")
                 scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
-                os.system('cp sqlite.db sqlite.back')
+                copy2('sqlite.db', 'sqlite.back')
         else:
             continue
     update_db(scraping.user_sec_uid, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -119,4 +119,4 @@ if __name__ == '__main__':
         detailed_error_info = traceback.format_exc()
         scrapy_logger.info(detailed_error_info)
     finally:
-        os.system('cp sqlite.db sqlite.back')
+        copy2('sqlite.db', 'sqlite.back')
