@@ -143,7 +143,7 @@ def start(scraping: Following, has_send):
                     store_message_data(r)
                 else:
                     update_db(scraping.userid, previous_weibo_time)
-                    with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
+                    with open('error.txt', mode='a', encoding='utf-8') as f1:
                         f1.write(f"处理 {weibo['weibo_url']} 失败\n")
                         f1.write(f"{r.text}\n\n")
                     logger.error(f"处理 {weibo['weibo_url']} 失败")
