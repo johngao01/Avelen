@@ -1,4 +1,3 @@
-import logging
 import traceback
 from datetime import datetime
 
@@ -6,9 +5,6 @@ import telegram
 from telegram import Bot, InputMediaVideo, InputMediaPhoto, InputMediaDocument
 from telegram.constants import ParseMode
 
-logger = logging.getLogger('webhook')
-# 设置Logger对象的级别为INFO
-logger.setLevel(logging.NOTSET)
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 MARKDOWN_CHAR = ['*', '`', '[', '_', '`']
@@ -21,13 +17,13 @@ async def retry_send(fun, **kwargs) -> list:
             r = await fun(**kwargs, read_timeout=42, connect_timeout=20, pool_timeout=20)
             return r
         except telegram.error.TimedOut:
-            logger.error("Get TimeoutError：\n" + traceback.format_exc())
+            print("Get TimeoutError：\n" + traceback.format_exc())
             time -= 1
         except telegram.error.BadRequest:
-            logger.error("Get BadRequest Error：\n" + traceback.format_exc())
+            print("Get BadRequest Error：\n" + traceback.format_exc())
             time -= 1
         except telegram.error.RetryAfter:
-            logger.error("Get RetryAfter Error：\n" + traceback.format_exc())
+            print("Get RetryAfter Error：\n" + traceback.format_exc())
             time -= 1
 
 
@@ -100,7 +96,7 @@ async def send_album(bot, filetype, album: list):
         medias = []
         for media in album:
             path, caption, file_size = media
-            logger.info(path + "\t" + filetype)
+            print(path + "\t" + filetype)
             if filetype == 'video':
                 media = InputMediaVideo(open(path, mode='rb'), caption=caption)
             elif filetype == 'photo':
@@ -179,7 +175,7 @@ async def send_video_or_photo(data):
     caption = file['caption']
     path = file['media']
     ext = path[-3:]
-    logger.info(path + "\t" + ext)
+    print(path + "\t" + ext)
     if ext in ['mp4', 'mov', 'gif']:
         send_response = await retry_send(fun=tg_bot.send_video, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
     else:
