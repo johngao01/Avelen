@@ -414,7 +414,7 @@ def download(media: AwemeMedia, aweme_post_data, logger):
                 media_content = download_response.content
                 break
             except Exception:
-                logger.waring('  '.join([media.download_url, '下载失败，重试']))
+                logger.warning('  '.join([media.download_url, '下载失败，重试']))
                 continue
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, media_content)
