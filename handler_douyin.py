@@ -458,7 +458,7 @@ def handler_video_douyin(aweme: Aweme):
                 video_content = download_response.content
                 break
             except Exception:
-                scrapy_logger.warning('  '.join([aweme_video.download_url,'下载失败，重试']))
+                scrapy_logger.warning('  '.join([aweme_video.download_url, '下载失败，重试']))
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, video_content)
         if not result:
