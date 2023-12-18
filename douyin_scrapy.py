@@ -36,9 +36,23 @@ class Scrapy:
                 "downlink": "10",
                 # "webid": self.__web,
             }
+            if self.username == 'favorite':
+                params.update({
+                    "min_cursor": "0",
+                    "whale_cut_token": "",
+                    "cut_version": "1",
+                    "publish_video_strategy_type": "2",
+                    "pc_client_type": "1",
+                    "version_code": "170400",
+                    "version_name": "17.4.0",
+                })
             params['X-Bogus'] = self.new_xbogus.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
-            resp = requests.get(url='https://www.douyin.com/aweme/v1/web/aweme/post/', headers=self.header,
-                                params=params)
+            if self.username == 'favorite':
+                resp = requests.get(url="https://www.douyin.com/aweme/v1/web/aweme/favorite/", headers=self.header,
+                                    params=params)
+            else:
+                resp = requests.get(url='https://www.douyin.com/aweme/v1/web/aweme/post/', headers=self.header,
+                                    params=params)
             if resp.text == '':
                 scrapy_logger.error('爬取失败，空响应')
                 exit(1)
