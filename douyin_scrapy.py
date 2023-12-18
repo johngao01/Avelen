@@ -103,14 +103,18 @@ def start(scraping: Following, has_send):
     scrapy.scrapy_aweme()
     new_aweme = sorted(scrapy.awemes, key=lambda item: item['create_time'])
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
-    for aweme in new_aweme:
+    for i, aweme in enumerate(new_aweme, start=1):
         error = 0
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
+            print(i, aweme.aweme_url, aweme.describe)
             continue
         aweme.save_json()
         while True:
             if aweme.is_video:
+                if aweme.aweme_info['data']['duration'] > 3600000:  # 视频时长大于3600s时，跳过
+                    print(i, aweme.aweme_info['data']['duration'], aweme.aweme_url, aweme.describe)
+                    break
                 r = handler_video_douyin(aweme)
             else:
                 r = handler_note_douyin(aweme)
