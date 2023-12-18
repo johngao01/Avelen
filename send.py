@@ -118,11 +118,18 @@ async def send_message_after(tg_bot, data, messages):
     message = data['text_raw']
     for char in MARKDOWN_CHAR:
         message = message.replace(char, '\\' + char)
-    send_response = await tg_bot.sendMessage(
-        DEVELOPER_CHAT_ID,
-        "[{}]({})".format(data['username'], data['url']) + "：" + message,
-        parse_mode=ParseMode.MARKDOWN,
-    )
+    if data['username'] == 'favorite' and 'nickname' in data:
+        send_response = await tg_bot.sendMessage(
+            DEVELOPER_CHAT_ID,
+            "[{}]({})".format(data['nickname'], data['url']) + "：" + message,
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    else:
+        send_response = await tg_bot.sendMessage(
+            DEVELOPER_CHAT_ID,
+            "[{}]({})".format(data['username'], data['url']) + "：" + message,
+            parse_mode=ParseMode.MARKDOWN,
+        )
     messages.append(send_response)
     results = []
     for send_response in messages:

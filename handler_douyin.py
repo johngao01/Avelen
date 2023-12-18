@@ -262,6 +262,7 @@ class Aweme:
         }
         self.post_data = {
             'username': self.username,
+            'nickname': self._node['author']['nickname'],
             'url': self.aweme_url,
             'userid': self.user_sec_uid,
             'idstr': self.aweme_id,
@@ -269,6 +270,8 @@ class Aweme:
             'create_time': self.create_time_str,
             'text_raw': self.describe,
         }
+        if self.username == 'favorite':
+            self.post_data.update({'userid': self._node['author']['sec_uid']})
 
     def save_json(self):
         """
