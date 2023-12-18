@@ -63,16 +63,16 @@ def get_send_url(douyin_weibo):
     return exec_sql_get_data(f'''SELECT distinct url FROM messages where url like '%{douyin_weibo}%';''')
 
 
-def get_weibo_file(url):
+def get_file(url):
     return exec_sql_get_data(f"select CAPTION from messages where url='{url}'")
 
 
-def get_weibo_messages(url):
+def get_messages(url):
     return exec_sql_get_data(f"select MESSAGE_ID from messages where url='{url}'")
 
 
 def get_duplicate_caption(url):
-    return exec_sql_get_data(f"SELECT CAPTION FROM messages where url = '{url}' "
+    return exec_sql_get_data(f"SELECT CAPTION FROM messages where url='{url}'"
                              f"GROUP BY CAPTION HAVING COUNT(*) > 1;")
 
 

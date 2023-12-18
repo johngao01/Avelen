@@ -72,7 +72,7 @@ async def get_url(update):
     return url
 
 
-async def del_weibo_files(weibo_files):
+async def del_files(weibo_files):
     for root, dirs, files in os.walk("/root/download/weibo"):
         for file in files:
             if file in weibo_files:
@@ -86,13 +86,13 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = await get_url(update)
     if url:
         logger.info("url：" + url)
-        weibo_files = get_weibo_file(url)
-        weibo_messages = get_weibo_messages(url)
-        weibo_messages.append(message_id)
-        await del_weibo_files(weibo_files)
+        files = get_file(url)
+        messages = get_messages(url)
+        messages.append(message_id)
+        await del_files(files)
     else:
-        weibo_messages = [message_id]
-    for message_id in weibo_messages:
+        messages = [message_id]
+    for message_id in messages:
         await delete_message(context, message_id, DEVELOPER_CHAT_ID)
         logger.info(f"删除id为{message_id}的message")
     return url
