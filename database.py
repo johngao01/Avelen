@@ -71,6 +71,15 @@ def get_weibo_messages(url):
     return exec_sql_get_data(f"select MESSAGE_ID from messages where url='{url}'")
 
 
+def get_duplicate_caption(url):
+    return exec_sql_get_data(f"SELECT CAPTION FROM messages where url = '{url}' "
+                             f"GROUP BY CAPTION HAVING COUNT(*) > 1;")
+
+
+def get_message_id(caption, url):
+    return exec_sql_get_data(f"SELECT message_id FROM messages where caption='{caption}' and url='{url}' order by MESSAGE_ID")
+
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()

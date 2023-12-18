@@ -110,6 +110,21 @@ async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message_id = update.message.message_id
+    url = await get_url(update)
+    captions = get_duplicate_caption(url)
+    if len(captions) > 0:
+        for caption in captions:
+            message_ids = get_message_id(caption, url)
+            if len(message_ids) > 0:
+                delete_messages = message_ids[0:-1]
+                for delete_message_id in delete_messages:
+                    logger.info("delete message of id is: " + delete_message_id)
+                    await delete_message(context, message_id=delete_message_id, chat_id=DEVELOPER_CHAT_ID)
+    await delete_message(context, message_id=message_id, chat_id=DEVELOPER_CHAT_ID)
+
+
 async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weibo_link = update.message.text
     message_id = update.message.message_id
@@ -156,7 +171,8 @@ async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"), BotCommand("resend", "重发"),
-               BotCommand("delete", "删除"), BotCommand("scrapy_douyin", "开始爬取抖音")]
+               BotCommand("delete", "删除"), BotCommand("clear", "清理"),
+               BotCommand("scrapy_douyin", "开始爬取抖音")]
     await application.bot.set_my_commands(commands=command)
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
@@ -294,6 +310,7 @@ def main() -> None:
     application.add_handler(CommandHandler("backup", backup))
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
+    application.add_handler(CommandHandler("clear", clear))
     application.add_handler(CommandHandler("scrapy_douyin", start_scrapy_douyin))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
