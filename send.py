@@ -7,6 +7,8 @@ from telegram.constants import ParseMode
 
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
+API_URL = 'http://localhost:8081/bot'
+FILE_API_URL = 'http://localhost:8081/file/bot'
 MARKDOWN_CHAR = ['*', '`', '[', '_', '`']
 
 
@@ -135,7 +137,7 @@ async def send_message_after(tg_bot, data, messages):
 
 
 async def send_medias(data):
-    tg_bot = Bot(token=TOKEN)
+    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
     photos = []
     videos = []
     documents = []
@@ -170,7 +172,7 @@ async def send_medias(data):
 
 
 async def send_video_or_photo(data):
-    tg_bot = Bot(token=TOKEN)
+    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
     file = data['files']
     caption = file['caption']
     path = file['media']
@@ -186,7 +188,7 @@ async def send_video_or_photo(data):
 
 
 async def message_send(data):
-    tg_bot = Bot(token=TOKEN)
+    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
     message = data['message']
     for char in MARKDOWN_CHAR:
         message = message.replace(char, '\\' + char)
@@ -197,7 +199,7 @@ async def message_send(data):
 
 
 async def send_document(data):
-    tg_bot = Bot(token=TOKEN)
+    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
     file = data['files']
     caption = file['caption']
     path = file['media']
