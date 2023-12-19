@@ -107,12 +107,12 @@ def start(scraping: Following, has_send):
         error = 0
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
-            print(i, aweme.aweme_url, aweme.describe)
+            print(i, aweme.aweme_url, aweme.describe.replace('\n', ' '))
             continue
         aweme.save_json()
         while True:
             if aweme.is_video:
-                if aweme.aweme_info['data']['duration'] > 3600000:  # 视频时长大于3600s时，跳过
+                if aweme.aweme_info['data']['duration'] > 1800000:  # 视频时长大于3600s时，跳过
                     print(i, aweme.aweme_info['data']['duration'], aweme.aweme_url, aweme.describe)
                     break
                 r = handler_video_douyin(aweme)
