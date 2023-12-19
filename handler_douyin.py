@@ -405,7 +405,7 @@ def download(media: AwemeMedia, aweme_post_data, logger):
             media_content = f.read()
         media_size = os.path.getsize(save_path)
     else:
-        print(media.download_url)
+        error = 0
         while True:
             try:
                 download_response = download_media(media.download_url, media.content_type,
@@ -414,7 +414,10 @@ def download(media: AwemeMedia, aweme_post_data, logger):
                 media_content = download_response.content
                 break
             except Exception:
+                error += 1
                 logger.warning('  '.join([media.download_url, '下载失败，重试']))
+                if error > 3:
+                    return
                 continue
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, media_content)
@@ -450,6 +453,7 @@ def handler_video_douyin(aweme: Aweme):
             video_content = f.read()
         video_size = os.path.getsize(save_path)
     else:
+        error = 0
         while True:
             try:
                 download_response = download_media(aweme_video.download_url, aweme_video.content_type,
@@ -458,7 +462,10 @@ def handler_video_douyin(aweme: Aweme):
                 video_content = download_response.content
                 break
             except Exception:
+                error += 1
                 scrapy_logger.warning('  '.join([aweme_video.download_url, '下载失败，重试']))
+                if error > 3:
+                    return
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         result = save_content(save_path, video_content)
         if not result:
