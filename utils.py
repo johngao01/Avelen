@@ -82,17 +82,20 @@ def bytes2md5(r_bytes):
     return file_hash.hexdigest()
 
 
-def save_content(save_path, content: bytes):
+def save_content(save_path, response):
     """
     保存内容到本地
     :param save_path: 文件保存地址
-    :param content: 媒体内容
+    :param response: 请求下载响应
     :return: 文件地址
     """
     try:
-        with open(save_path, mode='wb') as f:
-            f.write(content)
+        with open(save_path, mode='wb', buffering=8192) as f:
+            for chunk in response.iter_content(chunk_size=8192):  # Adjust the chunk size as needed
+                if chunk:
+                    f.write(chunk)
         return True
+
     except OSError as e:
         print(e)
         return False

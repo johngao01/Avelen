@@ -459,7 +459,6 @@ def handler_video_douyin(aweme: Aweme):
                 download_response = download_media(aweme_video.download_url, aweme_video.content_type,
                                                    aweme_video.download_referer,
                                                    stream=True)
-                video_content = download_response.content
                 break
             except Exception:
                 error += 1
@@ -467,12 +466,12 @@ def handler_video_douyin(aweme: Aweme):
                 if error > 3:
                     return
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        result = save_content(save_path, video_content)
+        result = save_content(save_path, download_response)
         if not result:
             aweme.post_data.update({'message': f"获取[抖音视频]({aweme.aweme_info['url']})失败"})
             r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
             return r
-        video_size = len(video_content)
+        video_size = os.path.getsize(save_path)
     human_readable_size = convert_bytes_to_human_readable(video_size)
     scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
                                   os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
