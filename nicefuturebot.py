@@ -285,6 +285,9 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     response_json = json.loads(rs.text)
     aweme = response_json['aweme_detail']
+    if aweme is None:
+        await delete_message(context, message_id, DEVELOPER_CHAT_ID)
+        return
     aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
     user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], 1, '')
     aweme = Aweme(user, aweme)
