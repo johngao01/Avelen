@@ -179,9 +179,11 @@ async def send_video_or_photo(data):
     ext = path[-3:]
     print(path + "\t" + ext)
     if ext in ['mp4', 'mov', 'gif']:
-        send_response = await retry_send(fun=tg_bot.send_video, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
+        send_response = await retry_send(fun=tg_bot.send_video, video=open(path, 'rb'), chat_id=DEVELOPER_CHAT_ID,
+                                         caption=caption)
     else:
-        send_response = await retry_send(fun=tg_bot.send_photo, video=path, chat_id=DEVELOPER_CHAT_ID, caption=caption)
+        send_response = await retry_send(fun=tg_bot.send_photo, video=open(path, 'rb'), chat_id=DEVELOPER_CHAT_ID,
+                                         caption=caption)
     messages = [send_response]
     results = await send_message_after(tg_bot, data, messages)
     return results
