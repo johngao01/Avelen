@@ -436,7 +436,7 @@ def download(media: AwemeMedia, aweme_post_data, logger):
     if media_size > MAX_VIDEO_SIZE:
         photo_data.update(
             {'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({media.download_url})"})
-    elif media_content:
+    elif media_size:
         photo_data.update({'type': 'video'}) if media.content_type == 'video' else photo_data.update({'type': 'photo'})
     return photo_data
 
@@ -494,6 +494,9 @@ def handler_note_douyin(aweme: Aweme):
                     photos.append(result)
             except Exception as e:
                 scrapy_logger.info("下载出错：" + str(e))
-    aweme.post_data.update({'files': photos})
-    r = request_webhook('/send-album', aweme.post_data, scrapy_logger)
-    return r
+    if len(photos) > 0:
+        aweme.post_data.update({'files': photos})
+        r = request_webhook('/send-album', aweme.post_data, scrapy_logger)
+        return r
+    else:
+        return 'fail'
