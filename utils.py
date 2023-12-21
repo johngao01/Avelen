@@ -112,3 +112,8 @@ def request_webhook(method, post_data, logger):
         time -= 1
     else:
         return r
+
+
+def log_error(url):
+    with open('error.txt', 'a') as f:
+        f.write(f"处理 {url} 失败\n")
