@@ -1,4 +1,5 @@
 import os.path
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import md5
@@ -7,8 +8,7 @@ from time import time
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
-import requests
-
+from database import store_message_data
 from utils import *
 
 scrapy_logger = MyLogger('douyin', 'scrapy_douyin', mode='a')
@@ -381,11 +381,36 @@ class AwemeMedia:
         return filepath
 
 
+def get_aweme_detail(aweme_url):
+    if aweme_url.startswith("https://www."):
+        aweme_id = re.search(r'(\d{19})', aweme_url).group(1)
+    else:
+        aweme_url = re.search('https://v.douyin.com/[A-Za-z0-9]+/', aweme_url).group(0)
+        aweme_id = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})/?', aweme_url).group(2)
+    params = {
+        "aweme_id": aweme_id,
+        "aid": "6383",
+        "cookie_enabled": "true",
+        "platform": "PC",
+        "downlink": "10"
+    }
+    new_xb = NewXBogus()
+    params['X-Bogus'] = new_xb.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
+    api_post_url = 'https://www.douyin.com/aweme/v1/web/aweme/detail/?'
+    rs = requests.get(api_post_url, params=params, headers=douyin_headers, timeout=5)
+    if rs.text == '':
+        print('空数据')
+        return
+    response_json = json.loads(rs.text)
+    aweme = response_json['aweme_detail']
+    return aweme
+
+
 def download_media(aweme_media):
     if aweme_media.download_referer:
         douyin_headers.update({'referer': aweme_media.download_referer})
     try:
-        resp = requests.get(aweme_media.download_url, headers=douyin_headers,stream=True)
+        resp = requests.get(aweme_media.download_url, headers=douyin_headers, stream=True)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         return str(e)
@@ -420,7 +445,8 @@ def download(media: AwemeMedia, aweme_post_data, logger):
         if isinstance(download_response, requests.Response) and save_content(save_path, download_response):
             media_size = os.path.getsize(save_path)
         else:
-            logger.info('  '.join([aweme_post_data['url'], media.content_id, media_name, media.download_url, '下载失败']))
+            logger.info(
+                '  '.join([aweme_post_data['url'], media.content_id, media_name, media.download_url, '下载失败']))
             return
     human_readable_size = convert_bytes_to_human_readable(media_size)
     if media.content_type == 'video':
@@ -500,3 +526,21 @@ def handler_note_douyin(aweme: Aweme):
         return r
     else:
         return 'fail'
+
+
+def handler_douyin(aweme):
+    aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
+    user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], 1, '')
+    aweme = Aweme(user, aweme)
+    if aweme.is_video:
+        r = handler_video_douyin(aweme)
+    else:
+        r = handler_note_douyin(aweme)
+    if type(r) is requests.Response:
+        if r.status_code == 200:
+            store_message_data(r)
+            return True
+        else:
+            return False
+    else:
+        return False
