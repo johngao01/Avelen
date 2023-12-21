@@ -127,9 +127,7 @@ def start(scraping: Following, has_send):
                     error += 1
                     if error > 3:
                         update_db(scraping.user_sec_uid, previous_time)
-                        with open('error.txt', mode='a', encoding='utf-8') as f1:
-                            f1.write(f"处理 {aweme.aweme_url} 失败\n")
-                            f1.write(f"{r.text}\n\n")
+                        log_error(aweme.aweme_url)
                         scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
                         break
             else:
