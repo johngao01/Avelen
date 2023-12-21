@@ -101,7 +101,10 @@ class Scrapy:
 def start(scraping: Following, has_send):
     scrapy = Scrapy(scraping)
     scrapy.scrapy_aweme()
-    new_aweme = sorted(scrapy.awemes, key=lambda item: item['create_time'])
+    if scrapy.username != 'favorite':
+        new_aweme = sorted(scrapy.awemes, key=lambda item: item['create_time'])
+    else:
+        new_aweme = scrapy.awemes
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     for i, aweme in enumerate(new_aweme, start=1):
         error = 0
