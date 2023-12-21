@@ -95,7 +95,6 @@ def save_content(save_path, response):
                 if chunk:
                     f.write(chunk)
         return True
-
     except OSError as e:
         print(e)
         return False

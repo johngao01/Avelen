@@ -427,8 +427,6 @@ def download(media: AwemeMedia, aweme_post_data, logger):
     media_name = media.save_name
     save_path = media.save_path()
     if os.path.exists(save_path):
-        with open(save_path, mode='rb') as f:
-            media_content = f.read()
         media_size = os.path.getsize(save_path)
     else:
         error = 0
