@@ -7,6 +7,8 @@ from time import time
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
+import requests
+
 from utils import *
 
 scrapy_logger = MyLogger('douyin', 'scrapy_douyin', mode='a')
@@ -379,19 +381,18 @@ class AwemeMedia:
         return filepath
 
 
-def download_media(url, content_type, referer=None, **kwargs):
-    if referer:
-        douyin_headers.update({'referer': referer})
+def download_media(aweme_media):
+    if aweme_media.download_referer:
+        douyin_headers.update({'referer': aweme_media.download_referer})
     try:
-        resp = requests.get(url, headers=douyin_headers, **kwargs)
+        resp = requests.get(aweme_media.download_url, headers=douyin_headers,stream=True)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
-        print(e)
-        raise requests.RequestException
+        return str(e)
     else:
-        if content_type == 'image' and resp.headers['Content-Type'].startswith(content_type):
+        if aweme_media.content_type == 'image' and resp.headers['Content-Type'].startswith(aweme_media.content_type):
             return resp
-        elif content_type == 'video' and resp.headers['Content-Type'].startswith(content_type):
+        elif aweme_media.content_type == 'video' and resp.headers['Content-Type'].startswith(aweme_media.content_type):
             return resp
         else:
             return None
@@ -408,23 +409,19 @@ def download(media: AwemeMedia, aweme_post_data, logger):
         error = 0
         while True:
             try:
-                download_response = download_media(media.download_url, media.content_type,
-                                                   media.download_referer,
-                                                   stream=True)
-                media_content = download_response.content
+                download_response = download_media(media)
                 break
             except Exception:
                 error += 1
-                logger.warning('  '.join([media.download_url, '下载失败，重试']))
+                logger.warning('  '.join([aweme_post_data['url'], media.download_url, '下载失败，重试']))
                 if error > 3:
                     return
-                continue
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        result = save_content(save_path, media_content)
-        if not result:
-            logger.info('  '.join([media.content_id, media_name, media.download_url, '下载失败']))
+        if isinstance(download_response, requests.Response) and save_content(save_path, download_response):
+            media_size = os.path.getsize(save_path)
+        else:
+            logger.info('  '.join([aweme_post_data['url'], media.content_id, media_name, media.download_url, '下载失败']))
             return
-        media_size = len(media_content)
     human_readable_size = convert_bytes_to_human_readable(media_size)
     if media.content_type == 'video':
         logger.info('  '.join([aweme_post_data['username'], aweme_post_data['url'], aweme_post_data['create_time'],
@@ -449,28 +446,21 @@ def handler_video_douyin(aweme: Aweme):
     media_name = aweme_video.save_name
     save_path = aweme_video.save_path()
     if os.path.exists(save_path):
-        with open(save_path, mode='rb') as f:
-            video_content = f.read()
         video_size = os.path.getsize(save_path)
     else:
         error = 0
         while True:
             try:
-                download_response = download_media(aweme_video.download_url, aweme_video.content_type,
-                                                   aweme_video.download_referer,
-                                                   stream=True)
+                download_response = download_media(aweme_video)
                 break
             except Exception:
                 error += 1
-                scrapy_logger.warning('  '.join([aweme_video.download_url, '下载失败，重试']))
+                scrapy_logger.warning('  '.join([aweme.aweme_url, aweme.describe, '下载失败，重试']))
                 if error > 3:
                     return
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        result = save_content(save_path, download_response)
-        if not result:
-            aweme.post_data.update({'message': f"获取[抖音视频]({aweme.aweme_info['url']})失败"})
-            r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
-            return r
+        if isinstance(download_response, requests.Response) and save_content(save_path, download_response):
+            return False
         video_size = os.path.getsize(save_path)
     human_readable_size = convert_bytes_to_human_readable(video_size)
     scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
@@ -480,7 +470,7 @@ def handler_video_douyin(aweme: Aweme):
             {'message': "文件太大({})，[请单击我查看]({})".format(human_readable_size, aweme_video.download_url)})
         r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
         return r
-    elif video_content:
+    elif video_size:
         aweme.post_data.update({'files': {'media': save_path, 'caption': media_name}})
         r = request_webhook('/photo-or-video', aweme.post_data, scrapy_logger)
         return r

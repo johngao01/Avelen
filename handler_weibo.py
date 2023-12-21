@@ -79,15 +79,15 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
     media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + "_" + str(index) + "." + file_type
     save_path = os.path.join(weibo_info['save_dir'], media_name)
     if os.path.exists(save_path):
-        with open(save_path, mode='rb') as f:
-            pic_content = f.read()
+        pass
     else:
-        response = requests.get(photo_url, headers=weibo_info['header'])
+        response = requests.get(photo_url, headers=weibo_info['header'], stream=True)
+        save_content(save_path, response)
         if response.status_code != 200:
             logger.info("禁止访问的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
             return photo_video
-        pic_content = response.content
-        save_content(save_path, pic_content)
+    with open(save_path, mode='rb') as f:
+        pic_content = f.read()
     md5value = bytes2md5(pic_content)
     if pic_content:
         size = len(pic_content)
@@ -135,9 +135,8 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
                     size = os.path.getsize(save_path)
                 else:
                     response = requests.get(livephoto_url, headers=weibo_info['header'])
-                    livephoto_content = response.content
-                    size = len(livephoto_content)
-                    save_content(save_path, livephoto_content)
+                    save_content(save_path, response)
+                    size = os.path.getsize(save_path)
                 duration = get_duration_from_cv2(save_path)
                 msg = '\t'.join([str(index), save_path, str(duration), convert_bytes_to_human_readable(size)])
                 logger.info(msg)
@@ -267,11 +266,11 @@ def get_video_url(page_info):
 
 
 def handler_video_weibo(weibo_info, post_data, video_url):
-    video_content = requests.get(video_url, weibo_info['header']).content
+    response = requests.get(video_url, weibo_info['header'], stream=True)
     media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
     save_path = os.path.join(weibo_info['save_dir'], media_name)
-    save_content(save_path, video_content)
-    size = len(video_content)
+    save_content(save_path, response)
+    size = os.path.getsize(save_path)
     human_readable_size = convert_bytes_to_human_readable(size)
     msg = '\t'.join(['1', save_path, human_readable_size])
     logger.info(msg)
@@ -279,7 +278,7 @@ def handler_video_weibo(weibo_info, post_data, video_url):
         post_data.update({'message': "文件太大({})，[请单击我查看]({})".format(human_readable_size, video_url)})
         r = request_webhook('/send_message', post_data, logger)
         return r
-    elif video_content:
+    elif size:
         post_data.update({'files': {'media': save_path, 'caption': media_name}})
         r = request_webhook('/photo-or-video', post_data, logger)
         return r
