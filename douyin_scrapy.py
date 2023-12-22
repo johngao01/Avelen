@@ -70,7 +70,7 @@ class Scrapy:
             page_latest_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的抖音的时间
             for aweme in page_awemes:
                 aweme_create_time = datetime.fromtimestamp(aweme['create_time'])
-                if aweme_create_time > self.last_one_time:
+                if self.username == 'favorite' or aweme_create_time > self.last_one_time:
                     page_add += 1
                     aweme['username'] = self.username
                     aweme['user_sec_uid'] = self.user_sec_uid
@@ -86,7 +86,11 @@ class Scrapy:
                 scrapy_info += f"，本页获得{page_add}个新抖音,共有{len(self.awemes)}个新抖音"
             else:
                 scrapy_info += f"，本页没有新抖音,共有{len(self.awemes)}个新抖音"
-            if page_latest_time <= self.last_one_time:
+            if self.username == 'favorite' and len(self.awemes) >= SCRAPY_FAVORITE_LIMIT:
+                scrapy_info += f"，获取新喜欢完成。\n"
+                scrapy_logger.info(scrapy_info)
+                break
+            if self.username != 'favorite' and page_latest_time <= self.last_one_time:
                 scrapy_info += f"，获取新抖音完成。\n"
                 scrapy_logger.info(scrapy_info)
                 break
