@@ -4,8 +4,11 @@ import time
 import zipfile
 
 folder = r'/root/download/'
-
-z = zipfile.ZipFile("/media/media.zip", 'w')
+package_path = r"/media/media.zip"
+if os.path.exists(package_path):
+    z = zipfile.ZipFile("/media/media.zip", 'a')
+else:
+    z = zipfile.ZipFile("/media/media.zip", 'w')
 os.chdir(folder)
 
 start = time.time()
