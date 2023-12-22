@@ -250,28 +250,18 @@ async def live_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     link_message = update.message.text
     message_id = update.message.message_id
-    if link_message.startswith("https://www.") or link_message.startswith("https://live."):
-        link = link_message
-        logger.info(link)
-        if link.startswith('https://live.douyin.com/'):
-            await live_douyin(update, context)
-            return
-    else:
-        link = re.search('https://v.douyin.com/[A-Za-z0-9]+/', link_message).group(0)
-        r = requests.get(url=link, headers=headers, allow_redirects=False)
-        link = r.headers.get('Location')
-        logger.info(link)
-        if link.startswith('https://webcast.amemv.com/douyin/webcast/reflow/'):
-            await live_douyin(update, context)
-            return
+    link, aweme_id = get_url_id(link_message)
+    if aweme_id == '':
+        await live_douyin(update, context)
+        return
     logger.info(link)
-    aweme = get_aweme_detail(link)
+    aweme = get_aweme_detail(aweme_id)
     if aweme is None:
         logger.error(f"处理抖音 {link} 失败")
         await delete_message(context, message_id, DEVELOPER_CHAT_ID)
         return
     if handler_douyin(aweme):
-        logger.error(f"处理抖音 {link} 失败")
+        pass
     else:
         logger.error(f"处理抖音 {link} 失败")
     await delete_message(context, message_id, DEVELOPER_CHAT_ID)
@@ -279,7 +269,7 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main() -> None:
     weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
-    douyin_filter = filters.Regex('https://(v.|www.|live.)?douyin.*')
+    douyin_filter = filters.Regex('https://(v.|www.|live.)?(ies)?douyin.*')
     # application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
     #     edit_commands).build()
     builder = Application.builder()

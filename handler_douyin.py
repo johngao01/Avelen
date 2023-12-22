@@ -381,12 +381,29 @@ class AwemeMedia:
         return filepath
 
 
-def get_aweme_detail(aweme_url):
-    if aweme_url.startswith("https://www."):
-        aweme_id = re.search(r'(\d{19})', aweme_url).group(1)
+def get_url_id(share_info:str):
+    if share_info.startswith('https://www.douyin.com'):
+        url = re.search(r'https://www.douyin.com/(video|note)/(\d{19})/?',share_info).group(0)
+        aweme_id = url.split('/')[-1]
     else:
-        aweme_url = re.search('https://v.douyin.com/[A-Za-z0-9]+/', aweme_url).group(0)
-        aweme_id = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})/?', aweme_url).group(2)
+        link = re.search('https://v.douyin.com/[A-Za-z0-9]+/', share_info)
+        if link is None:
+            url = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})?', share_info).group(0)
+            url = url.replace(r'https://www.iesdouyin.com/share', r'https://www.douyin.com')
+            aweme_id = url.split('/')[-1]
+        else:
+            link = link.group(0)
+            r = requests.get(url=link, headers=douyin_headers, allow_redirects=False)
+            url = r.headers.get('Location')
+            if url.startswith('https://webcast.amemv.com/douyin/webcast/reflow/'):
+                return url, ''
+            url = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})?', url).group(0)
+            url = url.replace(r'https://www.iesdouyin.com/share', r'https://www.douyin.com')
+            aweme_id = url.split('/')[-1]
+    return url, aweme_id
+
+
+def get_aweme_detail(aweme_id):
     params = {
         "aweme_id": aweme_id,
         "aid": "6383",
