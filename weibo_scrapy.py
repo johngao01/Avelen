@@ -1,5 +1,5 @@
-from shutil import copy2
 import time
+from shutil import copy2
 
 import urllib3
 
@@ -140,6 +140,7 @@ def start(scraping: Following, has_send):
             if type(r) is requests.Response:
                 if r.status_code == 200:
                     previous_weibo_time = weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
+                    download_log(r)
                     store_message_data(r)
                 else:
                     update_db(scraping.userid, previous_weibo_time)

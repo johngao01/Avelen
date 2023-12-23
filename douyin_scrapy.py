@@ -128,6 +128,7 @@ def start(scraping: Following, has_send):
             if type(r) is requests.Response:
                 if r.status_code == 200:
                     previous_time = aweme.create_time_str
+                    download_log(r)
                     store_message_data(r)
                     break
                 else:

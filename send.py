@@ -41,6 +41,8 @@ def process_message(message: telegram.Message, data):
         'TEXT_RAW': data['text_raw'],
         'URL': data['url'],
         'USERID': data['userid'],
+        'USERNAME': data['nickname'],
+        'CREATE_TIME': data['create_time'],
         'IDSTR': data['idstr'],
         'MBLOGID': data['mblogid'],
         'PHOTO': {},

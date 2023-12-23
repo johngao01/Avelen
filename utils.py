@@ -72,6 +72,16 @@ def get_duration_from_cv2(filepath):
     return 0
 
 
+def download_log(response):
+    response = response.json()
+    messages = response['messages']
+    message = messages[-1]
+    log = (message['USERNAME'] + " " + message['CREATE_TIME'] + " " + message['DATE_TIME'] +
+           " " + message['URL'] + " " + message['TEXT_RAW'].replace('\n', ' '))
+    with open('send.log', 'a') as f:
+        f.write(log + "\n")
+
+
 def bytes2md5(r_bytes):
     """
     计算bytes数据的MD5值

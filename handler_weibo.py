@@ -201,7 +201,8 @@ def weibo_data(weibo_link, username):
     }
     os.makedirs(weibo_info['save_dir'], exist_ok=True)
     post_data = {
-        'username': data['user']['screen_name'],
+        'username': username,
+        'nickname': data['user']['screen_name'],
         'url': weibo_link,
         'userid': user_id,
         'idstr': weibo_id,
