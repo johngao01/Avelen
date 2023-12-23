@@ -381,9 +381,9 @@ class AwemeMedia:
         return filepath
 
 
-def get_url_id(share_info:str):
+def get_url_id(share_info: str):
     if share_info.startswith('https://www.douyin.com'):
-        url = re.search(r'https://www.douyin.com/(video|note)/(\d{19})/?',share_info).group(0)
+        url = re.search(r'https://www.douyin.com/(video|note)/(\d{19})/?', share_info).group(0)
         aweme_id = url.split('/')[-1]
     else:
         link = re.search('https://v.douyin.com/[A-Za-z0-9]+/', share_info)
