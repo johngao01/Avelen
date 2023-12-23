@@ -87,11 +87,11 @@ class Scrapy:
             else:
                 scrapy_info += f"，本页没有新抖音,共有{len(self.awemes)}个新抖音"
             if self.username == 'favorite' and len(self.awemes) >= SCRAPY_FAVORITE_LIMIT:
-                scrapy_info += f"，获取新喜欢完成。\n"
+                scrapy_info += f"，获取新喜欢完成。"
                 scrapy_logger.info(scrapy_info)
                 break
             if self.username != 'favorite' and page_latest_time <= self.last_one_time:
-                scrapy_info += f"，获取新抖音完成。\n"
+                scrapy_info += f"，获取新抖音完成。"
                 scrapy_logger.info(scrapy_info)
                 break
             scrapy_logger.info(scrapy_info)
@@ -134,13 +134,13 @@ def start(scraping: Following, has_send):
                 else:
                     error += 1
                     if error > 3:
-                        update_db(scraping.user_sec_uid, previous_time)
+                        update_db(scraping.user_sec_uid, scraping.username, previous_time)
                         log_error(aweme.aweme_url)
                         scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
                         break
             else:
                 break
-    update_db(scraping.user_sec_uid, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
+    update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
 if __name__ == '__main__':

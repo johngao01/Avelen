@@ -92,11 +92,12 @@ def init_db():
     conn.commit()
 
 
-def update_db(user_id, latest_time):
+def update_db(user_id, username, latest_time):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sql = f'UPDATE FOLLOWINGS SET latest_time={repr(latest_time)},scrapy_time={repr(now)} WHERE USERID={repr(user_id)}'
+    sql = (f'UPDATE FOLLOWINGS SET latest_time={repr(latest_time)},scrapy_time={repr(now)} '
+           f'WHERE USERID={repr(user_id)} and username={repr(username)};')
     # print(sql)
     cursor.execute(sql)
     conn.commit()

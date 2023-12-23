@@ -121,7 +121,7 @@ def start(scraping: Following, has_send):
     new_weibo, max_weibo_time = scrapy_latest(scraping, logger)
     if len(new_weibo) == 0:
         logger.info(f'{scraping.username} 没有新微博\n')
-        update_db(scraping.userid, max_weibo_time)
+        update_db(scraping.userid, scraping.username, max_weibo_time)
         return
     new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
     previous_weibo_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -135,7 +135,7 @@ def start(scraping: Following, has_send):
                 f1.write(f"处理 {weibo['weibo_url']} 失败\n")
             logger.error(f"处理 {weibo['weibo_url']} 失败")
             logger.error(traceback.format_exc())
-            update_db(scraping.userid, previous_weibo_time)
+            update_db(scraping.userid, scraping.username, previous_weibo_time)
         else:
             if type(r) is requests.Response:
                 if r.status_code == 200:
@@ -143,7 +143,7 @@ def start(scraping: Following, has_send):
                     download_log(r)
                     store_message_data(r)
                 else:
-                    update_db(scraping.userid, previous_weibo_time)
+                    update_db(scraping.userid, scraping.username, previous_weibo_time)
                     with open('error.txt', mode='a', encoding='utf-8') as f1:
                         f1.write(f"处理 {weibo['weibo_url']} 失败\n")
                         f1.write(f"{r.text}\n\n")
@@ -152,7 +152,7 @@ def start(scraping: Following, has_send):
             else:
                 continue
     logger.info(f'\n')
-    update_db(scraping.userid, max_weibo_time)
+    update_db(scraping.userid, scraping.username, max_weibo_time)
 
 
 if __name__ == '__main__':
