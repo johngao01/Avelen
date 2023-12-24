@@ -190,6 +190,7 @@ def weibo_data(weibo_link, username):
     if username:
         save_dir = os.path.join(download_save_root_directory, 'weibo', username)
     else:
+        username = data['user']['screen_name']
         save_dir = os.path.join(download_save_root_directory, 'weibo', data['user']['screen_name'])
     weibo_info = {
         'data': data,
