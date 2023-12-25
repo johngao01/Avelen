@@ -110,11 +110,13 @@ def start(scraping: Following, has_send):
     else:
         new_aweme = scrapy.awemes
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
+    if len(new_aweme) == 0:
+        scrapy_logger.info(f"{scrapy.username} 没有新作品\n")
     for i, aweme in enumerate(new_aweme, start=1):
         error = 0
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
-            print(i, aweme.aweme_url, aweme.describe.replace('\n', ' '))
+            print(i, aweme.aweme_url, aweme.create_time_str, aweme.describe.replace('\n', ' '))
             continue
         aweme.save_json()
         while True:
@@ -140,6 +142,8 @@ def start(scraping: Following, has_send):
                         break
             else:
                 break
+    if len(new_aweme) > 0:
+        scrapy_logger.info(f"处理完 {scrapy.username} 的 {len(new_aweme)} 个作品\n")
     update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
