@@ -363,7 +363,7 @@ class AwemeMedia:
 
     @property
     def save_name(self):
-        if len(self._aweme.describe) > 100:
+        if len(self._aweme.describe) > 50:
             desc = sub('[\\\\/:*?"<>|\n]', "", self._aweme.describe[0:50])
         else:
             desc = sub('[\\\\/:*?"<>|\n]', "", self._aweme.describe)
@@ -468,7 +468,7 @@ def download(media: AwemeMedia, aweme_post_data, logger):
         logger.info('  '.join([aweme_post_data['username'], aweme_post_data['url'], aweme_post_data['create_time'],
                                os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
     else:
-        logger.info('  '.join([os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
+        logger.info('  '.join(['', os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
     photo_data = {
         'media': save_path,
         'caption': media_name,
