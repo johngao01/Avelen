@@ -144,7 +144,7 @@ def start(scraping: Following, has_send):
                 break
     if len(new_aweme) > 0:
         scrapy_logger.info(f"处理完 {scrapy.username} 的 {len(new_aweme)} 个作品\n")
-    update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
+        update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
 if __name__ == '__main__':

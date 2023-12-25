@@ -152,7 +152,8 @@ def start(scraping: Following, has_send):
             else:
                 continue
     logger.info(f'\n')
-    update_db(scraping.userid, scraping.username, max_weibo_time)
+    if len(new_weibo) > 0:
+        update_db(scraping.userid, scraping.username, max_weibo_time)
 
 
 if __name__ == '__main__':
