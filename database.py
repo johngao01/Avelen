@@ -53,7 +53,8 @@ def exec_sql_get_data(sql):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(sql)
-    data = [item[0] for item in cursor.fetchall()]
+    data = [item[0] if len(item) == 1 else item for item in cursor.fetchall()]
+    conn.commit()
     cursor.close()
     conn.close()
     return data
@@ -72,12 +73,26 @@ def get_messages(url):
 
 
 def get_duplicate_caption(url):
-    return exec_sql_get_data(f"SELECT CAPTION FROM messages where url='{url}'"
+    return exec_sql_get_data(f"SELECT url,CAPTION FROM messages where url='{url}'"
                              f"GROUP BY CAPTION HAVING COUNT(*) > 1;")
 
 
+def delete_db_message(message_id):
+    return exec_sql_get_data(f"delete FROM messages where message_id='{message_id}'")
+
+
+def get_duplicate_messages():
+    five_hours_ago = datetime.datetime.now() - datetime.timedelta(hours=17)
+    five_hours_ago = five_hours_ago.strftime('%Y-%m-%d %H:%M:%S')
+    sql = f'''select distinct url,caption from (select CAPTION, url from messages 
+              where DATE_TIME > '{five_hours_ago}'
+              GROUP BY CAPTION,url HAVING COUNT(*) > 1)'''
+    print(sql)
+    return exec_sql_get_data(sql)
+
+
 def get_message_id(caption, url):
-    return exec_sql_get_data(f"SELECT message_id FROM messages where caption='{caption}' and url='{url}'"
+    return exec_sql_get_data(f"SELECT message_id,date_time FROM messages where caption='{caption}' and url='{url}'"
                              f"order by MESSAGE_ID")
 
 

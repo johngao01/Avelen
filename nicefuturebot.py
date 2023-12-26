@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 
 import telegram.error
 from telegram import Update, BotCommand
-from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -52,8 +51,9 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     message_id = update.message.message_id
     await context.bot.send_document(document=open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb'),
-                                    chat_id=DEVELOPER_CHAT_ID)
-    await context.bot.send_document(document=open('/etc/x-ui/x-ui.db', 'rb'), chat_id=DEVELOPER_CHAT_ID)
+                                    chat_id=DEVELOPER_CHAT_ID, read_timeout=42, connect_timeout=20, pool_timeout=20)
+    await context.bot.send_document(document=open('/etc/x-ui/x-ui.db', 'rb'), chat_id=DEVELOPER_CHAT_ID,
+                                    read_timeout=42, connect_timeout=20, pool_timeout=20)
     await delete_message(context, message_id=message_id, chat_id=DEVELOPER_CHAT_ID)
 
 
@@ -112,14 +112,18 @@ async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     url = await get_url(update)
-    captions = get_duplicate_caption(url)
-    if len(captions) > 0:
-        for caption in captions:
+    if url:
+        duplicate = get_duplicate_caption(url)
+    else:
+        duplicate = get_duplicate_messages()
+    if len(duplicate) > 0:
+        for url, caption in duplicate:
             message_ids = get_message_id(caption, url)
             if len(message_ids) > 0:
                 delete_messages = message_ids[0:-1]
-                for delete_message_id in delete_messages:
-                    logger.info("delete message of id is: " + delete_message_id)
+                for delete_message_id, date_time in delete_messages:
+                    delete_db_message(delete_message_id)
+                    logger.info("delete message of id is: " + delete_message_id + " " + date_time + " " + url)
                     await delete_message(context, message_id=delete_message_id, chat_id=DEVELOPER_CHAT_ID)
     await delete_message(context, message_id=message_id, chat_id=DEVELOPER_CHAT_ID)
 
@@ -153,10 +157,10 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
         f"<pre>{html.escape(tb_string)}</pre>"
     )
-
+    logger.error(message)
     # Finally, send the message
-    await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="抱歉，出现了一些错误，无法获得相应的内容")
+    # await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML)
+    # await context.bot.send_message(chat_id=update.effective_chat.id, text="抱歉，出现了一些错误，无法获得相应的内容")
 
 
 async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
