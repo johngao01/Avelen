@@ -112,23 +112,26 @@ def start(scraping: Following, has_send):
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     if len(new_aweme) == 0:
         scrapy_logger.info(f"{scrapy.username} 没有新作品\n")
+    skip = done = 0
     for i, aweme in enumerate(new_aweme, start=1):
         error = 0
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
+            skip += 1
             print(i, aweme.aweme_url, aweme.create_time_str, aweme.describe.replace('\n', ' '))
             continue
         aweme.save_json()
         while True:
             if aweme.is_video:
                 if aweme.aweme_info['data']['duration'] > 1800000:  # 视频时长大于3600s时，跳过
-                    print(i, aweme.aweme_info['data']['duration'], aweme.aweme_url, aweme.describe)
+                    # print(i, aweme.aweme_info['data']['duration'], aweme.aweme_url, aweme.describe)
                     break
                 r = handler_video_douyin(aweme)
             else:
                 r = handler_note_douyin(aweme)
             if type(r) is requests.Response:
                 if r.status_code == 200:
+                    done += 1
                     previous_time = aweme.create_time_str
                     download_log(r)
                     store_message_data(r)
@@ -142,8 +145,8 @@ def start(scraping: Following, has_send):
                         break
             else:
                 break
-    if len(new_aweme) > 0:
-        scrapy_logger.info(f"处理完 {scrapy.username} 的 {len(new_aweme)} 个作品\n")
+    if done > 0 or skip > 0:
+        scrapy_logger.info(f"处理完 {scrapy.username} 的 {done} 个作品，跳过 {skip} 个作品\n")
         update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
