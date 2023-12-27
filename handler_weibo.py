@@ -179,15 +179,13 @@ def weibo_data(weibo_link, username):
                             params={'id': weibo_id},
                             headers=weibo_header)
     data = response.json()
-    if 'user' not in data:
+    if 'message' in data and data['message'] == '暂无权限查看':
         return False, weibo_link
     user_id = data['user']['idstr']
     weibo_id = data['idstr']
     mblogid = data['mblogid']
     save_json(weibo_edit_count(data), user_id, weibo_id, data)
     create_time = standardize_date(data['created_at'])
-    if 'message' in data and data['message'] == '暂无权限查看':
-        return
     weibo_header['referer'] = f'https://weibo.com/{user_id}/{weibo_id}'
     if username:
         save_dir = os.path.join(download_save_root_directory, 'weibo', username)
