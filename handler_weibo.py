@@ -293,37 +293,38 @@ def handler_video_weibo(weibo_info, post_data, video_url):
 def handle_weibo(weibo_url, userid=None, username=None):
     weibo_info, post_data = weibo_data(weibo_url, username)
     weibo_dict = weibo_info['data']
+    info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'] + '\t'
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
-        logger.info(weibo_url + '\t' + '转发微博')
+        logger.info(info + '转发微博')
         return
     if userid:
         # 剔除快转微博
         if weibo_dict['user']['idstr'] != userid:
-            logger.info(weibo_url + '\t' + '转发微博')
+            logger.info(info + '转发微博')
             return
     if type(weibo_dict.get('pic_ids')) is list and len(weibo_dict.get('pic_ids')) > 0:
         if 'mix_media_info' in weibo_dict:
-            logger.info(weibo_url + '\t' + '图片微博')
+            logger.info(info + '图片微博')
             pic_infos = weibo_pic_infos(weibo_dict)
             r = handler_photo_weibo(weibo_info, pic_infos, post_data)
             return r
         elif 'pic_infos' in weibo_dict:
-            logger.info(weibo_url + '\t' + '图片微博')
+            logger.info(info + '图片微博')
             r = handler_photo_weibo(weibo_info, weibo_dict['pic_infos'], post_data)
             return r
         else:
-            logger.info(weibo_url + '\t' + '图片微博')
+            logger.info(info + '图片微博===\t')
     else:
         data = weibo_dict
         page_info = data.get('page_info')
         if page_info:
             video_url = get_video_url(page_info)
             if video_url:
-                logger.info(weibo_url + '\t' + '视频微博')
+                logger.info(info + '视频微博')
                 r = handler_video_weibo(weibo_info, post_data, video_url)
                 return r
             else:
-                logger.info(weibo_url + '\t' + '文字微博')
+                logger.info(info + '文字微博')
         else:
-            logger.info(weibo_url + '\t' + '文字微博')
+            logger.info(info + '文字微博')
