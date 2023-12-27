@@ -499,8 +499,13 @@ def handler_video_douyin(aweme: Aweme):
                 scrapy_logger.warning('  '.join([aweme.aweme_url, aweme.describe, '下载失败，重试']))
                 if error > 3:
                     return
+        if not isinstance(download_response, requests.Response):
+            scrapy_logger.error("请求下载错误，非正常响应")
+            return False
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        if isinstance(download_response, requests.Response) and save_content(save_path, download_response):
+        save_result = save_content(save_path, download_response)
+        if not save_result:
+            scrapy_logger.error("保存错误")
             return False
         video_size = os.path.getsize(save_path)
     human_readable_size = convert_bytes_to_human_readable(video_size)
