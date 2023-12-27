@@ -131,8 +131,7 @@ def start(scraping: Following, has_send):
         try:
             r = handle_weibo(weibo['weibo_url'], scraping.userid, scraping.username)
         except Exception:
-            with open('error_weibo.txt', mode='a', encoding='utf-8') as f1:
-                f1.write(f"处理 {weibo['weibo_url']} 失败\n")
+            log_error(weibo['weibo_url'])
             logger.error(f"处理 {weibo['weibo_url']} 失败")
             logger.error(traceback.format_exc())
             update_db(scraping.userid, scraping.username, previous_weibo_time)

@@ -179,6 +179,8 @@ def weibo_data(weibo_link, username):
                             params={'id': weibo_id},
                             headers=weibo_header)
     data = response.json()
+    if 'user' not in data:
+        return False, weibo_link
     user_id = data['user']['idstr']
     weibo_id = data['idstr']
     mblogid = data['mblogid']
@@ -292,8 +294,11 @@ def handler_video_weibo(weibo_info, post_data, video_url):
 
 def handle_weibo(weibo_url, userid=None, username=None):
     weibo_info, post_data = weibo_data(weibo_url, username)
+    if weibo_info is False:
+        logger.error('错误的微博：' + post_data)
+        return
     weibo_dict = weibo_info['data']
-    info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'] + '\t'
+    info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
         logger.info(info + '转发微博')
