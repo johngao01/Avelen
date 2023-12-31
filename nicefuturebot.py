@@ -198,11 +198,11 @@ async def live_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         title = data["title"]
         stream_urls = data["stream_url"]["flv_pull_url"]
         viewer = data['user_count'] if 'user_count' in data else data['room_view_stats']['display_value']
-        await context.bot.send_message(text='\t'.join([nickname, title, str(viewer)]), chat_id=update.effective_chat.id)
         for clarity in ['FULL_HD1', 'HD1', 'SD1', 'SD2']:
             if clarity in stream_urls:
                 await context.bot.send_message(text=stream_urls[clarity], chat_id=update.effective_chat.id)
                 break
+        await context.bot.send_message(update.effective_chat.id, '\t'.join([nickname, title, str(viewer)]))
 
     async def get_share_live_data():
         response = requests.get(link, headers=live_headers, allow_redirects=False)
