@@ -72,7 +72,7 @@ async def get_url(update):
 
 
 async def del_files(weibo_files):
-    for root, dirs, files in os.walk("/root/download/weibo"):
+    for root, dirs, files in os.walk("/root/download"):
         for file in files:
             if file in weibo_files:
                 path = os.path.join(root, file)
@@ -104,7 +104,7 @@ async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
             r = handle_weibo(url)
             store_message_data(r)
         elif 'douyin' in url:
-            url, aweme_id = get_url_id(url)
+            link, aweme_id = get_url_id(url)
             aweme = get_aweme_detail(aweme_id)
             handler_douyin(aweme)
         else:

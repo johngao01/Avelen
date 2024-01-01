@@ -558,6 +558,7 @@ def handler_douyin(aweme):
         r = handler_note_douyin(aweme)
     if type(r) is requests.Response:
         if r.status_code == 200:
+            download_log(r)
             store_message_data(r)
             return True
         else:
