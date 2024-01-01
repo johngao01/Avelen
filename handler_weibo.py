@@ -179,7 +179,8 @@ def weibo_data(weibo_link, username):
                             params={'id': weibo_id},
                             headers=weibo_header)
     data = response.json()
-    if 'message' in data and data['message'] == '暂无权限查看':
+    if 'message' in data and (data['message'] == '暂无权限查看' or data['message'] == '该微博不存在'):
+        logger.error(data['message'])
         return False, weibo_link
     user_id = data['user']['idstr']
     weibo_id = data['idstr']
