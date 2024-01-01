@@ -104,7 +104,9 @@ async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
             r = handle_weibo(url)
             store_message_data(r)
         elif 'douyin' in url:
-            pass
+            url, aweme_id = get_url_id(url)
+            aweme = get_aweme_detail(aweme_id)
+            handler_douyin(aweme)
         else:
             pass
 
