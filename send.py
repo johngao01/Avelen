@@ -101,12 +101,13 @@ async def send_album(bot, filetype, album: list):
         for media in album:
             path, caption, file_size = media
             print(path + "\t" + filetype)
-            if filetype == 'video':
-                media = InputMediaVideo(open(path, mode='rb'), caption=caption)
-            elif filetype == 'photo':
-                media = InputMediaPhoto(open(path, mode='rb'), caption=caption)
-            else:
-                media = InputMediaDocument(open(path, mode='rb'), caption=caption)
+            with open(path, 'rb') as f:
+                if filetype == 'video':
+                    media = InputMediaVideo(f, caption=caption)
+                elif filetype == 'photo':
+                    media = InputMediaPhoto(f, caption=caption)
+                else:
+                    media = InputMediaDocument(f, caption=caption)
             medias.append(media)
         send_responses = await retry_send(bot.send_media_group, media=medias, chat_id=DEVELOPER_CHAT_ID)
         if send_responses is not None:
@@ -180,12 +181,13 @@ async def send_video_or_photo(data):
     path = file['media']
     ext = path[-3:]
     print(path + "\t" + ext)
-    if ext in ['mp4', 'mov', 'gif']:
-        send_response = await retry_send(fun=tg_bot.send_video, video=open(path, 'rb'), chat_id=DEVELOPER_CHAT_ID,
-                                         caption=caption)
-    else:
-        send_response = await retry_send(fun=tg_bot.send_photo, video=open(path, 'rb'), chat_id=DEVELOPER_CHAT_ID,
-                                         caption=caption)
+    with open(path, 'rb') as f:
+        if ext in ['mp4', 'mov', 'gif']:
+            send_response = await retry_send(fun=tg_bot.send_video, video=f, chat_id=DEVELOPER_CHAT_ID,
+                                             caption=caption)
+        else:
+            send_response = await retry_send(fun=tg_bot.send_photo, video=f, chat_id=DEVELOPER_CHAT_ID,
+                                             caption=caption)
     messages = [send_response]
     results = await send_message_after(tg_bot, data, messages)
     return results
@@ -211,3 +213,11 @@ async def send_document(data):
                                  caption=caption)]
     results = await send_message_after(tg_bot, data, messages)
     return results
+
+
+async def backup():
+    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
+    with open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb') as f:
+        r1 = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=f)
+    with open('/etc/x-ui/x-ui.db', 'rb') as f:
+        r2 = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=f)
