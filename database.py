@@ -52,9 +52,15 @@ def get_all_following(platform):
 def exec_sql_get_data(sql):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute(sql)
+    print(sql)
+    try:
+        cursor.execute(sql)
+    except Exception as e:
+        print(e)
+        conn.rollback()
+    else:
+        conn.commit()
     data = [item[0] if len(item) == 1 else item for item in cursor.fetchall()]
-    conn.commit()
     cursor.close()
     conn.close()
     return data
