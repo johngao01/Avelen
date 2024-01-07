@@ -12,13 +12,12 @@ import requests
 script_directory = os.path.dirname(os.path.abspath(__file__))
 download_save_root_directory = '/root/download'
 MAX_PHOTO_SIZE = 10 * 1024 * 1024
-MAX_PHOTO_TOTAL_PIXEL = 10000
+MAX_PHOTO_TOTAL_PIXEL = 7000
 MAX_VIDEO_SIZE = 2000 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 2000 * 1024 * 1024
 
 SCRAPY_FAVORITE_LIMIT = 60
 WEB_HOOK_URL = 'http://localhost:5000'
-TIME_OUT = 30
 
 
 class MyLogger(logging.Logger):
