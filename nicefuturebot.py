@@ -92,6 +92,7 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         messages = [message_id]
     for message_id in messages:
+        delete_db_message(message_id)
         await delete_message(context, message_id, DEVELOPER_CHAT_ID)
         logger.info(f"删除id为{message_id}的message")
     return url
