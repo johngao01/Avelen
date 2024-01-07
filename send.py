@@ -218,6 +218,4 @@ async def send_document(data):
 async def backup():
     tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
     with open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb') as f:
-        r1 = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=f)
-    with open('/etc/x-ui/x-ui.db', 'rb') as f:
-        r2 = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=f)
+        await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=f)
