@@ -4,6 +4,7 @@ from datetime import datetime
 import telegram
 from telegram import Bot, InputMediaVideo, InputMediaPhoto, InputMediaDocument
 from telegram.constants import ParseMode
+from telegram.constants import ChatAction
 
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
@@ -162,12 +163,15 @@ async def send_medias(data):
                                              parse_mode=ParseMode.MARKDOWN)
             messages.append(send_response)
     if len(photos) > 0:
+        await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_PHOTO)
         response_message = await send_album(tg_bot, 'photo', photos)
         messages.extend(response_message)
     if len(videos) > 0:
+        await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_VIDEO)
         response_message = await send_album(tg_bot, 'video', videos)
         messages.extend(response_message)
     if len(documents) > 0:
+        await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_DOCUMENT)
         response_message = await send_album(tg_bot, 'document', documents)
         messages.extend(response_message)
     results = await send_message_after(tg_bot, data, messages)
@@ -183,9 +187,11 @@ async def send_video_or_photo(data):
     print(path + "\t" + ext)
     with open(path, 'rb') as f:
         if ext in ['mp4', 'mov', 'gif']:
+            await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_VIDEO)
             send_response = await retry_send(fun=tg_bot.send_video, video=f, chat_id=DEVELOPER_CHAT_ID,
                                              caption=caption)
         else:
+            await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_PHOTO)
             send_response = await retry_send(fun=tg_bot.send_photo, video=f, chat_id=DEVELOPER_CHAT_ID,
                                              caption=caption)
     messages = [send_response]
@@ -198,6 +204,7 @@ async def message_send(data):
     message = data['message']
     for char in MARKDOWN_CHAR:
         message = message.replace(char, '\\' + char)
+    await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
     messages = [await retry_send(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=message,
                                  parse_mode=ParseMode.MARKDOWN)]
     results = await send_message_after(tg_bot, data, messages)
@@ -209,6 +216,7 @@ async def send_document(data):
     file = data['files']
     caption = file['caption']
     path = file['media']
+    await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_DOCUMENT)
     messages = [await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
                                  caption=caption)]
     results = await send_message_after(tg_bot, data, messages)
