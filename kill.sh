@@ -9,7 +9,8 @@ if [ ${#pids[@]} -eq 0 ]; then
 else
   echo "Killing Python3 processes..."
   # 使用循环逐个杀死进程
-  for pid in "${pids[@]}"; do
+  # shellcheck disable=SC2043
+  for pid in "{pids[@]}"; do
     echo "Killing process with PID: $pid"
     kill "$pid"
   done
