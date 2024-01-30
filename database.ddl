@@ -8,7 +8,7 @@ create table if not exists messages
     CHAT           TEXT,
     MEDIA_GROUP_ID TEXT,
     TEXT_RAW       TEXT,
-    WEIBO_URL      TEXT,
+    URL            TEXT,
     USERID         TEXT,
     IDSTR          TEXT,
     MBLOGID        TEXT
