@@ -14,20 +14,15 @@ MARKDOWN_CHAR = ['*', '`', '[', '_', '`']
 
 
 async def retry_send(fun, **kwargs) -> list:
-    time = 5
-    while time:
-        try:
-            r = await fun(**kwargs, read_timeout=42, connect_timeout=20, pool_timeout=20)
-            return r
-        except telegram.error.TimedOut:
-            print("Get TimeoutError：\n" + traceback.format_exc())
-            time -= 1
-        except telegram.error.BadRequest:
-            print("Get BadRequest Error：\n" + traceback.format_exc())
-            time -= 1
-        except telegram.error.RetryAfter:
-            print("Get RetryAfter Error：\n" + traceback.format_exc())
-            time -= 1
+    try:
+        r = await fun(**kwargs, read_timeout=42, write_timeout=40, connect_timeout=40, pool_timeout=40)
+        return r
+    except telegram.error.TimedOut:
+        print("Get TimeoutError：\n" + traceback.format_exc())
+    except telegram.error.BadRequest:
+        print("Get BadRequest Error：\n" + traceback.format_exc())
+    except telegram.error.RetryAfter:
+        print("Get RetryAfter Error：\n" + traceback.format_exc())
 
 
 def process_message(message: telegram.Message, data):
