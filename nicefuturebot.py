@@ -59,9 +59,12 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_url(update):
     message = update.message.reply_to_message
+    logger.info("reply message id：" + str(message.id))
     if not message:
         return
     text = message.text_markdown
+    if text is None:
+        return
     logger.info(text)
     url = re.findall(r'\((.*?)\)', text)
     if not url:
@@ -92,7 +95,7 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         messages = [message_id]
     for message_id in messages:
-        delete_db_message(message_id)
+        # delete_db_message(message_id)
         await delete_message(context, message_id, DEVELOPER_CHAT_ID)
         logger.info(f"删除id为{message_id}的message")
     return url
