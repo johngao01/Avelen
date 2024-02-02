@@ -59,9 +59,9 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_url(update):
     message = update.message.reply_to_message
-    logger.info("reply message id：" + str(message.id))
     if not message:
         return
+    logger.info("reply message id：" + str(message.id))
     text = message.text_markdown
     if text is None:
         return
