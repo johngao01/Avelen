@@ -99,7 +99,12 @@ def get_duplicate_messages():
 
 def get_message_id(caption, url):
     return exec_sql_get_data(f"SELECT message_id,date_time FROM messages where caption='{caption}' and url='{url}'"
-                             f"order by MESSAGE_ID")
+                             f" order by MESSAGE_ID")
+
+
+def get_message_ids(message_id):
+    return exec_sql_get_data("select message_id from messages where url "
+                             f"in (select url from messages where message_id={message_id})")
 
 
 def init_db():

@@ -9,6 +9,7 @@ from telegram import Update, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
+    MessageReactionHandler,
     ContextTypes, MessageHandler, filters,
 )
 
@@ -38,9 +39,12 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
 
 
-async def delete_message(context, message_id, chat_id):
+async def delete_message(context, chat_id, message_id):
     try:
-        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        if type(message_id) is list:
+            await context.bot.delete_messages(chat_id, message_id)
+        else:
+            await context.bot.delete_message(chat_id, message_id)
     except telegram.error.TelegramError:
         pass
 
@@ -54,7 +58,7 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     chat_id=DEVELOPER_CHAT_ID, read_timeout=42, connect_timeout=20, pool_timeout=20)
     await context.bot.send_document(document=open('/etc/x-ui/x-ui.db', 'rb'), chat_id=DEVELOPER_CHAT_ID,
                                     read_timeout=42, connect_timeout=20, pool_timeout=20)
-    await delete_message(context, message_id=message_id, chat_id=DEVELOPER_CHAT_ID)
+    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
 
 
 async def get_url(update):
@@ -94,10 +98,8 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await del_files(files)
     else:
         messages = [message_id]
-    for message_id in messages:
-        # delete_db_message(message_id)
-        await delete_message(context, message_id, DEVELOPER_CHAT_ID)
-        logger.info(f"删除id为{message_id}的message")
+    print(messages)
+    await delete_message(context, DEVELOPER_CHAT_ID, messages)
     return url
 
 
@@ -127,11 +129,9 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_ids = get_message_id(caption, url)
             if len(message_ids) > 0:
                 delete_messages = message_ids[0:-1]
-                for delete_message_id, date_time in delete_messages:
-                    delete_db_message(delete_message_id)
-                    logger.info("delete message of id is: " + delete_message_id + " " + date_time + " " + url)
-                    await delete_message(context, message_id=delete_message_id, chat_id=DEVELOPER_CHAT_ID)
-    await delete_message(context, message_id=message_id, chat_id=DEVELOPER_CHAT_ID)
+                print(delete_messages)
+                await delete_message(context, DEVELOPER_CHAT_ID, delete_messages)
+    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
 
 
 async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -146,7 +146,7 @@ async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"处理微博 {weibo_link} 失败")
     else:
         logger.error(f"处理微博 {weibo_link} 失败")
-    await delete_message(context, message_id, DEVELOPER_CHAT_ID)
+    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -174,7 +174,7 @@ async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info(message_id)
     logger.info("start scrapy douyin")
     os.system('python3 douyin_scrapy.py')
-    await delete_message(context, message_id, DEVELOPER_CHAT_ID)
+    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
     logger.info("scrapy douyin end")
 
 
@@ -268,13 +268,23 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     aweme = get_aweme_detail(aweme_id)
     if aweme is None:
         logger.error(f"处理抖音 {link} 失败")
-        await delete_message(context, message_id, DEVELOPER_CHAT_ID)
+        await delete_message(context, DEVELOPER_CHAT_ID, message_id)
         return
     if handler_douyin(aweme):
         pass
     else:
         logger.error(f"处理抖音 {link} 失败")
-    await delete_message(context, message_id, DEVELOPER_CHAT_ID)
+    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
+
+
+async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    reaction = update.message_reaction
+    print(reaction.old_reaction, reaction.new_reaction)
+    if reaction.new_reaction[0].emoji == '👎':
+        reaction_message_id = reaction.message_id
+        messages_id = get_message_ids(reaction_message_id)
+        print(messages_id)
+        await delete_message(context, DEVELOPER_CHAT_ID, messages_id)
 
 
 def main() -> None:
@@ -291,6 +301,7 @@ def main() -> None:
     builder.base_file_url(r'http://localhost:8081/file/bot')
     builder.local_mode(local_mode=True)
     application = builder.build()
+    application.add_handler(MessageReactionHandler(reaction_handler))
     application.add_handler(CommandHandler("backup", backup))
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
