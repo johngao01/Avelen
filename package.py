@@ -39,4 +39,6 @@ for root, dirs, files in os.walk(folder, topdown=False):
             except OSError as e:
                 print(f"Error deleting folder: {folder_to_check} - {e}")
 
-print('Zip Download Link: ', f"http://{ipv4}:9999/media.zip")
+os.system('ls -l /media/media.zip')
+
+print('\nZip Download Link: ', f"http://{ipv4}:9999/media.zip")
