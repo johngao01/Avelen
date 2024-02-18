@@ -45,8 +45,8 @@ async def delete_message(context, chat_id, message_id):
             await context.bot.delete_messages(chat_id, message_id)
         else:
             await context.bot.delete_message(chat_id, message_id)
-    except telegram.error.TelegramError:
-        pass
+    except telegram.error.TelegramError as e:
+        print(e)
 
 
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -129,7 +129,7 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_ids = get_message_id(caption, url)
             if len(message_ids) > 0:
                 delete_messages = message_ids[0:-1]
-                print(delete_messages)
+                print(message_ids, delete_messages)
                 await delete_message(context, DEVELOPER_CHAT_ID, delete_messages)
     await delete_message(context, DEVELOPER_CHAT_ID, message_id)
 
