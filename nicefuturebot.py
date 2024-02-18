@@ -179,10 +179,14 @@ async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def edit_commands(application):
-    command = [BotCommand("backup", "备份数据"), BotCommand("resend", "重发"),
-               BotCommand("delete", "删除"), BotCommand("clear", "清理"),
-               BotCommand("scrapy_douyin", "开始爬取抖音")]
+    command = [BotCommand("backup", "备份数据"),
+               BotCommand("clear", "清理")
+               # BotCommand("resend", "重发"),
+               # BotCommand("delete", "删除"),
+               # BotCommand("scrapy_douyin", "开始爬取抖音")
+               ]
     await application.bot.set_my_commands(commands=command)
+    print("bot start ------------------->")
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
 
@@ -278,13 +282,33 @@ async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    messages_id = []
     reaction = update.message_reaction
     print(reaction.old_reaction, reaction.new_reaction)
-    if reaction.new_reaction[0].emoji == '👎':
-        reaction_message_id = reaction.message_id
+    emoji = reaction.new_reaction[0].emoji
+    reaction_message_id = reaction.message_id
+    if emoji == '👎' or emoji == "😁":
         messages_id = get_message_ids(reaction_message_id)
         print(messages_id)
         await delete_message(context, DEVELOPER_CHAT_ID, messages_id)
+    if emoji == "😁":
+        url = get_message_url(reaction_message_id)
+        if url:
+            url = url[0]
+            logger.info("url：" + url)
+            files = get_file(url)
+            await del_files(files)
+            for message_id in messages_id:
+                delete_db_message(message_id)
+            if 'weibo' in url:
+                r = handle_weibo(url)
+                store_message_data(r)
+            elif 'douyin' in url:
+                link, aweme_id = get_url_id(url)
+                aweme = get_aweme_detail(aweme_id)
+                handler_douyin(aweme)
+            else:
+                pass
 
 
 def main() -> None:
@@ -303,8 +327,8 @@ def main() -> None:
     application = builder.build()
     application.add_handler(MessageReactionHandler(reaction_handler))
     application.add_handler(CommandHandler("backup", backup))
-    application.add_handler(CommandHandler("resend", resend))
-    application.add_handler(CommandHandler("delete", delete))
+    # application.add_handler(CommandHandler("resend", resend))
+    # application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
     application.add_handler(CommandHandler("scrapy_douyin", start_scrapy_douyin))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))

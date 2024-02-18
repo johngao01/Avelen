@@ -107,6 +107,10 @@ def get_message_ids(message_id):
                              f"in (select url from messages where message_id={message_id})")
 
 
+def get_message_url(message_id):
+    return exec_sql_get_data(f"select url from messages where message_id={message_id}")
+
+
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
