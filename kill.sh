@@ -7,14 +7,13 @@ pids=($(pgrep -f "python3"))
 if [ ${#pids[@]} -eq 0 ]; then
   echo "No Python3 processes found."
 else
-  echo "Killing Python3 processes..."
   # 使用循环逐个杀死进程
   # shellcheck disable=SC2043
-  for pid in "{pids[@]}"; do
+  for pid in "${pids[@]}"; do
     echo "Killing process with PID: $pid"
     kill "$pid"
   done
   echo "All Python3 processes killed."
 fi
 
-rm -rf  __pycache__ 
+rm -rf __pycache__
