@@ -1,3 +1,4 @@
+import traceback
 from shutil import copy2
 
 from database import *

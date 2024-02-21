@@ -1,4 +1,5 @@
 import time
+import traceback
 from shutil import copy2
 
 import urllib3
