@@ -45,8 +45,8 @@ async def delete_message(context, chat_id, message_id):
             await context.bot.delete_messages(chat_id, message_id)
         else:
             await context.bot.delete_message(chat_id, message_id)
-    except telegram.error.TelegramError:
-        pass
+    except telegram.error.TelegramError as e:
+        print(e)
 
 
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -129,7 +129,7 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_ids = get_message_id(caption, url)
             if len(message_ids) > 0:
                 delete_messages = message_ids[0:-1]
-                print(delete_messages)
+                print(message_ids, delete_messages)
                 await delete_message(context, DEVELOPER_CHAT_ID, delete_messages)
     await delete_message(context, DEVELOPER_CHAT_ID, message_id)
 
@@ -180,10 +180,10 @@ async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"),
-               BotCommand("clear", "清理")
-               # BotCommand("resend", "重发"),
-               # BotCommand("delete", "删除"),
-               # BotCommand("scrapy_douyin", "开始爬取抖音")
+               BotCommand("clear", "清理"),
+               BotCommand("resend", "重发"),
+               BotCommand("delete", "删除"),
+               BotCommand("scrapy_douyin", "开始爬取抖音")
                ]
     await application.bot.set_my_commands(commands=command)
     print("bot start ------------------->")
@@ -327,8 +327,8 @@ def main() -> None:
     application = builder.build()
     application.add_handler(MessageReactionHandler(reaction_handler))
     application.add_handler(CommandHandler("backup", backup))
-    # application.add_handler(CommandHandler("resend", resend))
-    # application.add_handler(CommandHandler("delete", delete))
+    application.add_handler(CommandHandler("resend", resend))
+    application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
     application.add_handler(CommandHandler("scrapy_douyin", start_scrapy_douyin))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
