@@ -1,3 +1,4 @@
+import time
 import traceback
 from datetime import datetime
 
@@ -187,7 +188,7 @@ async def send_video_or_photo(data):
                                              caption=caption)
         else:
             await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_PHOTO)
-            send_response = await retry_send(fun=tg_bot.send_photo, video=f, chat_id=DEVELOPER_CHAT_ID,
+            send_response = await retry_send(fun=tg_bot.send_photo, photo=f, chat_id=DEVELOPER_CHAT_ID,
                                              caption=caption)
     messages = [send_response]
     results = await send_message_after(tg_bot, data, messages)
