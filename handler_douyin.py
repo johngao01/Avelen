@@ -281,6 +281,8 @@ class Aweme:
         :return:
         """
         json_path = os.path.join(download_save_root_directory, 'douyin', 'json', self.username, self.aweme_id + '.json')
+        if os.path.exists(json_path):
+            return
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, mode='w', encoding='utf8') as json_write:
             data = self._node.copy()

@@ -59,6 +59,8 @@ def save_json(edit_count, userid, idstr, json_data):
         json_path = os.path.join(download_save_root_directory, 'weibo', 'json', idstr + '.json')
     else:
         json_path = os.path.join(download_save_root_directory, 'weibo', 'json', idstr + "_" + str(edit_count) + '.json')
+    if os.path.exists(json_path):
+        return
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, mode='w', encoding='utf8') as json_write:
         json.dump(json_data, json_write, ensure_ascii=False, indent=4)
