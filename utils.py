@@ -2,9 +2,7 @@ import hashlib
 import json
 import logging
 import os
-import traceback
 from datetime import datetime
-from time import sleep
 
 import cv2
 import requests
@@ -111,18 +109,14 @@ def save_content(save_path, response):
 
 
 def request_webhook(method, post_data, logger):
-    time = 3
     try:
         r = requests.post(WEB_HOOK_URL + method, data=json.dumps(post_data))
-    except requests.exceptions.RequestException:
-        logger.error(traceback.format_exc())
-        logger.info("time sleep 15 seconds")
-        sleep(15)
-        time -= 1
+    except requests.exceptions.RequestException as e:
+        logger.info(e)
     else:
         return r
 
 
-def log_error(url):
+def log_error(url, text=''):
     with open('error.txt', 'a') as f:
-        f.write(f"处理 {url} 失败\n")
+        f.write(f"处理 {url} 失败  {text}\n")
