@@ -1,5 +1,7 @@
 import html
+import os
 import sys
+import traceback
 from re import compile
 from urllib.parse import parse_qs
 from urllib.parse import urlparse
@@ -36,7 +38,21 @@ logger.addHandler(ch)
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
+    message_id = update.message.message_id
+    text = update.message.text
+    logger.info(message_id)
+    logger.info(text)
+    if 'scrapy' in text:
+        if 'weibo' in text:
+            os.system('python3 weibo_scrapy.py')
+        elif 'douyin' in text:
+            os.system('python3 douyin_scrapy.py')
+    elif text == 'sw':
+        os.system('python3 weibo_scrapy.py')
+    elif text == 'sd':
+        os.system('python3 douyin_scrapy.py')
+    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
+    logger.info("scrapy end")
 
 
 async def delete_message(context, chat_id, message_id):
@@ -169,21 +185,11 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # await context.bot.send_message(chat_id=update.effective_chat.id, text="抱歉，出现了一些错误，无法获得相应的内容")
 
 
-async def start_scrapy_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message_id = update.message.message_id
-    logger.info(message_id)
-    logger.info("start scrapy douyin")
-    os.system('python3 douyin_scrapy.py')
-    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-    logger.info("scrapy douyin end")
-
-
 async def edit_commands(application):
     command = [BotCommand("backup", "备份数据"),
                BotCommand("clear", "清理"),
                BotCommand("resend", "重发"),
-               BotCommand("delete", "删除"),
-               BotCommand("scrapy_douyin", "开始爬取抖音")
+               BotCommand("delete", "删除")
                ]
     await application.bot.set_my_commands(commands=command)
     print("bot start ------------------->")
@@ -330,7 +336,7 @@ def main() -> None:
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
-    application.add_handler(CommandHandler("scrapy_douyin", start_scrapy_douyin))
+    application.add_handler(MessageHandler(filters.Text(), echo))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
     application.add_error_handler(error_handler)
