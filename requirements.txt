@@ -1,6 +1,5 @@
-Flask==3.0.0
-opencv_python==4.8.1.78
-Pillow==10.1.0
-Pillow==10.1.0
+Flask
+opencv_python
+Pillow
 python-telegram-bot>=20.8
-Requests==2.31.0
+Requests
