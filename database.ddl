@@ -8,7 +8,7 @@ CREATE TABLE "followings"
     LATEST_TIME  TEXT,
     douyin_weibo TEXT,
     scrapy_time  TEXT
-)
+);
 
 CREATE TABLE "messages"
 (
@@ -24,7 +24,7 @@ CREATE TABLE "messages"
     USERID         TEXT,
     IDSTR          TEXT,
     MBLOGID        TEXT
-)
+);
 
 CREATE TABLE "document"
 (
