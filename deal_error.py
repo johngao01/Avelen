@@ -20,6 +20,7 @@ for line in lines:
             if r.status_code == 200:
                 store_message_data(r)
             else:
+                print(f'处理{url}失败')
                 log_error(url)
         else:
             continue
