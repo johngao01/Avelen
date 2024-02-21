@@ -22,7 +22,11 @@ async def retry_send(fun, **kwargs) -> list:
         print("Get TimeoutError：\n" + traceback.format_exc())
     except telegram.error.BadRequest:
         print("Get BadRequest Error：\n" + traceback.format_exc())
-    except telegram.error.RetryAfter:
+    except telegram.error.RetryAfter as e:
+        if 'Flood control exceeded. Retry in' in e.message:
+            second = int(e.message.split(' ')[-2])
+            print("sleep {} seconds".format(second))
+            time.sleep(second)
         print("Get RetryAfter Error：\n" + traceback.format_exc())
 
 
@@ -136,7 +140,7 @@ async def send_message_after(tg_bot, data, messages):
     return results
 
 
-async def send_medias(data):
+async def send_multiple(data):
     tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
     photos = []
     videos = []
@@ -174,47 +178,32 @@ async def send_medias(data):
     return results
 
 
-async def send_video_or_photo(data):
+async def send_single(data):
     tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
     file = data['files']
     caption = file['caption']
     path = file['media']
-    ext = path[-3:]
+    filetype = file['type']
+    ext = path.split('.')[-1]
     print(path + "\t" + ext)
     with open(path, 'rb') as f:
-        if ext in ['mp4', 'mov', 'gif']:
-            await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_VIDEO)
-            send_response = await retry_send(fun=tg_bot.send_video, video=f, chat_id=DEVELOPER_CHAT_ID,
+        if filetype == 'document':
+            await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_DOCUMENT)
+            send_response = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
                                              caption=caption)
         else:
-            await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_PHOTO)
-            send_response = await retry_send(fun=tg_bot.send_photo, photo=f, chat_id=DEVELOPER_CHAT_ID,
-                                             caption=caption)
+            if ext in ['mp4', 'mov', 'gif']:
+                await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_VIDEO)
+                send_response = await retry_send(fun=tg_bot.send_video, video=f, chat_id=DEVELOPER_CHAT_ID,
+                                                 caption=caption)
+            else:
+                await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_PHOTO)
+                send_response = await retry_send(fun=tg_bot.send_photo, photo=f, chat_id=DEVELOPER_CHAT_ID,
+                                                 caption=caption)
+    if send_response is None:
+        print("send_single发送失败，", path)
+        return
     messages = [send_response]
-    results = await send_message_after(tg_bot, data, messages)
-    return results
-
-
-async def message_send(data):
-    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
-    message = data['message']
-    for char in MARKDOWN_CHAR:
-        message = message.replace(char, '\\' + char)
-    await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
-    messages = [await retry_send(tg_bot.sendMessage, chat_id=DEVELOPER_CHAT_ID, text=message,
-                                 parse_mode=ParseMode.MARKDOWN)]
-    results = await send_message_after(tg_bot, data, messages)
-    return results
-
-
-async def send_document(data):
-    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
-    file = data['files']
-    caption = file['caption']
-    path = file['media']
-    await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_DOCUMENT)
-    messages = [await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=path,
-                                 caption=caption)]
     results = await send_message_after(tg_bot, data, messages)
     return results
 

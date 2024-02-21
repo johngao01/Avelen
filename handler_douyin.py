@@ -477,11 +477,10 @@ def download(media: AwemeMedia, aweme_post_data, logger):
         'size': media_size
     }
     if media_size > MAX_VIDEO_SIZE:
-        photo_data.update(
-            {'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({media.download_url})"})
+        log_error(aweme_post_data['url'], f'文件太大，{save_path} {human_readable_size}')
     elif media_size:
         photo_data.update({'type': 'video'}) if media.content_type == 'video' else photo_data.update({'type': 'photo'})
-    return photo_data
+        return photo_data
 
 
 def handler_video_douyin(aweme: Aweme):
@@ -514,18 +513,13 @@ def handler_video_douyin(aweme: Aweme):
     scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
                                   os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
     if video_size > MAX_VIDEO_SIZE:
-        aweme.post_data.update(
-            {'message': "文件太大({})，[请单击我查看]({})".format(human_readable_size, aweme_video.download_url)})
-        r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
-        return r
+        log_error(aweme.aweme_info['url'], f'文件太大，{save_path} {human_readable_size}')
     elif video_size:
-        aweme.post_data.update({'files': {'media': save_path, 'caption': media_name}})
-        r = request_webhook('/photo-or-video', aweme.post_data, scrapy_logger)
+        aweme.post_data.update({'files': {'media': save_path, 'caption': media_name, 'type': 'video'}})
+        r = request_webhook('/main', aweme.post_data, scrapy_logger)
         return r
     else:
-        aweme.post_data.update({'message': f"获取[抖音视频]({aweme.aweme_info['url']})失败"})
-        r = request_webhook('/send_message', aweme.post_data, scrapy_logger)
-        return r
+        log_error(aweme.aweme_info['url'], '获取失败')
 
 
 def handler_note_douyin(aweme: Aweme):
@@ -544,10 +538,10 @@ def handler_note_douyin(aweme: Aweme):
                 scrapy_logger.info("下载出错：" + str(e))
     if len(photos) > 0:
         aweme.post_data.update({'files': photos})
-        r = request_webhook('/send-album', aweme.post_data, scrapy_logger)
+        r = request_webhook('/main', aweme.post_data, scrapy_logger)
         return r
     else:
-        return 'fail'
+        log_error(aweme.aweme_info['url'], '获取失败')
 
 
 def handler_douyin(aweme):

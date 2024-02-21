@@ -238,10 +238,10 @@ def handler_photo_weibo(weibo_info, pic_infos, post_data):
     if len(post_data['files']) == 0:
         return
     if len(post_data) >= 2:
-        r = request_webhook('/send-album', post_data, logger)
+        r = request_webhook('/main', post_data, logger)
         return r
     else:
-        r = request_webhook('/photo-or-video', post_data, logger)
+        r = request_webhook('/main', post_data, logger)
         return r
 
 
@@ -280,17 +280,13 @@ def handler_video_weibo(weibo_info, post_data, video_url):
     msg = '\t'.join(['1', save_path, human_readable_size])
     logger.info(msg)
     if size > MAX_VIDEO_SIZE:
-        post_data.update({'message': "文件太大({})，[请单击我查看]({})".format(human_readable_size, video_url)})
-        r = request_webhook('/send_message', post_data, logger)
-        return r
+        log_error(weibo_info['url'], f'文件太大，{save_path} {human_readable_size}')
     elif size:
-        post_data.update({'files': {'media': save_path, 'caption': media_name}})
-        r = request_webhook('/photo-or-video', post_data, logger)
+        post_data.update({'files': {'media': save_path, 'caption': media_name, 'type': 'video'}})
+        r = request_webhook('/main', post_data, logger)
         return r
     else:
-        post_data.update({'message': f"获取[微博视频]({weibo_info['url']})失败"})
-        r = request_webhook('/send_message', post_data, logger)
-        return r
+        log_error(weibo_info['url'], '下载失败')
 
 
 def handle_weibo(weibo_url, userid=None, username=None):
