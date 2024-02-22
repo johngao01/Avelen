@@ -142,6 +142,7 @@ def start(scraping: Following, has_send):
                     previous_weibo_time = weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
                     download_log(r)
                     store_message_data(r)
+                    rate_control(r, logger)
                 else:
                     update_db(scraping.userid, scraping.username, previous_weibo_time)
                     with open('error.txt', mode='a', encoding='utf-8') as f1:

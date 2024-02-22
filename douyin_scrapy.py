@@ -136,6 +136,7 @@ def start(scraping: Following, has_send):
                     previous_time = aweme.create_time_str
                     download_log(r)
                     store_message_data(r)
+                    rate_control(r, scrapy_logger)
                     break
                 else:
                     error += 1

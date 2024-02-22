@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 from datetime import datetime
 
 import cv2
@@ -16,6 +17,9 @@ MAX_DOCUMENT_SIZE = 2000 * 1024 * 1024
 
 SCRAPY_FAVORITE_LIMIT = 60
 WEB_HOOK_URL = 'http://localhost:5000'
+count = 0  # 发送了消息数量
+times = 0  # 第几次发送
+rate = 30  # 每分钟限制发送消息数
 
 
 class MyLogger(logging.Logger):
@@ -115,6 +119,15 @@ def request_webhook(method, post_data, logger):
         logger.info(e)
     else:
         return r
+
+
+def rate_control(r, logger):
+    global count, times, rate
+    count = count + len(r.json()['messages'])
+    if count // 30 > times:
+        times += 1
+        logger.info(str(count) + "   " + str(times))
+        time.sleep(60 * (1 + times / 10))
 
 
 def log_error(url, text=''):
