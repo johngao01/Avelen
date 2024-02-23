@@ -1,4 +1,3 @@
-import time
 import traceback
 from shutil import copy2
 
