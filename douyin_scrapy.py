@@ -146,7 +146,7 @@ def start(scraping: Following, has_send):
                         scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
                         break
             else:
-                break
+                log_error(aweme.aweme_url)
     if done > 0 or skip > 0:
         scrapy_logger.info(f"处理完 {scrapy.username} 的 {done} 个作品，跳过 {skip} 个作品\n")
         update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
