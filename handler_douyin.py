@@ -1,10 +1,8 @@
 import os.path
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import md5
 from re import sub
-from time import time
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
@@ -227,7 +225,7 @@ class NewXBogus:
             user_agent: tuple,
             version=23,
             test_time=None):
-        timestamp = int(test_time or time())
+        timestamp = int(test_time or time.time())
         query = self.process_url_path(urlencode(query))
         return self.generate_x_bogus(
             query, version, user_agent[self.__index[version]], timestamp)
