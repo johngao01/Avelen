@@ -88,10 +88,10 @@ def delete_db_message(message_id):
 
 
 def get_duplicate_messages():
-    five_hours_ago = datetime.datetime.now() - datetime.timedelta(hours=17)
-    five_hours_ago = five_hours_ago.strftime('%Y-%m-%d %H:%M:%S')
+    hours_ago = datetime.datetime.now() - datetime.timedelta(hours=48)
+    hours_ago = hours_ago.strftime('%Y-%m-%d %H:%M:%S')
     sql = f'''select distinct url,caption from (select CAPTION, url from messages 
-              where DATE_TIME > '{five_hours_ago}'
+              where DATE_TIME > '{hours_ago}'
               GROUP BY CAPTION,url HAVING COUNT(*) > 1)'''
     print(sql)
     return exec_sql_get_data(sql)
