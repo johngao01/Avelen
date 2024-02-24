@@ -126,8 +126,9 @@ def rate_control(r, logger):
     count = count + len(r.json()['messages'])
     if count // 30 > times:
         times += 1
-        logger.info(str(count) + "   " + str(times))
-        time.sleep(60 * (1 + times / 10))
+        sleep_time = 60 * (1 + times / 10)
+        logger.info(str(count) + f"  sleep {sleep_time} seconds")
+        time.sleep(sleep_time)
 
 
 def log_error(url, text=''):
