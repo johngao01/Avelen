@@ -80,6 +80,8 @@ if __name__ == '__main__':
     root_dir = '/root/download/instagram/json/'
     try:
         for posts in start():
+            if not posts:
+                continue
             latest_post = max(posts, key=lambda x: x.create_time)
             for i, p in enumerate(posts, start=1):
                 if p.url in send_url:
