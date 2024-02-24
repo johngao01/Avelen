@@ -176,8 +176,7 @@ def download_file(media: Media):
     r = requests.get(media.url, headers=download_header, stream=True, timeout=30)
     if r.status_code == 200:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, mode='wb') as f:
-            f.write(r.content)
+        save_content(save_path, r)
         size = getsize(save_path)
         instagram_logger.info('  ' + save_path + "\t" + convert_bytes_to_human_readable(size))
         return size, save_path
