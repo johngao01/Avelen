@@ -1,5 +1,4 @@
 import html
-import sys
 import traceback
 from re import compile
 from urllib.parse import parse_qs
@@ -19,21 +18,7 @@ from handler_weibo import *
 from handler_instagram import *
 
 DEVELOPER_CHAT_ID = 708424141
-script_path = os.path.dirname(os.path.abspath(__file__))
-os.chdir(script_path)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-# 再创建一个handler，用于输出到控制台
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.INFO)
-
-# 定义handler的输出格式
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-# 给logger添加handler
-logger.addHandler(ch)
+logger = MyLogger('nice', 'bot')
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
