@@ -292,7 +292,11 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messages_id = []
     reaction = update.message_reaction
     print(reaction.old_reaction, reaction.new_reaction)
-    emoji = reaction.new_reaction[0].emoji
+    emoji = reaction.new_reaction or reaction.old_reaction
+    if emoji:
+        emoji = emoji[0].emoji
+    else:
+        return
     reaction_message_id = reaction.message_id
     if emoji == '👎' or emoji == "😁":
         messages_id = get_message_ids(reaction_message_id)
@@ -365,7 +369,7 @@ def main() -> None:
     application.add_handler(
         MessageHandler(filters.Text() & (~douyin_filter or ~weibo_filter or ~instagram_filter), echo))
     application.add_error_handler(error_handler)
-    application.run_polling()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
