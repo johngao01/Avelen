@@ -1,10 +1,8 @@
 import html
-import os
 import sys
 import traceback
 from re import compile
 from urllib.parse import parse_qs
-from urllib.parse import urlparse
 
 import telegram.error
 from telegram import Update, BotCommand
@@ -12,12 +10,13 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageReactionHandler,
-    ContextTypes, MessageHandler, filters,
+    ContextTypes, MessageHandler, filters
 )
 
 from database import *
 from handler_douyin import *
 from handler_weibo import *
+from handler_instagram import *
 
 DEVELOPER_CHAT_ID = 708424141
 script_path = os.path.dirname(os.path.abspath(__file__))
@@ -146,6 +145,8 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if len(message_ids) > 0:
                 delete_messages = message_ids[0:-1]
                 print(message_ids, delete_messages)
+                for mid in delete_messages:
+                    delete_db_message(mid)
                 await delete_message(context, DEVELOPER_CHAT_ID, delete_messages)
     await delete_message(context, DEVELOPER_CHAT_ID, message_id)
 
@@ -317,9 +318,31 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 
+async def instagram_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    link_message = update.message.text
+    message_id = update.message.message_id
+    shortcode = link_message.split('/')[4]
+    logger.info(shortcode)
+    post = get_post_detail(shortcode)
+    if post is None:
+        logger.error(f"处理instagram {link_message} 失败")
+        await delete_message(context, DEVELOPER_CHAT_ID, message_id)
+        return
+    r = handler_post(Post(post['data']['xdt_api__v1__media__shortcode__web_info']['items'][0]))
+    if type(r) is requests.Response:
+        if r.status_code == 200:
+            store_message_data(r)
+        else:
+            logger.error(f"处理instagram {link_message} 失败")
+    else:
+        logger.error(f"处理instagram {link_message} 失败")
+    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
+
+
 def main() -> None:
     weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
     douyin_filter = filters.Regex('https://(v.|www.|live.)?(ies)?douyin.*')
+    instagram_filter = filters.Regex('https://www.instagram.com/*')
     # application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
     #     edit_commands).build()
     builder = Application.builder()
@@ -336,9 +359,11 @@ def main() -> None:
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
-    application.add_handler(MessageHandler(filters.Text(), echo))
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
+    application.add_handler(MessageHandler(instagram_filter, instagram_scrapy))
+    application.add_handler(
+        MessageHandler(filters.Text() & (~douyin_filter or ~weibo_filter or ~instagram_filter), echo))
     application.add_error_handler(error_handler)
     application.run_polling()
 
