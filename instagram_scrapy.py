@@ -51,8 +51,6 @@ def scrapy_profile_post(profile: Profile):
 def from_local_json():
     for star in os.listdir(root_dir):
         following_posts = []
-        if star == 'missparaskeva':
-            continue
         star_dir = os.path.join(root_dir, star)
         for file in os.listdir(star_dir):
             path = os.path.join(star_dir, file)
