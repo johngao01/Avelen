@@ -113,43 +113,35 @@ def start(scraping: Following, has_send):
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     if len(new_aweme) == 0:
         scrapy_logger.info(f"{scrapy.username} 没有新作品\n")
-    skip = done = 0
     for i, aweme in enumerate(new_aweme, start=1):
-        error = 0
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
-            skip += 1
             print(i, aweme.aweme_url, aweme.create_time_str, aweme.describe.replace('\n', ' '))
             continue
         aweme.save_json()
-        while True:
-            if aweme.is_video:
-                if aweme.aweme_info['data']['duration'] > 1800000:  # 视频时长大于3600s时，跳过
-                    # print(i, aweme.aweme_info['data']['duration'], aweme.aweme_url, aweme.describe)
-                    break
-                r = handler_video_douyin(aweme)
+        if aweme.is_video:
+            if aweme.aweme_info['data']['duration'] > 1800000:  # 视频时长大于3600s时，跳过
+                # print(i, aweme.aweme_info['data']['duration'], aweme.aweme_url, aweme.describe)
+                continue
+            r = handler_video_douyin(aweme)
+        else:
+            r = handler_note_douyin(aweme)
+        if type(r) is requests.Response:
+            if r.status_code == 200:
+                previous_time = aweme.create_time_str
+                download_log(r)
+                store_message_data(r)
+                rate_control(r, scrapy_logger)
+                continue
             else:
-                r = handler_note_douyin(aweme)
-            if type(r) is requests.Response:
-                if r.status_code == 200:
-                    done += 1
-                    previous_time = aweme.create_time_str
-                    download_log(r)
-                    store_message_data(r)
-                    rate_control(r, scrapy_logger)
-                    break
-                else:
-                    error += 1
-                    if error > 3:
-                        update_db(scraping.user_sec_uid, scraping.username, previous_time)
-                        log_error(aweme.aweme_url)
-                        scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
-                        break
-            else:
+                update_db(scraping.user_sec_uid, scraping.username, previous_time)
                 log_error(aweme.aweme_url)
-    if done > 0 or skip > 0:
-        scrapy_logger.info(f"处理完 {scrapy.username} 的 {done} 个作品，跳过 {skip} 个作品\n")
-        update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
+                scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
+                continue
+        else:
+            log_error(aweme.aweme_url)
+            continue
+    update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
 if __name__ == '__main__':
