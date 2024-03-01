@@ -46,19 +46,20 @@ def weibo_edit_count(weibo_info):
     return edit_count
 
 
-def save_json(edit_count, userid, idstr, json_data):
+def save_json(edit_count, username, idstr, json_data):
     """
     将微博数据存储在本地保存为json文件
     :param edit_count: 微博的修改次数
-    :param userid: 微博的用户id
+    :param username: 微博的用户username
     :param idstr: 微博的id
     :param json_data: 微博的数据
     :return:
     """
     if edit_count == 0:
-        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', idstr + '.json')
+        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', username, idstr + '.json')
     else:
-        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', idstr + "_" + str(edit_count) + '.json')
+        json_path = os.path.join(download_save_root_directory, 'weibo', 'json', username,
+                                 idstr + "_" + str(edit_count) + '.json')
     if os.path.exists(json_path):
         return
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
