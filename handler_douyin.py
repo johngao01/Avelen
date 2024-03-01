@@ -14,8 +14,16 @@ scrapy_logger = MyLogger('douyin', 'scrapy_douyin', mode='a')
 with open('cookies.txt', mode='r', encoding='utf8') as cookie_file:
     cookies = cookie_file.read()
 douyin_headers = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183',
-    'Cookie': cookies
+    'referer': 'https://www.douyin.com/',
+    'cookie': cookies,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
+}
+with open('周明瑞.txt', mode='r', encoding='utf-8') as f:
+    cookies1 = f.read()
+favorite_headers = {
+    'referer': 'https://www.douyin.com/',
+    'cookie': cookies1,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
 }
 
 video_aweme_detail_url = 'https://www.douyin.com/aweme/v1/web/aweme/detail/?'
