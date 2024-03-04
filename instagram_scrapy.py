@@ -15,7 +15,7 @@ def get_posts(username, after='', before='null', first=12, last='null'):
         'fb_api_req_friendly_name': 'PolarisProfilePostsQuery',
         'variables': json.dumps(variables),
         'server_timestamps': 'true',
-        'doc_id': '7186392774778364',
+        'doc_id': '7354141574647290',
     }
     response = graphql_request(data)
     return response.json()
@@ -58,7 +58,6 @@ def from_local_json():
                 item = json.load(json_read)
             following_posts.append(Post(item))
         following_posts = sorted(following_posts, key=lambda x: x.create_time)
-        print(len(send_url), len(following_posts))
         yield following_posts
 
 
@@ -98,8 +97,12 @@ if __name__ == '__main__':
                         log_error(p.url, result.status_code)
                 else:
                     log_error(p.url, result)
-            update_db(latest_post.owner_pk, latest_post.owner_username,
-                      latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
-            time.sleep(30)
+            if len(sys.argv) < 2:
+                update_db(latest_post.owner_pk, latest_post.owner_username,
+                          latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
+                time.sleep(60)
+            else:
+                print(f"replace into followings values ('{latest_post.owner_pk}','{latest_post.owner_username}',1,"
+                      f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','2000-02-15 09:32:50');")
     except Exception as e:
         print(e)

@@ -8,14 +8,14 @@ instagram_headers = {
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
     'cache-control': 'no-cache',
     'content-type': 'application/x-www-form-urlencoded',
-    'cookie': 'ig_did=AFC567FD-6D72-4DBB-BB97-CBA38A9863E3; datr=TGKTZcw9b3j5B1PvNLiMRCRc; mid=ZZe3vQALAAH-Wx3ygnwfh539E6uU; ig_nrcb=1; dpr=1.3541666269302368; ps_n=0; ps_l=0; csrftoken=qs9rnw9s97GwtbfUDVXYz0eNVz3u2CkR; ds_user_id=56449351710; shbid="17455\\05456449351710\\0541740028817:01f7383c9710dfda197bc7a509815b915f739ea76d22c64c7ee2e72b40353248a2d9ec3f"; shbts="1708492817\\05456449351710\\0541740028817:01f7eae0e6b1cd257894bf4b0388eb0e6508aa456e99040d3b8f7f8bd3a3e10a8d36409d"; sessionid=56449351710%3AyQTNaU3RCjHkSc%3A15%3AAYeC6SLNVBRagnyo9K4u9iK7F0aoqU_63m9sh7usmA; rur="NAO\\05456449351710\\0541740114464:01f739ef083e09df200f50174fd4535747da19de5f66666675b4d6bc00347609b934fe34"',
+    'cookie': 'ig_did=AFC567FD-6D72-4DBB-BB97-CBA38A9863E3; datr=TGKTZcw9b3j5B1PvNLiMRCRc; mid=ZZe3vQALAAH-Wx3ygnwfh539E6uU; ig_nrcb=1; dpr=1.3541666269302368; ps_n=0; ps_l=0; csrftoken=qs9rnw9s97GwtbfUDVXYz0eNVz3u2CkR; ds_user_id=56449351710; sessionid=56449351710%3AyQTNaU3RCjHkSc%3A15%3AAYcrocVWarI1MVPIYsbSt18qBtq-o4pf1HKYUBkcwA; shbid="17455\\05456449351710\\0541740813944:01f71447f277cb44955b53b94aefea503081cb4361155897afc6fcf33f908d8a55f22d69"; shbts="1709277944\\05456449351710\\0541740813944:01f72fe4389deeb9e0f7b89236598d93a20f9d1937f9309200000866f8b45ac6e3939f11"; rur="NAO\\05456449351710\\0541740814718:01f764dbac1bc1916d2f7bfd6283f986284970eb09985844a27e1d6d0600df207e042a3f"; SL_GWPT_Show_Hide_tmp=1; SL_wptGlobTipTmp=1',
     'dpr': '1.35417',
     'origin': 'https://www.instagram.com',
     'pragma': 'no-cache',
-    'referer': 'https://www.instagram.com/p.i.n.k02/',
+    'referer': 'https://www.instagram.com/swb.aby/',
     'sec-ch-prefers-color-scheme': 'light',
-    'sec-ch-ua': '"Not A(Brand";v="99", "Microsoft Edge";v="121", "Chromium";v="121"',
-    'sec-ch-ua-full-version-list': '"Not A(Brand";v="99.0.0.0", "Microsoft Edge";v="121.0.2277.128", "Chromium";v="121.0.6167.184"',
+    'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Microsoft Edge";v="122"',
+    'sec-ch-ua-full-version-list': '"Chromium";v="122.0.6261.70", "Not(A:Brand";v="24.0.0.0", "Microsoft Edge";v="122.0.2365.59"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-model': '""',
     'sec-ch-ua-platform': '"Windows"',
@@ -23,14 +23,17 @@ instagram_headers = {
     'sec-fetch-dest': 'empty',
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-origin',
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0',
     'viewport-width': '1883',
     'x-asbd-id': '129477',
     'x-csrftoken': 'qs9rnw9s97GwtbfUDVXYz0eNVz3u2CkR',
+    'x-fb-friendly-name': 'PolarisProfilePostsQuery',
+    'x-fb-lsd': 'EyhCDa06sm2QOPSOuSR2Re',
+    'x-ig-app-id': '936619743392459',
 }
 instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
 graphql_url = 'https://www.instagram.com/api/graphql'
-fb_dtsg = 'NAcOHs17aPsstlXPht3t8RvIdfHPQkgDsuacIVlsvKPHUxYzlOa_BDA:17843691127146670:1708225385'
+fb_dtsg = 'NAcOkY6Ufoeuo8P2vxiRrY4HQVxLcWKmPBuYMKjJ7waYQ0hq0Hzk0Zw:17843691127146670:1708225385'
 
 
 class Profile:
