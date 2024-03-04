@@ -44,17 +44,6 @@ def scrapy_like(uid, scrapy_log: MyLogger):
     return all_weibo
 
 
-class Following:
-    def __init__(self, userid, username, scrapy_type, latest_time):
-        self.userid = userid
-        self.username = username
-        self.scrapy_type = scrapy_type
-        if latest_time is None or latest_time == '':
-            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
-        else:
-            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
-
-
 def one_page_latest(user_id: str, page):
     params = {'container_ext': 'profile_uid:' + user_id, 'containerid': '107603' + user_id,
               'page_type': 'searchall', 'page': page}

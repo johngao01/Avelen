@@ -41,6 +41,17 @@ del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0
 weibo_logger = MyLogger('scrapy_weibo', 'scrapy_weibo', mode='a')
 
 
+class Following:
+    def __init__(self, userid, username, scrapy_type, latest_time):
+        self.userid = userid
+        self.username = username
+        self.scrapy_type = scrapy_type
+        if latest_time is None or latest_time == '':
+            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
+        else:
+            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
+
+
 def standardize_date(created_at):
     """
     将微博的创建时间标准格式化
@@ -205,7 +216,7 @@ def parse_weibo_data(weibo_data, username):
     else:
         username = weibo_data['user']['screen_name']
         save_dir = os.path.join(download_save_root_directory, 'weibo', weibo_data['user']['screen_name'])
-    save_json(weibo_edit_count(weibo_data), username, weibo_id, weibo_data)
+    # save_json(weibo_edit_count(weibo_data), username, weibo_id, weibo_data)
     create_time = standardize_date(weibo_data['created_at'])
     weibo_url = f'https://www.weibo.com/{user_id}/{weibo_id}'
     weibo_header['referer'] = weibo_url
