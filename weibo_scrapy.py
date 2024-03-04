@@ -59,7 +59,6 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
     page = 1
     weibo_list = []
     keep = 5
-    max_weibo_time = datetime(2000, 12, 31, 12, 12, 12)
     while keep:
         page_add = 0
         # 此方法获取的信息不能下载v+内容，但不需要cookie
@@ -69,7 +68,7 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
         if info['ok']:
             cards = info['data']['cards']
             cards_num = len(cards)
-            page_weibo_latest_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
+            page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
             for card in cards:
                 if card['card_type'] == 9:
                     weibo_info = card['mblog']
@@ -78,13 +77,11 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
                         latest_edit_time = standardize_date(weibo_info['edit_at'])
                     else:
                         latest_edit_time = standardize_date(weibo_info['created_at'])
-                    save_json(weibo_edit_count(weibo_info), user.userid, weibo_id, weibo_info)
+                    save_json(weibo_edit_count(weibo_info), user.username, weibo_id, weibo_info)
                     weibo_info['weibo_time'] = latest_edit_time
                     weibo_url = "https://www.weibo.com" + "/" + user.userid + "/" + weibo_id
-                    if latest_edit_time > max_weibo_time:
-                        max_weibo_time = latest_edit_time
-                    if latest_edit_time < page_weibo_latest_time:
-                        page_weibo_latest_time = latest_edit_time
+                    if latest_edit_time < page_weibo_min_time:
+                        page_weibo_min_time = latest_edit_time
                     if user.scrapy_type == 1 and latest_edit_time > user.latest_time:
                         page_add += 1
                         weibo_info['weibo_url'] = weibo_url
@@ -102,7 +99,7 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
                 scrapy_info += f"，本页获得{page_add}个新微博,共有{len(weibo_list)}个新微博"
             else:
                 scrapy_info += f"，本页没有新微博,共有{len(weibo_list)}个新微博"
-            if page_weibo_latest_time <= user.latest_time:
+            if page_weibo_min_time <= user.latest_time:
                 scrapy_info += f"，获取新微博完成。"
                 scrapy_log.info(scrapy_info)
                 break
@@ -114,17 +111,16 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
             time.sleep(60)
         elif info['ok'] == 0 and info.get('msg') == "这里还没有内容":
             keep -= 1
-    return weibo_list, max_weibo_time.strftime('%Y-%m-%d %H:%M:%S')
+    return weibo_list
 
 
 def start(scraping: Following, has_send):
-    new_weibo, max_weibo_time = scrapy_latest(scraping, logger)
+    new_weibo = scrapy_latest(scraping, logger)
     if len(new_weibo) == 0:
         logger.info(f'{scraping.username} 没有新微博\n')
-        update_db(scraping.userid, scraping.username, max_weibo_time)
         return
     new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
-    previous_weibo_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
+    latest_weibo = max(new_weibo, key=lambda x: x['weibo_time'])
     for weibo in new_weibo:
         if weibo['weibo_url'] in has_send:
             continue
@@ -134,7 +130,6 @@ def start(scraping: Following, has_send):
             log_error(weibo['weibo_url'])
             logger.error(f"处理 {weibo['weibo_url']} 失败")
             logger.error(traceback.format_exc())
-            update_db(scraping.userid, scraping.username, previous_weibo_time)
         else:
             if type(r) is requests.Response:
                 if r.status_code == 200:
@@ -143,7 +138,6 @@ def start(scraping: Following, has_send):
                     store_message_data(r)
                     rate_control(r, logger)
                 else:
-                    update_db(scraping.userid, scraping.username, previous_weibo_time)
                     with open('error.txt', mode='a', encoding='utf-8') as f1:
                         f1.write(f"处理 {weibo['weibo_url']} 失败\n")
                         f1.write(f"{r.text}\n\n")
@@ -153,7 +147,7 @@ def start(scraping: Following, has_send):
                 continue
     logger.info(f'\n')
     if len(new_weibo) > 0:
-        update_db(scraping.userid, scraping.username, max_weibo_time)
+        update_db(scraping.userid, scraping.username, latest_weibo.strftime('%Y-%m-%d %H:%M:%S'))
 
 
 if __name__ == '__main__':
