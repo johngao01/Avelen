@@ -27,8 +27,12 @@ def scrapy_like(uid, scrapy_log: MyLogger):
             'page': str(page),
             'with_total': 'true',
         }
-        response = requests.get('https://weibo.com/ajax/statuses/likelist', params=params, headers=cookie_headers)
-        lists = response.json()['data']['list']
+        try:
+            response = requests.get('https://weibo.com/ajax/statuses/likelist', params=params, headers=cookie_headers)
+            lists = response.json()['data']['list']
+        except Exception as e:
+            weibo_logger.error(str(e))
+            return all_weibo
         for weibo in lists:
             if 'user' in weibo:
                 weibo_url = "https://www.weibo.com" + "/" + weibo['user']['idstr'] + "/" + weibo['idstr']
