@@ -11,14 +11,14 @@ from utils import *
 
 scrapy_logger = MyLogger('douyin', 'scrapy_douyin', mode='a')
 
-with open('cookies.txt', mode='r', encoding='utf8') as cookie_file:
+with open('cookies/cookies.txt', mode='r', encoding='utf8') as cookie_file:
     cookies = cookie_file.read()
 douyin_headers = {
     'referer': 'https://www.douyin.com/',
     'cookie': cookies,
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
 }
-with open('周明瑞.txt', mode='r', encoding='utf-8') as f:
+with open('cookies/周明瑞.txt', mode='r', encoding='utf-8') as f:
     cookies1 = f.read()
 favorite_headers = {
     'referer': 'https://www.douyin.com/',

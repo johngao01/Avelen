@@ -11,13 +11,15 @@ headers = {
     'referer': 'https://weibo.com/',
     'Content-Type': 'application/json'
 }
+with open('cookies/johnjohn01.txt') as cookie_file:
+    cookies = cookie_file.read()
 cookie_headers = {
     'authority': 'weibo.com',
     'accept': 'application/json, text/plain, */*',
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
     'cache-control': 'no-cache',
     'client-version': 'v2.44.70',
-    'cookie': 'SINAGLOBAL=4461371745215.063.1705391868773; ULV=1708907399902:8:6:1:1837128793793.0325.1708907399784:1708586890387; XSRF-TOKEN=sQCVBYffKOsd70RbAHuH0TPm; SL_G_WPT_TO=zh-CN; SL_GWPT_Show_Hide_tmp=1; SL_wptGlobTipTmp=1; ALF=1711846337; SUB=_2A25I5VaRDeRhGeFJ7VUW-C7OyjmIHXVrm9ZZrDV8PUJbkNANLUXHkW1Nf1NVvoa8A6rVe4rTLz04WILDCYEHefWC; SUBP=0033WrSXqPxfM725Ws9jqgMF55529P9D9WFybN0YodCC8sDaiK3hJFKd5JpX5KzhUgL.FoMNSoMN1h5EeK-2dJLoI7D3dcyVIJvQdo5p; WBPSESS=CIq1nOqC6X2VXYb4WSS3wMt_Z8Adek6Z5Tk5bl67sgJoDdwtcByi9nSlY_pkZwq_rgYB88Xz423xy7Xckz5d1YCVqEnL4tG4ArmnHKFpSKXjoI1wZ-o9oWwl07_MQEkM07rbj3MatBNO_hpkE8OULw==',
+    'cookie': cookies,
     'pragma': 'no-cache',
     'referer': 'https://weibo.com/u/page/like/7767780215',
     'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Microsoft Edge";v="122"',
