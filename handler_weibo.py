@@ -1,4 +1,5 @@
 import datetime
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from PIL import Image
@@ -36,7 +37,8 @@ cookie_headers = {
 weibo_header = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                   'Chrome/104.0.0.0 Safari/537.36',
-    'referer': 'https://weibo.com/'
+    'referer': 'https://weibo.com/',
+    'cookie': 'SUBP=0033WrSXqPxfM72-Ws9jqgMF55529P9D9W51vhsNfUfV2YL.VHulT9DN;WBPSESS=gJ7ElPMf_3q2cdj5JUfmvBCyTLpPuA6sKwpyMFrI2wvAnu3g9Yr-LXk8RZ0EwVzH3ZNo_Vdp2RXzXjs4BBoJzDZC3qLHqRffDSd1XU3RNsAnzJYtEo9D7HKvjaX3HOZw-Y992VC7yPKctxof_ywVOPWptY43SWIw3VEaRwGiDLY=;SUB=_2AkMSoiDDf8NxqwFRmfsVyW7qaYp0zQ3EieKk_tEYJRMxHRl-yT8XqlxZtRB6OSIOKwYh5I1-rxzEimXIcPYLDv47DUz8;XSRF-TOKEN=4_zeJNqfBCsDMNEPpT3GCLnR'
 }
 del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736']
 
@@ -246,13 +248,20 @@ def parse_weibo_data(weibo_data, username):
 
 def get_weibo_data(weibo_link):
     weibo_id = weibo_link.split('/')[-1]
-    response = requests.get('https://weibo.com/ajax/statuses/show',
-                            params={'id': weibo_id},
-                            headers=weibo_header)
-    data = response.json()
-    if 'message' in data and (data['message'] == '暂无权限查看' or data['message'] == '该微博不存在'):
-        weibo_logger.error(data['message'])
-        return False, weibo_link
+    try:
+        response = requests.get('https://weibo.com/ajax/statuses/show',
+                                params={'id': weibo_id, 'locale': 'zh-CN'},
+                                headers=weibo_header)
+        data = response.json()
+    except Exception as e:
+        weibo_logger.error("获取微博信息失败：" + weibo_link)
+        log_error(weibo_link, '获取微博失败')
+        return False
+    if 'message' in data and (data['message'] == '暂无查看权限' or data['message'] == '该微博不存在'):
+        weibo_logger.error(data['message'] + "\t" + weibo_link)
+        return False
+    elif 'message' in data and (data['message'] == '访问频次过高，请稍后再试'):
+        time.sleep(90)
     data['weibo_url'] = weibo_link
     return data
 
@@ -335,11 +344,12 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
     else:
         weibo_data = get_weibo_data(weibo_url)
         if weibo_data is False:
-            weibo_logger.error('错误的微博：' + weibo_url)
             return
         weibo_info, post_data = parse_weibo_data(weibo_data, username)
     weibo_dict = weibo_info['data']
     info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
+    if weibo_dict['mblog_vip_type'] == 1:
+        weibo_logger.info(info + 'V+微博')
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
         weibo_logger.info(info + '转发微博')
