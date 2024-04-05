@@ -350,6 +350,7 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
     info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
     if weibo_dict['mblog_vip_type'] == 1:
         weibo_logger.info(info + 'V+微博')
+        return
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
         weibo_logger.info(info + '转发微博')
