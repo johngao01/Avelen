@@ -133,4 +133,4 @@ def rate_control(r, logger):
 
 def log_error(url, text=''):
     with open('error.txt', 'a') as f:
-        f.write(f"处理 {url} 失败  {text}\n")
+        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 处理 {url} 失败  {text}\n")
