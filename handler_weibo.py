@@ -107,13 +107,12 @@ def save_json(edit_count, username, idstr, json_data):
         json.dump(json_data, json_write, ensure_ascii=False, indent=4)
 
 
-def download_image(weibo_info, photo_url, pic, pic_id, index):
+def download_image(weibo_info, photo_url, pic, index):
     """
     多线程下载图片微博中的jpg、mov、gif
     :param weibo_info: 微博数据
     :param photo_url: 图片的下载地址
     :param pic: 图片节点
-    :param pic_id: 图片的pic_id
     :param index: 图片的序号
     :return:
     """
@@ -127,7 +126,7 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
         response = requests.get(photo_url, headers=weibo_info['header'], stream=True)
         save_content(save_path, response)
         if response.status_code != 200:
-            weibo_logger.info("禁止访问的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
+            weibo_logger.info("禁止访问的内容：" + weibo_info['url'])
             return photo_video
     with open(save_path, mode='rb') as f:
         pic_content = f.read()
@@ -136,7 +135,7 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
         size = len(pic_content)
         human_readable_size = convert_bytes_to_human_readable(size)
         if md5value in del_file:
-            weibo_logger.info("和谐的内容：" + weibo_info['url'] + "：pic_id：" + pic_id)
+            weibo_logger.info("和谐的内容：" + weibo_info['url'])
         else:
             file_data = {
                 'media': save_path,
@@ -201,6 +200,18 @@ def download_image(weibo_info, photo_url, pic, pic_id, index):
             return photo_video
     else:
         return photo_video
+
+
+def download_video(weibo_info, video_url, index):
+    response = requests.get(video_url, weibo_info['header'], stream=True)
+    media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
+    save_path = os.path.join(weibo_info['save_dir'], media_name)
+    save_content(save_path, response)
+    size = os.path.getsize(save_path)
+    human_readable_size = convert_bytes_to_human_readable(size)
+    msg = '\t'.join([str(index), save_path, human_readable_size])
+    weibo_logger.info(msg)
+    return {'media': save_path, 'caption': media_name, 'type': 'video', 'size': size}
 
 
 def weibo_pic_infos(weibo_dict):
@@ -274,7 +285,7 @@ def handler_photo_weibo(weibo_info, pic_infos, post_data):
         # 使用线程池来执行下载任务
         future_to_url = {
             executor.submit(download_image, weibo_info, pic_infos[pic_id].get('largest').get('url'),
-                            pic_infos[pic_id], pic_id, i): (
+                            pic_infos[pic_id], i): (
                 pic_id, i) for i, pic_id in enumerate(pic_ids, start=1)}
         for future in as_completed(future_to_url):
             try:
@@ -286,12 +297,8 @@ def handler_photo_weibo(weibo_info, pic_infos, post_data):
     post_data.update({'files': photo_video})
     if len(post_data['files']) == 0:
         return
-    if len(post_data) >= 2:
-        r = request_webhook('/main', post_data, weibo_logger)
-        return r
-    else:
-        r = request_webhook('/main', post_data, weibo_logger)
-        return r
+    r = request_webhook('/main', post_data, weibo_logger)
+    return r
 
 
 def get_video_url(page_info):
@@ -320,18 +327,11 @@ def get_video_url(page_info):
 
 
 def handler_video_weibo(weibo_info, post_data, video_url):
-    response = requests.get(video_url, weibo_info['header'], stream=True)
-    media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
-    save_path = os.path.join(weibo_info['save_dir'], media_name)
-    save_content(save_path, response)
-    size = os.path.getsize(save_path)
-    human_readable_size = convert_bytes_to_human_readable(size)
-    msg = '\t'.join(['1', save_path, human_readable_size])
-    weibo_logger.info(msg)
-    if size > MAX_VIDEO_SIZE:
-        log_error(weibo_info['url'], f'文件太大，{save_path} {human_readable_size}')
-    elif size:
-        post_data.update({'files': {'media': save_path, 'caption': media_name, 'type': 'video'}})
+    result = download_video(weibo_info, video_url, 1)
+    if result['size'] > MAX_VIDEO_SIZE:
+        log_error(weibo_info['url'], f"文件太大，{result['media']}")
+    elif result['size']:
+        post_data.update({'files': result})
         r = request_webhook('/main', post_data, weibo_logger)
         return r
     else:
@@ -360,13 +360,12 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
         if weibo_dict['user']['idstr'] != userid:
             weibo_logger.info(info + '转发微博')
             return
-    if type(weibo_dict.get('pic_ids')) is list and len(weibo_dict.get('pic_ids')) > 0:
-        if 'mix_media_info' in weibo_dict:
-            weibo_logger.info(info + '图片微博')
-            pic_infos = weibo_pic_infos(weibo_dict)
-            r = handler_photo_weibo(weibo_info, pic_infos, post_data)
-            return r
-        elif 'pic_infos' in weibo_dict:
+    if 'mix_media_info' in weibo_dict and weibo_dict['mix_media_info']['items']:
+        weibo_logger.info(info + '图片视频微博')
+        r = handler_mix_media_weibo(weibo_info, post_data, weibo_dict['mix_media_info'])
+        return r
+    elif type(weibo_dict.get('pic_ids')) is list and len(weibo_dict.get('pic_ids')) > 0:
+        if 'pic_infos' in weibo_dict:
             weibo_logger.info(info + '图片微博')
             r = handler_photo_weibo(weibo_info, weibo_dict['pic_infos'], post_data)
             return r
@@ -385,3 +384,32 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
                 weibo_logger.info(info + '文字微博')
         else:
             weibo_logger.info(info + '文字微博')
+
+
+def handler_mix_media_weibo(weibo_info, post_data, mix_media_data):
+    mix_media_items = mix_media_data['items']
+    pic_infos = [item['data'] for item in mix_media_items if item['type'] == 'pic']
+    photo_video = []
+    if pic_infos:
+        with ThreadPoolExecutor() as executor:
+            # 使用线程池来执行下载任务
+            future_to_url = {
+                executor.submit(download_image, weibo_info, pic_infos[i].get('largest').get('url'),
+                                pic_infos[i], i + 1): i for i in range(len(pic_infos))}
+            for future in as_completed(future_to_url):
+                try:
+                    result = future.result()
+                    if result:
+                        photo_video.extend(result)
+                except Exception as e:
+                    weibo_logger.info("下载出错：" + str(e))
+    video_infos = [item['data'] for item in mix_media_items if item['type'] == 'video']
+    if video_infos:
+        for i, video in enumerate(video_infos, start=1):
+            video_url = get_video_url(video)
+            if video_url:
+                result = download_video(weibo_info, video_url, i)
+                photo_video.append(result)
+    post_data.update({'files': photo_video})
+    r = request_webhook('/main', post_data, weibo_logger)
+    return r
