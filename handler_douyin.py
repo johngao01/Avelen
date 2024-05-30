@@ -552,6 +552,8 @@ def handler_note_douyin(aweme: Aweme):
 
 
 def handler_douyin(aweme):
+    if aweme is None:
+        return False
     aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
     user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], 1, '')
     aweme = Aweme(user, aweme)
