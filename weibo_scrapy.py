@@ -152,9 +152,7 @@ def start(scraping: Following, has_send):
                     store_message_data(r)
                     rate_control(r, weibo_logger)
                 else:
-                    with open('error.txt', mode='a', encoding='utf-8') as f1:
-                        f1.write(f"处理 {weibo['weibo_url']} 失败\n")
-                        f1.write(f"{r.text}\n\n")
+                    log_error(weibo['weibo_url'])
                     weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
                     copy2('sqlite.db', 'sqlite.back')
             else:
