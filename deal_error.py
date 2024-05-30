@@ -18,8 +18,7 @@ for line in lines:
     elif 'douyin' in url:
         r = handler_douyin(get_aweme_detail(get_url_id(url)[1]))
     else:
-        p = get_post_detail(url)
-        r = handler_post(Post(p['data']['xdt_api__v1__media__shortcode__web_info']['items'][0]))
+        continue
     if type(r) is requests.Response:
         if r.status_code == 200:
             store_message_data(r)
