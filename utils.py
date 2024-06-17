@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import os
-import time
+from time import sleep
 from datetime import datetime
 
 import cv2
@@ -128,7 +128,7 @@ def rate_control(r, logger):
         times += 1
         sleep_time = 60 * (1 + times / 10)
         logger.info(str(count) + f"  sleep {sleep_time} seconds")
-        time.sleep(sleep_time)
+        sleep(sleep_time)
 
 
 def log_error(url, text=''):
