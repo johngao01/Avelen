@@ -236,7 +236,7 @@ class NewXBogus:
             user_agent: tuple,
             version=23,
             test_time=None):
-        timestamp = int(test_time or time.time())
+        timestamp = int(test_time or time())
         query = self.process_url_path(urlencode(query))
         return self.generate_x_bogus(
             query, version, user_agent[self.__index[version]], timestamp)
