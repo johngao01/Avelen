@@ -100,7 +100,7 @@ if __name__ == '__main__':
             if len(sys.argv) < 2:
                 update_db(latest_post.owner_pk, latest_post.owner_username,
                           latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
-                time.sleep(60)
+                sleep(60)
             else:
                 print(f"replace into followings values ('{latest_post.owner_pk}','{latest_post.owner_username}',1,"
                       f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','2000-02-15 09:32:50');")
