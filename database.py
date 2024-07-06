@@ -1,47 +1,64 @@
 import datetime
-import sqlite3
+import pymysql
 
-DB_NAME = 'sqlite.db'
+mysql_host = '107.172.133.192'
+mysql_user = 'root'
+mysql_password = '123456'
+mysql_db = 'nicebot'
+
+MESSAGES = ['MESSAGE_ID', 'CAPTION', 'CHAT_ID', 'DATE_TIME', 'FORM_USER', 'CHAT', 'MEDIA_GROUP_ID', 'TEXT_RAW',
+            'URL', 'USERID', 'IDSTR', 'MBLOGID']
+VIDEO = ['file_id', 'file_unique_id', 'width', 'height', 'duration', 'file_size',
+         'file_name', 'file_type', 'message_id', 'media_group_id', 'url']
+
+PHOTO = ['file_id', 'file_unique_id', 'width', 'height', 'file_size', 'file_name',
+         'message_id', 'media_group_id', 'url']
+
+DOCUMENT = ['file_id', 'file_unique_id', 'file_size', 'file_name', 'file_type',
+            'message_id', 'media_group_id', 'url']
+
+
+def insert_data(db_conn, table_name, columns, data_dict):
+    cursor = db_conn.cursor()
+    columns_str = ', '.join(columns)
+    placeholders = ', '.join(['%s'] * len(columns))
+    sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders});"
+    data = [data_dict[column] for column in columns]
+    cursor.execute(sql, data)
+    db_conn.commit()
 
 
 def store_message_data(response):
-    conn = sqlite3.connect(DB_NAME)
+    conn = pymysql.connect(host=mysql_host,
+                           user=mysql_user,
+                           password=mysql_password,
+                           database=mysql_db)
     cursor = conn.cursor()
     response = response.json()
     messages = response['messages']
     for message in messages:
-        insert_statement = """
-            INSERT INTO messages (MESSAGE_ID, CAPTION, CHAT_ID, DATE_TIME, FORM_USER, CHAT, MEDIA_GROUP_ID, TEXT_RAW, 
-            URL, USERID, IDSTR, MBLOGID) VALUES (:MESSAGE_ID, :CAPTION, :CHAT_ID, :DATE_TIME, :FORM_USER,
-            :CHAT,:MEDIA_GROUP_ID,:TEXT_RAW,:URL,:USERID,:IDSTR,:MBLOGID)"""
-        cursor.execute(insert_statement, message)
+        insert_data(conn, 'messages', MESSAGES, message)
         if message['VIDEO']:
-            insert_statement = """INSERT INTO video (file_id, file_unique_id, width, height, duration, file_size, 
-            file_name, file_type, message_id, media_group_id, url) VALUES (:file_id, :file_unique_id, :width, 
-            :height, :duration, :file_size, :file_name, :file_type, :message_id, :media_group_id, :url)"""
-            cursor.execute(insert_statement, message['VIDEO'])
+            insert_data(conn, 'video', VIDEO, message['VIDEO'])
         if message['PHOTO']:
             for k, v in message['PHOTO'].items():
-                insert_statement = """INSERT INTO photo (file_id, file_unique_id, width, height, file_size, file_name, 
-                message_id, media_group_id, url) VALUES (:file_id, :file_unique_id, :width, :height, :file_size, 
-                :file_name, :message_id, :media_group_id, :url)"""
-                cursor.execute(insert_statement, v)
+                insert_data(conn, 'photo', PHOTO, v)
         if message['DOCUMENT']:
-            insert_statement = """INSERT INTO DOCUMENT (file_id, file_unique_id, file_size, file_name, file_type, 
-            message_id, media_group_id, url) VALUES (:file_id, :file_unique_id,:file_size, :file_name, :file_type, 
-            :message_id, :media_group_id, :url)"""
-            cursor.execute(insert_statement, message['DOCUMENT'])
+            insert_data(conn, 'DOCUMENT', DOCUMENT, message['DOCUMENT'])
     conn.commit()
     cursor.close()
     conn.close()
 
 
 def get_all_following(platform):
-    conn = sqlite3.connect(DB_NAME)
+    conn = pymysql.connect(host=mysql_host,
+                           user=mysql_user,
+                           password=mysql_password,
+                           database=mysql_db)
     cursor = conn.cursor()
     sql = f'''SELECT userid, username, latest_time 
-              FROM FOLLOWINGS 
-              where plotform='{platform}' order by scrapy_time;'''
+              FROM `user`
+              where platform='{platform}' order by scrapy_time;'''
     cursor.execute(sql)
     data = [item for item in cursor.fetchall()]
     cursor.close()
@@ -50,7 +67,10 @@ def get_all_following(platform):
 
 
 def exec_sql_get_data(sql):
-    conn = sqlite3.connect(DB_NAME)
+    conn = pymysql.connect(host=mysql_host,
+                           user=mysql_user,
+                           password=mysql_password,
+                           database=mysql_db)
     cursor = conn.cursor()
     print(sql)
     try:
@@ -112,7 +132,10 @@ def get_message_url(message_id):
 
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = pymysql.connect(host=mysql_host,
+                           user=mysql_user,
+                           password=mysql_password,
+                           database=mysql_db)
     cursor = conn.cursor()
     with open('database.ddl', mode='a', encoding='utf-8') as f:
         sql = f.read()
@@ -123,10 +146,13 @@ def init_db():
 
 
 def update_db(user_id, username, latest_time):
-    conn = sqlite3.connect(DB_NAME)
+    conn = pymysql.connect(host=mysql_host,
+                           user=mysql_user,
+                           password=mysql_password,
+                           database=mysql_db)
     cursor = conn.cursor()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sql = (f'UPDATE FOLLOWINGS SET latest_time={repr(latest_time)},scrapy_time={repr(now)} '
+    sql = (f'UPDATE `user` SET latest_time={repr(latest_time)},scrapy_time={repr(now)} '
            f'WHERE USERID={repr(user_id)} and username={repr(username)};')
     # print(sql)
     cursor.execute(sql)
