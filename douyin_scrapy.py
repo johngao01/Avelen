@@ -154,5 +154,3 @@ if __name__ == '__main__':
     except Exception as e:
         detailed_error_info = traceback.format_exc()
         scrapy_logger.info(detailed_error_info)
-    finally:
-        copy2('sqlite.db', 'sqlite.back')

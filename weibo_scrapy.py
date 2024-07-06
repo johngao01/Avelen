@@ -1,8 +1,5 @@
 import traceback
-from shutil import copy2
-
 import urllib3
-
 from database import *
 from handler_weibo import *
 
@@ -154,7 +151,6 @@ def start(scraping: Following, has_send):
                 else:
                     log_error(weibo['weibo_url'])
                     weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
-                    copy2('sqlite.db', 'sqlite.back')
             else:
                 continue
     weibo_logger.info('\n')
