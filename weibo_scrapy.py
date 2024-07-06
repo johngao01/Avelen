@@ -91,7 +91,7 @@ def scrapy_latest(user: Following, scrapy_log: MyLogger):
                     weibo_url = "https://www.weibo.com" + "/" + user.userid + "/" + weibo_id
                     if latest_edit_time < page_weibo_min_time:
                         page_weibo_min_time = latest_edit_time
-                    if user.scrapy_type == 1 and latest_edit_time > user.latest_time:
+                    if latest_edit_time > user.latest_time:
                         page_add += 1
                         weibo_info['weibo_url'] = weibo_url
                         weibo_list.append(weibo_info)

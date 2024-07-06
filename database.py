@@ -39,9 +39,9 @@ def store_message_data(response):
 def get_all_following(platform):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    sql = f'''SELECT userid, username, scrapy_type, latest_time 
+    sql = f'''SELECT userid, username, latest_time 
               FROM FOLLOWINGS 
-              where douyin_weibo='{platform}' order by scrapy_time;'''
+              where plotform='{platform}' order by scrapy_time;'''
     cursor.execute(sql)
     data = [item for item in cursor.fetchall()]
     cursor.close()

@@ -8,7 +8,7 @@ instagram_headers = {
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
     'cache-control': 'no-cache',
     'content-type': 'application/x-www-form-urlencoded',
-    'cookie': 'ig_did=AFC567FD-6D72-4DBB-BB97-CBA38A9863E3; datr=TGKTZcw9b3j5B1PvNLiMRCRc; mid=ZZe3vQALAAH-Wx3ygnwfh539E6uU; ig_nrcb=1; dpr=1.3541666269302368; ps_n=0; ps_l=0; csrftoken=qs9rnw9s97GwtbfUDVXYz0eNVz3u2CkR; ds_user_id=56449351710; sessionid=56449351710%3AyQTNaU3RCjHkSc%3A15%3AAYcrocVWarI1MVPIYsbSt18qBtq-o4pf1HKYUBkcwA; shbid="17455\\05456449351710\\0541740813944:01f71447f277cb44955b53b94aefea503081cb4361155897afc6fcf33f908d8a55f22d69"; shbts="1709277944\\05456449351710\\0541740813944:01f72fe4389deeb9e0f7b89236598d93a20f9d1937f9309200000866f8b45ac6e3939f11"; rur="NAO\\05456449351710\\0541740814718:01f764dbac1bc1916d2f7bfd6283f986284970eb09985844a27e1d6d0600df207e042a3f"; SL_GWPT_Show_Hide_tmp=1; SL_wptGlobTipTmp=1',
+    'cookie': 'ps_n=1;datr=GI_aZZwhSAEjNRu3q6NEcKt-;shbts="1719926210\05456449351710\0541751462210:01f7c5fb9dadfc3148d8a9e86956af23052ac006bfaff27c50f502b848084a2e7fe745b5";ds_user_id=56449351710;shbid="17455\05456449351710\0541751462210:01f7354f0900a37a14751e55e155f9f172f22982b7ede76ebc00b82316ca7e121fe8cb63";csrftoken=1AkBsQKpZI7hj5SQPX4m2n8Jhz6LihDm;ig_did=641CDFD2-A3C1-4C19-B077-DE76E869E16E;ps_l=1;wd=2560x584;mid=ZdqPGAALAAFsjJulTiz0Tv8Jk-nh;sessionid=56449351710%3Am0sqBCxdHZcwKW%3A2%3AAYes_6iGxaysXfEGK8uwJygj3Z5LfQC3LxMrF1196DY;rur="HIL\05456449351710\0541751462597:01f73b19f26e52d06de60df56d50350e315d5b6ae4754aeede41277c6631dc06022420f7"',
     'dpr': '1.35417',
     'origin': 'https://www.instagram.com',
     'pragma': 'no-cache',
@@ -33,14 +33,13 @@ instagram_headers = {
 }
 instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
 graphql_url = 'https://www.instagram.com/api/graphql'
-fb_dtsg = 'NAcOkY6Ufoeuo8P2vxiRrY4HQVxLcWKmPBuYMKjJ7waYQ0hq0Hzk0Zw:17843691127146670:1708225385'
+fb_dtsg = 'NAcPSB18sXr85-MYpSEs6ByaIB0EI92OoEdGUQhYpINxhGPwpNfWSyQ:17843671327157124:1710762843'
 
 
 class Profile:
-    def __init__(self, pk, username, scrapy_type, latest_time):
+    def __init__(self, pk, username, latest_time):
         self.pk = pk
         self.username = username
-        self.scrapy_type = scrapy_type
         if latest_time is None or latest_time == '':
             self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
         else:

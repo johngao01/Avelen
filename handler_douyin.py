@@ -767,10 +767,9 @@ class ABogus:
 
 
 class Following:
-    def __init__(self, userid, username, scrapy_type, latest_time):
+    def __init__(self, userid, username, latest_time):
         self.user_sec_uid = userid
         self.username = username
-        self.scrapy_type = scrapy_type
         if latest_time is None or latest_time == '':
             self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
         else:
