@@ -25,9 +25,9 @@ def scrapy_profile_post(profile: Profile):
     end_cursor = ''
     results = []
     has_next_page = True
+    instagram_logger.info(
+        f'开始获取 {profile.username} 截至 {str(profile.latest_time)} 的instagram，她的主页是 {profile.url}')
     while has_next_page:
-        instagram_logger.info(
-            f'开始获取 {profile.username} 截至 {str(profile.latest_time)} 的instagram，她的主页是 {profile.url}')
         page_data = get_posts(profile.username, after=end_cursor)
         if page_data:
             page_posts = page_data['data']['xdt_api__v1__feed__user_timeline_graphql_connection']['edges']
