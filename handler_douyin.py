@@ -1083,7 +1083,7 @@ def handler_douyin(aweme):
     if aweme is None:
         return False
     aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
-    user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], 1, '')
+    user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], '')
     aweme = Aweme(user, aweme)
     if aweme.is_video:
         r = handler_video_douyin(aweme)
