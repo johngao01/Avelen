@@ -1,9 +1,10 @@
 import datetime
 import pymysql
 
-mysql_host = '107.172.133.192'
+mysql_host = '195.245.229.193'
 mysql_user = 'root'
 mysql_password = '123456'
+mysql_port = 3307
 mysql_db = 'nicebot'
 
 MESSAGES = ['MESSAGE_ID', 'CAPTION', 'CHAT_ID', 'DATE_TIME', 'FORM_USER', 'CHAT', 'MEDIA_GROUP_ID', 'TEXT_RAW',
@@ -18,6 +19,15 @@ DOCUMENT = ['file_id', 'file_unique_id', 'file_size', 'file_name', 'file_type',
             'message_id', 'media_group_id', 'url']
 
 
+def get_db_conn():
+    conn = pymysql.connect(host=mysql_host,
+                           user=mysql_user,
+                           port=mysql_port,
+                           password=mysql_password,
+                           database=mysql_db)
+    return conn
+
+
 def insert_data(db_conn, table_name, columns, data_dict):
     cursor = db_conn.cursor()
     columns_str = ', '.join(columns)
@@ -29,10 +39,7 @@ def insert_data(db_conn, table_name, columns, data_dict):
 
 
 def store_message_data(response):
-    conn = pymysql.connect(host=mysql_host,
-                           user=mysql_user,
-                           password=mysql_password,
-                           database=mysql_db)
+    conn = get_db_conn()
     cursor = conn.cursor()
     response = response.json()
     messages = response['messages']
@@ -51,10 +58,7 @@ def store_message_data(response):
 
 
 def get_all_following(platform):
-    conn = pymysql.connect(host=mysql_host,
-                           user=mysql_user,
-                           password=mysql_password,
-                           database=mysql_db)
+    conn = get_db_conn()
     cursor = conn.cursor()
     sql = f'''SELECT userid, username, latest_time 
               FROM `user`
@@ -67,12 +71,8 @@ def get_all_following(platform):
 
 
 def exec_sql_get_data(sql):
-    conn = pymysql.connect(host=mysql_host,
-                           user=mysql_user,
-                           password=mysql_password,
-                           database=mysql_db)
+    conn = get_db_conn()
     cursor = conn.cursor()
-    print(sql)
     try:
         cursor.execute(sql)
     except Exception as e:
@@ -113,7 +113,6 @@ def get_duplicate_messages():
     sql = f'''select distinct url,caption from (select CAPTION, url from messages 
               where DATE_TIME > '{hours_ago}'
               GROUP BY CAPTION,url HAVING COUNT(*) > 1)'''
-    print(sql)
     return exec_sql_get_data(sql)
 
 
@@ -132,10 +131,7 @@ def get_message_url(message_id):
 
 
 def init_db():
-    conn = pymysql.connect(host=mysql_host,
-                           user=mysql_user,
-                           password=mysql_password,
-                           database=mysql_db)
+    conn = get_db_conn()
     cursor = conn.cursor()
     with open('database.ddl', mode='a', encoding='utf-8') as f:
         sql = f.read()
@@ -146,15 +142,11 @@ def init_db():
 
 
 def update_db(user_id, username, latest_time):
-    conn = pymysql.connect(host=mysql_host,
-                           user=mysql_user,
-                           password=mysql_password,
-                           database=mysql_db)
+    conn = get_db_conn()
     cursor = conn.cursor()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sql = (f'UPDATE `user` SET latest_time={repr(latest_time)},scrapy_time={repr(now)} '
            f'WHERE USERID={repr(user_id)} and username={repr(username)};')
-    # print(sql)
     cursor.execute(sql)
     conn.commit()
     cursor.close()
