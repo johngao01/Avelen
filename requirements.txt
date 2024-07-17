@@ -3,3 +3,4 @@ opencv_python
 Pillow
 python-telegram-bot>=20.8
 Requests
+pymysql
