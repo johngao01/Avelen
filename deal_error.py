@@ -19,12 +19,12 @@ for line in lines:
         r = handler_douyin(get_aweme_detail(get_url_id(url)[1]))
     else:
         continue
+    send_url.append(url)
     if type(r) is requests.Response:
         if r.status_code == 200:
             store_message_data(r)
-            send_url.append(url)
         else:
             print(f'处理{url}失败')
-            log_error(url)
     else:
+        print(f'处理{url}失败')
         continue
