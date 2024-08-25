@@ -125,11 +125,12 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         duplicate = get_duplicate_messages()
     if len(duplicate) > 0:
+        print(f"共有{len(duplicate)}个记录")
         for url, caption in duplicate:
             message_ids = get_message_id(caption, url)
             if len(message_ids) > 0:
                 delete_messages = message_ids[0:-1]
-                print(message_ids, delete_messages)
+                print(url, caption, message_ids, delete_messages)
                 for mid in delete_messages:
                     delete_db_message(mid)
                 await delete_message(context, DEVELOPER_CHAT_ID, delete_messages)
