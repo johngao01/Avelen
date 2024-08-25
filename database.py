@@ -3,7 +3,7 @@ import pymysql
 
 mysql_host = '195.245.229.193'
 mysql_user = 'root'
-mysql_password = '123456'
+mysql_password = 'Gf75ZBF8jy7Gd4EY'
 mysql_port = 3307
 mysql_db = 'nicebot'
 
@@ -110,9 +110,9 @@ def delete_db_message(message_id):
 def get_duplicate_messages():
     hours_ago = datetime.datetime.now() - datetime.timedelta(hours=48)
     hours_ago = hours_ago.strftime('%Y-%m-%d %H:%M:%S')
-    sql = f'''select distinct url,caption from (select CAPTION, url from messages 
+    sql = f'''select distinct b.url,b.caption from (select CAPTION, url from messages 
               where DATE_TIME > '{hours_ago}'
-              GROUP BY CAPTION,url HAVING COUNT(*) > 1)'''
+              GROUP BY CAPTION,url HAVING COUNT(*) > 1) b'''
     return exec_sql_get_data(sql)
 
 
