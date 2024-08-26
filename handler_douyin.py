@@ -859,7 +859,7 @@ class Aweme:
             'id': self.aweme_id,
             'create_date': self.create_time.strftime("%Y%m%d"),
             'save_dir': os.path.join(download_save_root_directory, 'douyin'),
-            'header': douyin_headers.update({'referer': self.aweme_url})
+            'header': favorite_headers.update({'referer': self.aweme_url})
         }
         self.post_data = {
             'username': self.username,
@@ -994,7 +994,7 @@ def get_url_id(share_info: str):
             aweme_id = url.split('/')[-1]
         else:
             link = link.group(0)
-            r = requests.get(url=link, headers=douyin_headers, allow_redirects=False)
+            r = requests.get(url=link, headers=favorite_headers, allow_redirects=False)
             url = r.headers.get('Location')
             if url.startswith('https://webcast.amemv.com/douyin/webcast/reflow/'):
                 return url, ''
@@ -1013,7 +1013,7 @@ def get_aweme_detail(aweme_id):
               'device_memory': 8, 'platform': 'PC', 'msToken': '', 'aweme_id': aweme_id}
     a_bogus = ab_model_2_endpoint(params)
     api_post_url = f'https://www.douyin.com/aweme/v1/web/aweme/detail/?{urlencode(params)}&a_bogus={a_bogus}'
-    headers = douyin_headers.copy()
+    headers = favorite_headers.copy()
     headers[
         'User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
     rs = requests.get(api_post_url, params=params, headers=headers, timeout=5)
@@ -1030,9 +1030,9 @@ def get_aweme_detail(aweme_id):
 
 def download_media(aweme_media):
     if aweme_media.download_referer:
-        douyin_headers.update({'referer': aweme_media.download_referer})
+        favorite_headers.update({'referer': aweme_media.download_referer})
     try:
-        resp = requests.get(aweme_media.download_url, headers=douyin_headers, stream=True)
+        resp = requests.get(aweme_media.download_url, headers=favorite_headers, stream=True)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         return str(e)
