@@ -8,7 +8,7 @@ instagram_headers = {
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
     'cache-control': 'no-cache',
     'content-type': 'application/x-www-form-urlencoded',
-    'cookie': 'ps_n=1;datr=GI_aZZwhSAEjNRu3q6NEcKt-;shbts="1719926210\05456449351710\0541751462210:01f7c5fb9dadfc3148d8a9e86956af23052ac006bfaff27c50f502b848084a2e7fe745b5";ds_user_id=56449351710;shbid="17455\05456449351710\0541751462210:01f7354f0900a37a14751e55e155f9f172f22982b7ede76ebc00b82316ca7e121fe8cb63";csrftoken=1AkBsQKpZI7hj5SQPX4m2n8Jhz6LihDm;ig_did=641CDFD2-A3C1-4C19-B077-DE76E869E16E;ps_l=1;wd=2560x584;mid=ZdqPGAALAAFsjJulTiz0Tv8Jk-nh;sessionid=56449351710%3Am0sqBCxdHZcwKW%3A2%3AAYes_6iGxaysXfEGK8uwJygj3Z5LfQC3LxMrF1196DY;rur="HIL\05456449351710\0541751462597:01f73b19f26e52d06de60df56d50350e315d5b6ae4754aeede41277c6631dc06022420f7"',
+    'cookie': 'mid=ZdqPGAALAAFsjJulTiz0Tv8Jk-nh; ig_did=641CDFD2-A3C1-4C19-B077-DE76E869E16E; datr=GI_aZZwhSAEjNRu3q6NEcKt-; ds_user_id=56449351710; csrftoken=1AkBsQKpZI7hj5SQPX4m2n8Jhz6LihDm; ps_n=1; ps_l=1; shbid="17455\05456449351710\0541756339508:01f72db28d035d0f6bd42157bfed657a71873f46b9f915b4adf156c32f58e9f8ad2d6781"; shbts="1724803508\05456449351710\0541756339508:01f7bf7d57a964a48d81604d5955f4dcd505eb841afa962ef2ff9f35b0325fca372f3a4d"; sessionid=56449351710%3Am0sqBCxdHZcwKW%3A2%3AAYfYVfPTee1rhqBRWDIoJ33XOcCmCswz2XyCgnw0FJI; wd=2560x584; rur="HIL\05456449351710\0541756339637:01f7db4aac1b8f4118557a35b2ed97fb24646586bf9f7ce65b00bda3d714fa5f8d704d7f"',
     'dpr': '1.35417',
     'origin': 'https://www.instagram.com',
     'pragma': 'no-cache',
@@ -33,7 +33,7 @@ instagram_headers = {
 }
 instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
 graphql_url = 'https://www.instagram.com/api/graphql'
-fb_dtsg = 'NAcPSB18sXr85-MYpSEs6ByaIB0EI92OoEdGUQhYpINxhGPwpNfWSyQ:17843671327157124:1710762843'
+fb_dtsg = 'NAcMH7O078NWb4_ViTzhWstILg9z3Df79aLedeAB4gtWejlWOyT4MIQ:17843671327157124:1710762843'
 
 
 class Profile:
@@ -174,7 +174,6 @@ def download_file(media: Media):
         size = getsize(save_path)
         instagram_logger.info('  ' + save_path + "\t" + convert_bytes_to_human_readable(size))
         return size, save_path
-    print(media.url)
     r = requests.get(media.url, headers=download_header, stream=True, timeout=30)
     if r.status_code == 200:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
