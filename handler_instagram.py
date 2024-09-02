@@ -1,14 +1,17 @@
+import re
 from os.path import splitext, basename, getsize
 from urllib.parse import urlparse
 from utils import *
 
+with open('cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
+    cookies = f.read()
 instagram_headers = {
     'authority': 'www.instagram.com',
     'accept': '*/*',
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
     'cache-control': 'no-cache',
     'content-type': 'application/x-www-form-urlencoded',
-    'cookie': 'mid=ZdqPGAALAAFsjJulTiz0Tv8Jk-nh; ig_did=641CDFD2-A3C1-4C19-B077-DE76E869E16E; datr=GI_aZZwhSAEjNRu3q6NEcKt-; ds_user_id=56449351710; csrftoken=1AkBsQKpZI7hj5SQPX4m2n8Jhz6LihDm; ps_n=1; ps_l=1; shbid="17455\05456449351710\0541756339508:01f72db28d035d0f6bd42157bfed657a71873f46b9f915b4adf156c32f58e9f8ad2d6781"; shbts="1724803508\05456449351710\0541756339508:01f7bf7d57a964a48d81604d5955f4dcd505eb841afa962ef2ff9f35b0325fca372f3a4d"; sessionid=56449351710%3Am0sqBCxdHZcwKW%3A2%3AAYfYVfPTee1rhqBRWDIoJ33XOcCmCswz2XyCgnw0FJI; wd=2560x584; rur="HIL\05456449351710\0541756339637:01f7db4aac1b8f4118557a35b2ed97fb24646586bf9f7ce65b00bda3d714fa5f8d704d7f"',
+    'cookie': cookies,
     'dpr': '1.35417',
     'origin': 'https://www.instagram.com',
     'pragma': 'no-cache',
@@ -33,7 +36,17 @@ instagram_headers = {
 }
 instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
 graphql_url = 'https://www.instagram.com/api/graphql'
-fb_dtsg = 'NAcMH7O078NWb4_ViTzhWstILg9z3Df79aLedeAB4gtWejlWOyT4MIQ:17843671327157124:1710762843'
+r = requests.get('https://www.instagram.com', headers=instagram_headers)
+
+# 正则表达式查找并捕获token的值
+match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"}', r.text)
+
+if match:
+    fb_dtsg = match.group(1)  # 捕获的token值
+    instagram_logger.info(f"fb_dtsg value: {fb_dtsg}")
+else:
+    instagram_logger.error("fb_dtsg not found")
+    exit(1)
 
 
 class Profile:
