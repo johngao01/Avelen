@@ -1,4 +1,5 @@
 import re
+import sys
 from os.path import splitext, basename, getsize
 from urllib.parse import urlparse
 from utils import *
@@ -60,17 +61,18 @@ data = {
 }
 instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
 graphql_url = 'https://www.instagram.com/api/graphql'
-r = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)
-
-# 正则表达式查找并捕获token的值
-match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"}', r.text)
-
-if match:
-    fb_dtsg = match.group(1)  # 捕获的token值
-    instagram_logger.info(f"fb_dtsg value: {fb_dtsg}")
+if 'instagram_scrapy.py' in sys.argv[0]:
+    r = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)
+    # 正则表达式查找并捕获token的值
+    match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"}', r.text)
+    if match:
+        fb_dtsg = match.group(1)  # 捕获的token值
+        instagram_logger.info(f"fb_dtsg value: {fb_dtsg}")
+    else:
+        instagram_logger.error("fb_dtsg not found")
+        exit(1)
 else:
-    instagram_logger.error("fb_dtsg not found")
-    exit(1)
+    fb_dtsg = ''
 
 
 class Profile:
@@ -187,15 +189,14 @@ def get_post_detail(shortcode):
     if 'instagram' in shortcode:
         shortcode = shortcode.split('/')[4]
     variables = {"shortcode": shortcode}
-    data = {
+    response = graphql_request({
         'fb_dtsg': fb_dtsg,
         'fb_api_caller_class': 'RelayModern',
         'fb_api_req_friendly_name': 'PolarisPostRootQuery',
         'variables': json.dumps(variables),
         'server_timestamps': 'true',
         'doc_id': '6845264215599326',
-    }
-    response = graphql_request(data)
+    })
     return response.json()
 
 
