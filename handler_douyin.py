@@ -1022,7 +1022,7 @@ def get_aweme_detail(aweme_id):
         return
     response_json = json.loads(rs.text)
     if response_json['aweme_detail'] is None:
-        print(response_json['filter_detail']['notice'])
+        print(response_json['filter_detail'])
         return
     aweme = response_json['aweme_detail']
     return aweme
