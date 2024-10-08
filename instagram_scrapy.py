@@ -9,15 +9,14 @@ def get_posts(username, after='', before='null', first=12, last='null'):
                           "latest_reel_media": 'true'}, "username": username}
     if after != '':
         variables.update({"after": after, "before": before, "first": first, "last": last})
-    data = {
+    response = graphql_request({
         'fb_dtsg': fb_dtsg,
         'fb_api_caller_class': 'RelayModern',
         'fb_api_req_friendly_name': 'PolarisProfilePostsQuery',
         'variables': json.dumps(variables),
         'server_timestamps': 'true',
         'doc_id': '7354141574647290',
-    }
-    response = graphql_request(data)
+    })
     return response.json()
 
 

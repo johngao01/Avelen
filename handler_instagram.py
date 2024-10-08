@@ -6,19 +6,16 @@ from utils import *
 with open('cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
     cookies = f.read()
 instagram_headers = {
-    'authority': 'www.instagram.com',
     'accept': '*/*',
-    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-    'cache-control': 'no-cache',
+    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
     'content-type': 'application/x-www-form-urlencoded',
     'cookie': cookies,
-    'dpr': '1.35417',
     'origin': 'https://www.instagram.com',
-    'pragma': 'no-cache',
-    'referer': 'https://www.instagram.com/swb.aby/',
+    'priority': 'u=1, i',
+    'referer': 'https://www.instagram.com/',
     'sec-ch-prefers-color-scheme': 'light',
-    'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Microsoft Edge";v="122"',
-    'sec-ch-ua-full-version-list': '"Chromium";v="122.0.6261.70", "Not(A:Brand";v="24.0.0.0", "Microsoft Edge";v="122.0.2365.59"',
+    'sec-ch-ua': '"Google Chrome";v="129", "Not=A?Brand";v="8", "Chromium";v="129"',
+    'sec-ch-ua-full-version-list': '"Google Chrome";v="129.0.6668.90", "Not=A?Brand";v="8.0.0.0", "Chromium";v="129.0.6668.90"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-model': '""',
     'sec-ch-ua-platform': '"Windows"',
@@ -26,17 +23,44 @@ instagram_headers = {
     'sec-fetch-dest': 'empty',
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-origin',
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0',
-    'viewport-width': '1883',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
     'x-asbd-id': '129477',
-    'x-csrftoken': 'qs9rnw9s97GwtbfUDVXYz0eNVz3u2CkR',
-    'x-fb-friendly-name': 'PolarisProfilePostsQuery',
-    'x-fb-lsd': 'EyhCDa06sm2QOPSOuSR2Re',
+    'x-fb-friendly-name': 'LSPlatformGraphQLLightspeedRequestForIGDQuery',
+    'x-fb-lsd': 'IOlBer4tOLe1g3Wezxmxib',
     'x-ig-app-id': '936619743392459',
+    'x-ig-d': 'www',
+}
+data = {
+    'av': '17841456631306168',
+    '__d': 'www',
+    '__user': '0',
+    '__a': '1',
+    '__req': 'g',
+    '__hs': '20004.HYP:instagram_web_pkg.2.1..0.1',
+    'dpr': '1',
+    '__ccg': 'UNKNOWN',
+    '__rev': '1017134301',
+    '__s': 'f948gm:6gn02x:zry8iy',
+    '__hsi': '7423234038434103824',
+    '__dyn': '7xeUjG1mxu1syUbFp41twpUnwgU7SbzEdF8aUco2qwJxS0k24o1DU2_CwjE1xoswaq0yE462mcw5Mx62G5UswoEcE7O2l0Fwqo31w9a9wtUd8-U2zxe2GewGw9a361qw8Xxm16wUwtEvw5rCwLyESE7i3vwDwHg2ZwrUdUbGwmk0zU8oC1Iwqo5q3e3zhA6bwIDyUrAwCAxW1oCz8rwHwcOEy',
+    '__csr': 'hs2D6iiiMjPAttEmAAJqnYOrFnJGBuJV6rGp4emV5u_KRBVlLFAjy9vUGy4hQKAt95nBGivHWUyF6yF2poxoFAjAZ4CgGFFryppJ2axeifyEym9xi4228y4UOjhFeeAVrVaGFFEO9gHF2Q-8Qm4GUWeyauU9E01dWEkDwe62W6U0F-Eh8mWAU14o2iwdOmhwSpV7e9yE090K1g82u0TU0Au4lG0yia4kmdOwooaA2h6gGl0u97ypJ5ELDmNE2-wYwxiomwiRBl6wXxi2ZwVxGh6w40x6bx-4FE27waK11who4Ajy8pgB0D2oEgi1ew0FEw0liE0mVw',
+    '__comet_req': '7',
+    'fb_dtsg': 'NAcMqQJme8Zv4-SpU2fRGCLK2EHheAVhpp-SYk847IPcxXyunn0OMBw:17843671327157124:1710762843',
+    'jazoest': '26150',
+    'lsd': 'IOlBer4tOLe1g3Wezxmxib',
+    '__spin_r': '1017134301',
+    '__spin_b': 'trunk',
+    '__spin_t': '1728356359',
+    'qpl_active_flow_ids': '1056839232',
+    'fb_api_caller_class': 'RelayModern',
+    'fb_api_req_friendly_name': 'LSPlatformGraphQLLightspeedRequestForIGDQuery',
+    'variables': '{"deviceId":"e645281c-1c20-4fe2-ab5c-576765e998ed","requestId":0,"requestPayload":"{\\"database\\":1,\\"epoch_id\\":0,\\"last_applied_cursor\\":null,\\"sync_params\\":\\"{\\\\\\"bloks_version\\\\\\":\\\\\\"834a5e272ad60874513e8388fb7e1f1e894653cb45a6b1160396fcd3618ba96b\\\\\\",\\\\\\"full_height\\\\\\":200,\\\\\\"locale\\\\\\":\\\\\\"zh_CN\\\\\\",\\\\\\"preview_height\\\\\\":200,\\\\\\"preview_height_large\\\\\\":400,\\\\\\"preview_width\\\\\\":150,\\\\\\"preview_width_large\\\\\\":300,\\\\\\"scale\\\\\\":1,\\\\\\"snapshot_num_threads_per_page\\\\\\":15}\\",\\"version\\":8700946419928250}","requestType":1}',
+    'server_timestamps': 'true',
+    'doc_id': '7289167067878883',
 }
 instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
 graphql_url = 'https://www.instagram.com/api/graphql'
-r = requests.get('https://www.instagram.com', headers=instagram_headers)
+r = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)
 
 # 正则表达式查找并捕获token的值
 match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"}', r.text)
