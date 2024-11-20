@@ -1,4 +1,4 @@
-import sys
+import random
 
 from database import *
 from handler_instagram import *
@@ -60,11 +60,20 @@ def from_local_json():
         yield following_posts
 
 
+def random_select_once(elements):
+    """
+    从列表中随机选择元素，每个元素只选择一次，直到所有元素都选完。
+    """
+    random.shuffle(elements)  # 随机打乱列表
+    for element in elements:
+        yield element  # 依次返回元素
+
+
 def start():
     if len(sys.argv) < 2:
         instagram_logger.info("开始爬取用户数据")
         all_followings = get_all_following('instagram')
-        for following in all_followings:
+        for following in random_select_once(all_followings):
             following = Profile(*following)
             profile_posts = scrapy_profile_post(following)
             yield profile_posts
