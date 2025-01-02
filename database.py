@@ -1,10 +1,10 @@
 import datetime
 import pymysql
 
-mysql_host = '195.245.229.193'
+mysql_host = '154.31.158.73'
 mysql_user = 'root'
-mysql_password = 'Gf75ZBF8jy7Gd4EY'
-mysql_port = 3307
+mysql_password = 'Q5jWsTw8878xskhB'
+mysql_port = 3306
 mysql_db = 'nicebot'
 
 MESSAGES = ['MESSAGE_ID', 'CAPTION', 'CHAT_ID', 'DATE_TIME', 'FORM_USER', 'CHAT', 'MEDIA_GROUP_ID', 'TEXT_RAW',
