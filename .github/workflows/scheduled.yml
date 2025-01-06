@@ -1,0 +1,16 @@
+name: Scheduled Task
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  run-scheduled-task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Run script
+        run: |
+          # 在此处添加您的脚本命令
+          echo "This is a scheduled task."
