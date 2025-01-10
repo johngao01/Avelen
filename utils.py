@@ -4,6 +4,7 @@ import logging
 import os
 from time import sleep
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 
 import cv2
 import requests
@@ -28,7 +29,7 @@ class MyLogger(logging.Logger):
         super().__init__(name)
         filepath = f'{filename}.log'
         os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        file_handler = logging.FileHandler(filepath, mode=mode, encoding='utf-8')
+        file_handler = RotatingFileHandler(filepath, mode=mode, maxBytes=5*1024*1024, encoding='utf-8')
         file_handler.setLevel(logging.NOTSET)
         f_format = logging.Formatter("%(asctime)s : %(message)s") if log_time else logging.Formatter("%(message)s")
         file_handler.setFormatter(f_format)
