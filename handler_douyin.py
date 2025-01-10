@@ -928,12 +928,14 @@ class Aweme:
     def aweme_photos(self) -> ['AwemeMedia']:
         medias = []
         for i, image in enumerate(self.media_info(), start=1):
-            medias.append(AwemeMedia(self, i, image))
+            medias.append(AwemeMedia(self, i, image, 'image'))
+            if 'video' in image:
+                medias.append(AwemeMedia(self, i, image['video'], 'video'))
         return medias
 
 
 class AwemeMedia:
-    def __init__(self, media_aweme: Aweme, content_index, node: Optional[Dict[str, Any]] = None):
+    def __init__(self, media_aweme: Aweme, content_index, node: Optional[Dict[str, Any]] = None, content_type = None):
         self._aweme = media_aweme
         self._node = node
         self.aweme_id = self._aweme.aweme_id
@@ -942,11 +944,14 @@ class AwemeMedia:
         self.user_sec_uid = self._aweme.user_sec_uid
         self.aweme_url = self._aweme.aweme_url
         self.download_referer = self._aweme.aweme_url
-        self.content_type = 'video' if self._aweme.is_video else 'image'
+        if content_type:
+            self.content_type = content_type
+        else:
+            self.content_type=  'video' if self._aweme.is_video else 'image'
 
     @property
     def content_id(self):
-        if self._aweme.is_video:
+        if self.content_type == 'video':
             return self._node['play_addr']['uri']
         else:
             if 'uri' in self._node:
@@ -955,7 +960,7 @@ class AwemeMedia:
 
     @property
     def download_url(self):
-        if self._aweme.is_video:
+        if self.content_type == 'video':
             return f'https://aweme.snssdk.com/aweme/v1/play/?video_id={self.content_id}&radio=1080p&line=0'
         else:
             if 'url_list' in self._node:
@@ -968,13 +973,16 @@ class AwemeMedia:
             desc = sub('[\\\\/:*?"<>|\n]', "", self._aweme.describe[0:50])
         else:
             desc = sub('[\\\\/:*?"<>|\n]', "", self._aweme.describe)
-        if self._aweme.is_video:
-            return self._aweme.aweme_id + "_" + desc + ".mp4"
+        if self.content_type == 'video':
+            if self._aweme.is_video:
+                return self._aweme.aweme_id + "_" + desc + ".mp4"
+            else:
+                return self._aweme.aweme_id + "_" + desc + "_" + str(self.content_index) + ".mp4"
         else:
             return self._aweme.aweme_id + "_" + desc + "_" + str(self.content_index) + ".jpg"
 
     def save_path(self):
-        if self._aweme.is_video:
+        if self.content_type == 'video':
             filepath = os.path.join(self._aweme.aweme_info['save_dir'], self.username, self.save_name)
         else:
             filepath = os.path.join(self._aweme.aweme_info['save_dir'], 'images', self._aweme.username,
@@ -998,7 +1006,7 @@ def get_url_id(share_info: str):
             url = r.headers.get('Location')
             if url.startswith('https://webcast.amemv.com/douyin/webcast/reflow/'):
                 return url, ''
-            url = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})?', url).group(0)
+            url = re.search(r'https://www.iesdouyin.com/share/(video|note|slides)/(\d{19})?', url).group(0)
             url = url.replace(r'https://www.iesdouyin.com/share', r'https://www.douyin.com')
             aweme_id = url.split('/')[-1]
     return url, aweme_id
@@ -1022,7 +1030,7 @@ def get_aweme_detail(aweme_id):
         return
     response_json = json.loads(rs.text)
     if response_json['aweme_detail'] is None:
-        print(response_json['filter_detail'])
+        print(response_json['filter_detail']['notice'])
         return
     aweme = response_json['aweme_detail']
     return aweme
