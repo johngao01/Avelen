@@ -1,7 +1,7 @@
 import datetime
 import pymysql
 
-mysql_host = '154.31.158.73'
+mysql_host = 'aaa.happyfun.xyz'
 mysql_user = 'root'
 mysql_password = 'Q5jWsTw8878xskhB'
 mysql_port = 3306
@@ -51,7 +51,7 @@ def store_message_data(response):
             for k, v in message['PHOTO'].items():
                 insert_data(conn, 'photo', PHOTO, v)
         if message['DOCUMENT']:
-            insert_data(conn, 'DOCUMENT', DOCUMENT, message['DOCUMENT'])
+            insert_data(conn, 'document', DOCUMENT, message['DOCUMENT'])
     conn.commit()
     cursor.close()
     conn.close()
