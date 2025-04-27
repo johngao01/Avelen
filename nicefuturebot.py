@@ -331,7 +331,6 @@ def main() -> None:
     builder.local_mode(local_mode=True)
     application = builder.build()
     application.add_handler(MessageReactionHandler(reaction_handler))
-    application.add_handler(CommandHandler("backup", backup))
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
