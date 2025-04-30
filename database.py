@@ -1,9 +1,9 @@
 import datetime
 import pymysql
 
-mysql_host = 'aaa.happyfun.xyz'
+mysql_host = '38.49.57.25'
 mysql_user = 'root'
-mysql_password = 'Q5jWsTw8878xskhB'
+mysql_password = '31305a0fbd'
 mysql_port = 3306
 mysql_db = 'nicebot'
 
