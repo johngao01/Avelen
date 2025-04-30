@@ -50,10 +50,10 @@ class Scrapy:
             params['X-Bogus'] = self.new_xbogus.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
             if self.username == 'favorite':
                 resp = requests.get(url="https://www.douyin.com/aweme/v1/web/aweme/favorite/", headers=favorite_headers,
-                                    params=params)
+                                    params=params, timeout=30)
             else:
                 resp = requests.get(url='https://www.douyin.com/aweme/v1/web/aweme/post/', headers=self.header,
-                                    params=params)
+                                    params=params, timeout=30)
             if resp.text == '':
                 scrapy_logger.error('爬取失败，空响应')
                 exit(1)
