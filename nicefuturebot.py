@@ -49,18 +49,6 @@ async def delete_message(context, chat_id, message_id):
         print(e)
 
 
-async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id != DEVELOPER_CHAT_ID:
-        await echo(update, context)
-        return
-    message_id = update.message.message_id
-    await context.bot.send_document(document=open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb'),
-                                    chat_id=DEVELOPER_CHAT_ID, read_timeout=42, connect_timeout=20, pool_timeout=20)
-    await context.bot.send_document(document=open('/etc/x-ui/x-ui.db', 'rb'), chat_id=DEVELOPER_CHAT_ID,
-                                    read_timeout=42, connect_timeout=20, pool_timeout=20)
-    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-
-
 async def get_url(update):
     message = update.message.reply_to_message
     if not message:
@@ -173,11 +161,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def edit_commands(application):
-    command = [BotCommand("backup", "备份数据"),
-               BotCommand("clear", "清理"),
+    command = [BotCommand("clear", "清理"),
                BotCommand("resend", "重发"),
-               BotCommand("delete", "删除")
-               ]
+               BotCommand("delete", "删除")]
     await application.bot.set_my_commands(commands=command)
     print("bot start ------------------->")
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
@@ -345,7 +331,6 @@ def main() -> None:
     builder.local_mode(local_mode=True)
     application = builder.build()
     application.add_handler(MessageReactionHandler(reaction_handler))
-    application.add_handler(CommandHandler("backup", backup))
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
