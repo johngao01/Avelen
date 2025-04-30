@@ -203,7 +203,10 @@ def download_image(weibo_info, photo_url, pic, index):
 
 def download_video(weibo_info, video_url, index):
     response = requests.get(video_url, weibo_info['header'], stream=True)
-    media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
+    if index is None:
+        media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
+    else:
+        media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + f"_{index}.mp4"
     save_path = os.path.join(weibo_info['save_dir'], media_name)
     save_content(save_path, response)
     size = os.path.getsize(save_path)
