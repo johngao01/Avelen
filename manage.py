@@ -4,12 +4,13 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ConversationHandler,
-    CallbackQueryHandler, 
+    CallbackQueryHandler,
     PicklePersistence,
 )
 from telegram.constants import ParseMode
 from typing import cast
 from database import exec_sql_get_data
+import subprocess
 
 DEVELOPER_CHAT_ID = 708424141
 SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
@@ -126,13 +127,29 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def edit_commands(application):
-    command = [BotCommand("myfollow", "管理关注")]
+    command = [BotCommand("myfollow", "管理关注"),
+               BotCommand("lm", "查看/media文件夹")]
     await application.bot.set_my_commands(commands=command)
     print("bot start ------------------->")
+
 
 async def stop(application):
     await application.bot.send_message(DEVELOPER_CHAT_ID, "Shutting down...")
     print("bot stop ------------------->")
+
+
+async def ls_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id == DEVELOPER_CHAT_ID:
+        result = subprocess.run('ls -lth /media', shell=True, capture_output=True, text=True)
+        msg = ''
+        for i, line in enumerate(result.stdout.splitlines()):
+            if i == 0:
+                text = line
+            else:
+                text = ' '.join(line.split()[4:])
+            msg = msg + text + '\n'
+        await update.message.reply_text(msg)
+        return
 
 
 def main() -> None:
@@ -167,6 +184,7 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
+    application.add_handler(CommandHandler("lm", ls_media))
     application.add_handler(manage_follow_handler)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
