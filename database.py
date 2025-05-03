@@ -151,3 +151,18 @@ def update_db(user_id, username, latest_time):
     conn.commit()
     cursor.close()
     conn.close()
+
+
+def add_user(user_id, username, platform):
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('insert into user (userid, username, platform) values (%s, %s, %s) ', (user_id, username, platform))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(e)
+        return False
+    finally:
+        cursor.close()
+        conn.close()

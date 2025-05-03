@@ -1,3 +1,5 @@
+import re
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application,
@@ -6,14 +8,22 @@ from telegram.ext import (
     ConversationHandler,
     CallbackQueryHandler,
     PicklePersistence,
+    MessageHandler,
+    filters
 )
 from telegram.constants import ParseMode
 from typing import cast
-from database import exec_sql_get_data
+from database import exec_sql_get_data, add_user
 import subprocess
+from urllib.parse import urlparse
 
+headers = {
+    'referer': 'https://www.baidu.com/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
+}
 DEVELOPER_CHAT_ID = 708424141
 SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
+ADDRESS, NAME = range(2)
 follows = {}
 
 
@@ -128,7 +138,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def edit_commands(application):
     command = [BotCommand("myfollow", "管理关注"),
-               BotCommand("lm", "查看/media文件夹")]
+               BotCommand("lm", "查看/media文件夹"),
+               BotCommand("add", "添加爬取关注")]
     await application.bot.set_my_commands(commands=command)
     print("bot start ------------------->")
 
@@ -150,6 +161,62 @@ async def ls_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = msg + text + '\n'
         await update.message.reply_text(msg)
         return
+
+
+async def add_follow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("请输入关注的主页地址：")
+    return ADDRESS
+
+
+# 接收主页地址
+async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    def expand_url(short_url: str) -> str:
+        try:
+            response = requests.get(short_url, timeout=5, allow_redirects=True, headers=headers)
+            return response.url
+        except requests.RequestException as e:
+            print(f"获取真实地址失败: {e}")
+            return short_url
+
+    def extract_url(text: str) -> str | None:
+        # 提取第一个 http(s) 开头的 URL
+        match = re.search(r'(https?://[^\s]+)', text)
+        return match.group(0) if match else None
+
+    if 'weibo.com' in update.message.text:
+        url = update.message.text
+    else:
+        url = extract_url(update.message.text)
+        print(url)
+        if not url:
+            await update.message.reply_text("未提取到用户主页地址，请重新输入。")
+        url = expand_url(url)
+        print(url)
+    context.user_data['url'] = url
+    await update.message.reply_text(f"请输入用户名：", parse_mode=ParseMode.MARKDOWN)
+    return NAME
+
+
+# 接收姓名并结束
+async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    name = update.message.text
+    url = context.user_data.get("url")
+
+    print(f"添加用户：{name}, 主页地址：{url}")
+    parsed_url = urlparse(url)
+    if 'douyin' in parsed_url.hostname:
+        platform = 'douyin'
+    elif 'weibo' in parsed_url.hostname:
+        platform = 'weibo'
+    else:
+        await update.message.reply_text("未知的平台")
+        return ConversationHandler.END
+    url_path = parsed_url.path
+    user_id = url_path.split('/')[-1]
+    text = f'<a href="{url}"> {name} </a>已添加\n用户id：{user_id}\n平台：{platform}'
+    add_user(user_id, name, platform)
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    return ConversationHandler.END
 
 
 def main() -> None:
@@ -184,6 +251,15 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
+    add_handler = ConversationHandler(
+        entry_points=[CommandHandler('add', add_follow)],
+        states={
+            ADDRESS: [MessageHandler(filters.Text(), get_address)],
+            NAME: [MessageHandler(filters.Text(), get_name)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+    application.add_handler(add_handler)
     application.add_handler(CommandHandler("lm", ls_media))
     application.add_handler(manage_follow_handler)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
