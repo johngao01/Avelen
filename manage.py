@@ -139,7 +139,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def edit_commands(application):
     command = [BotCommand("myfollow", "管理关注"),
                BotCommand("lm", "查看/media文件夹"),
-               BotCommand("add", "添加爬取关注")]
+               BotCommand("add", "添加爬取关注"),
+               BotCommand("cancel", "取消操作")]
     await application.bot.set_my_commands(commands=command)
     print("bot start ------------------->")
 
@@ -189,7 +190,8 @@ async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         url = extract_url(update.message.text)
         print(url)
         if not url:
-            await update.message.reply_text("未提取到用户主页地址，请重新输入。")
+            await update.message.reply_text("未提取到用户主页地址，请重新开始。")
+            return ConversationHandler.END
         url = expand_url(url)
         print(url)
     context.user_data['url'] = url
