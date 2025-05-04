@@ -28,6 +28,9 @@ follows = {}
 
 
 async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await update.message.reply_text("你没有权限使用此命令")
+        return ConversationHandler.END
     keyboard = []
     row = []
     for platform in ['douyin', 'weibo', 'instagram']:
@@ -165,6 +168,9 @@ async def ls_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def add_follow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await update.message.reply_text("你没有权限使用此命令")
+        return ConversationHandler.END
     await update.message.reply_text("请输入关注的主页地址：")
     return ADDRESS
 
