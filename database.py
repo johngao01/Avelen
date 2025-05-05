@@ -8,7 +8,7 @@ mysql_port = 3306
 mysql_db = 'nicebot'
 
 MESSAGES = ['MESSAGE_ID', 'CAPTION', 'CHAT_ID', 'DATE_TIME', 'FORM_USER', 'CHAT', 'MEDIA_GROUP_ID', 'TEXT_RAW',
-            'URL', 'USERID', 'IDSTR', 'MBLOGID']
+            'URL', 'USERID', 'USERNAME', 'IDSTR', 'MBLOGID', 'MSG_STR']
 VIDEO = ['file_id', 'file_unique_id', 'width', 'height', 'duration', 'file_size',
          'file_name', 'file_type', 'message_id', 'media_group_id', 'url']
 
