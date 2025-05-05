@@ -37,6 +37,10 @@ async def retry_send(fun, **kwargs) -> list:
 
 
 def process_message(message: telegram.Message, data):
+    if data['username'] == 'favorite' and 'nickname' in data:
+        username = data['nickname']
+    else:
+        username = data['username']
     message_data = {
         'MESSAGE_ID': message.message_id,
         'CAPTION': message.caption or '',
@@ -48,10 +52,11 @@ def process_message(message: telegram.Message, data):
         'TEXT_RAW': data['text_raw'],
         'URL': data['url'],
         'USERID': data['userid'],
-        'USERNAME': data['nickname'],
+        'USERNAME': username,
         'CREATE_TIME': data['create_time'],
         'IDSTR': data['idstr'],
         'MBLOGID': data['mblogid'],
+        'MSG_STR': message.to_json(),
         'PHOTO': {},
         'VIDEO': {},
         'DOCUMENT': {}
@@ -125,7 +130,7 @@ async def send_album(bot, filetype, album: list):
 async def send_message_after(tg_bot, data, messages):
     message = data['text_raw']
     message = replace_char(message)
-    id_str = replace_char(data['id_str'])
+    id_str = replace_char(data['idstr'])
     if data['username'] == 'favorite' and 'nickname' in data:
         send_response = await tg_bot.sendMessage(
             DEVELOPER_CHAT_ID,
