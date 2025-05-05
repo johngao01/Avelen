@@ -11,7 +11,13 @@ DEVELOPER_CHAT_ID = 708424141
 TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 API_URL = 'http://localhost:8081/bot'
 FILE_API_URL = 'http://localhost:8081/file/bot'
-MARKDOWN_CHAR = ['*', '`', '[', '_', '`']
+MARKDOWN_CHAR = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+
+
+def replace_char(text):
+    for char in MARKDOWN_CHAR:
+        text = text.replace(char, f'\\{char}')
+    return text
 
 
 async def retry_send(fun, **kwargs) -> list:
@@ -118,19 +124,19 @@ async def send_album(bot, filetype, album: list):
 
 async def send_message_after(tg_bot, data, messages):
     message = data['text_raw']
-    for char in MARKDOWN_CHAR:
-        message = message.replace(char, '\\' + char)
+    message = replace_char(message)
+    id_str = replace_char(data['id_str'])
     if data['username'] == 'favorite' and 'nickname' in data:
         send_response = await tg_bot.sendMessage(
             DEVELOPER_CHAT_ID,
-            "[{}]({})".format(data['nickname'], data['url']) + "：" + message,
-            parse_mode=ParseMode.MARKDOWN,
+            f"\#{replace_char(data['nickname'])}  [{id_str}]({data['url']})\n\n{message}",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
     else:
         send_response = await tg_bot.sendMessage(
             DEVELOPER_CHAT_ID,
-            "[{}]({})".format(data['username'], data['url']) + "：" + message,
-            parse_mode=ParseMode.MARKDOWN,
+            f"\#{replace_char(data['username'])}  [{id_str}]({data['url']})\n\n{message}",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
     messages.append(send_response)
     results = []
