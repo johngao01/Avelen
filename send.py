@@ -1,3 +1,4 @@
+import re
 import time
 import traceback
 from datetime import datetime
@@ -132,17 +133,19 @@ async def send_message_after(tg_bot, data, messages):
     message = replace_char(message)
     id_str = replace_char(data['idstr'])
     if data['username'] == 'favorite' and 'nickname' in data:
-        send_response = await tg_bot.sendMessage(
-            DEVELOPER_CHAT_ID,
-            f"\#{replace_char(data['nickname'])}  [{id_str}]({data['url']})\n\n{message}",
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
+        name = data['nickname']
     else:
-        send_response = await tg_bot.sendMessage(
-            DEVELOPER_CHAT_ID,
-            f"\#{replace_char(data['username'])}  [{id_str}]({data['url']})\n\n{message}",
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
+        name = data['username']
+    # 去除中英文小括号及其内容
+    name = re.sub(r'[（(].*?[)）]', '', name)
+    # 去除特殊字符 . 和 -
+    name = re.sub(r'[.-]', '', name)
+    name = replace_char(name)
+    send_response = await tg_bot.sendMessage(
+        DEVELOPER_CHAT_ID,
+        f"\#{name}  [{id_str}]({data['url']})\n\n{message}",
+        parse_mode=ParseMode.MARKDOWN_V2,
+    )
     messages.append(send_response)
     results = []
     for send_response in messages:
