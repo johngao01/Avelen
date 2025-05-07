@@ -24,6 +24,7 @@ headers = {
 DEVELOPER_CHAT_ID = 708424141
 SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
 ADDRESS, NAME = range(2)
+MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
 
 
@@ -51,7 +52,8 @@ async def handle_platform_selected(update: Update, context: ContextTypes.DEFAULT
 
     _, platform = query.data.split("|", 1)
     context.user_data['platform'] = platform
-    result = exec_sql_get_data(f"select * from user where platform='{platform}'")
+    result = exec_sql_get_data(
+        f"select userid, username, latest_time, platform, scrapy_time from user where platform='{platform}' and valid=1")
     result = list(sorted(result, key=lambda x: x[2], reverse=True))
     num = len(result)
     keyboard = []
@@ -140,7 +142,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def edit_commands(application):
-    command = [BotCommand("myfollow", "管理关注"),
+    command = [BotCommand("myfollow", "我的关注"),
+               BotCommand("manage", "管理关注"),
                BotCommand("lm", "查看/media文件夹"),
                BotCommand("add", "添加爬取关注"),
                BotCommand("cancel", "取消操作")]
@@ -227,6 +230,17 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id == DEVELOPER_CHAT_ID:
+        result = exec_sql_get_data(f"select username from statistic order by num desc")
+        text = ''
+        for username in result:
+            for char in MARKDOWN_CHARS:
+                username = username.replace(char, f'\\{char}')
+            text += f'\#{username} '
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+
+
 def main() -> None:
     builder = Application.builder()
     persistence = PicklePersistence(filepath="arbitrarycallbackdatabot")
@@ -243,7 +257,7 @@ def main() -> None:
     application = builder.build()
 
     manage_follow_handler = ConversationHandler(
-        entry_points=[CommandHandler("myfollow", start_manage)],
+        entry_points=[CommandHandler("manage", start_manage)],
         states={
             SELECTING_PLATFORM: [
                 CallbackQueryHandler(handle_platform_selected, pattern=r"^platform\|")
@@ -269,6 +283,7 @@ def main() -> None:
     )
     application.add_handler(add_handler)
     application.add_handler(CommandHandler("lm", ls_media))
+    application.add_handler(CommandHandler("myfollow", list_my_follow))
     application.add_handler(manage_follow_handler)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
