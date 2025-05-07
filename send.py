@@ -3,6 +3,7 @@ import time
 import traceback
 from datetime import datetime
 
+import emoji
 import telegram
 from telegram import Bot, InputMediaVideo, InputMediaPhoto, InputMediaDocument
 from telegram.constants import ParseMode
@@ -13,6 +14,20 @@ TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
 API_URL = 'http://localhost:8081/bot'
 FILE_API_URL = 'http://localhost:8081/file/bot'
 MARKDOWN_CHAR = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+
+
+def clear_name(text):
+    # 去除中英文小括号及其内容
+    result = re.sub(r'[（(【].*?[】)）]', '', text)
+    # 去除表情
+    result = emoji.demojize(result)
+    result = re.sub(':\S+?:', '', result)
+    # 只保留字母、数字、下划线，其余全部删除
+    result = re.sub(r'[^\w]', '', result)
+    result = replace_char(result)
+    if result == '':
+        return '没有名字'
+    return result
 
 
 def replace_char(text):
@@ -136,14 +151,11 @@ async def send_message_after(tg_bot, data, messages):
         name = data['nickname']
     else:
         name = data['username']
-    # 去除中英文小括号及其内容
-    name = re.sub(r'[（(].*?[)）]', '', name)
-    # 去除特殊字符 . 和 -
-    name = re.sub(r'[.-]', '', name)
-    name = replace_char(name)
+    cleared_name = clear_name(name)
+    text = f"\#{cleared_name}  [{id_str}]({data['url']})\n\n{message}"
     send_response = await tg_bot.sendMessage(
         DEVELOPER_CHAT_ID,
-        f"\#{name}  [{id_str}]({data['url']})\n\n{message}",
+        text,
         parse_mode=ParseMode.MARKDOWN_V2,
     )
     messages.append(send_response)
