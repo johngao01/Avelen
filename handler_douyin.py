@@ -1068,14 +1068,14 @@ def download(media: AwemeMedia, aweme_post_data, logger):
                 error += 1
                 logger.warning('  '.join([aweme_post_data['url'], media.download_url, '下载失败，重试']))
                 if error > 3:
-                    return
+                    return None
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         if isinstance(download_response, requests.Response) and save_content(save_path, download_response):
             media_size = os.path.getsize(save_path)
         else:
             logger.info(
                 '  '.join([aweme_post_data['url'], media.content_id, media_name, media.download_url, '下载失败']))
-            return
+            return None
     human_readable_size = convert_bytes_to_human_readable(media_size)
     if media.content_type == 'video':
         logger.info('  '.join([aweme_post_data['username'], aweme_post_data['url'], aweme_post_data['create_time'],
@@ -1089,9 +1089,11 @@ def download(media: AwemeMedia, aweme_post_data, logger):
     }
     if media_size > MAX_VIDEO_SIZE:
         log_error(aweme_post_data['url'], f'文件太大，{save_path} {human_readable_size}')
+        return False
     elif media_size:
         photo_data.update({'type': 'video'}) if media.content_type == 'video' else photo_data.update({'type': 'photo'})
         return photo_data
+    return False
 
 
 def handler_video_douyin(aweme: Aweme):
@@ -1155,7 +1157,7 @@ def handler_note_douyin(aweme: Aweme):
         return r
     else:
         log_error(aweme.aweme_info['url'], '获取失败')
-
+        return False
 
 def handler_douyin(aweme):
     if aweme is None:
