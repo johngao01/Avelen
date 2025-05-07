@@ -1110,7 +1110,7 @@ def handler_video_douyin(aweme: Aweme):
                 error += 1
                 scrapy_logger.warning('  '.join([aweme.aweme_url, aweme.describe, '下载失败，重试']))
                 if error > 3:
-                    return
+                    return None
         if not isinstance(download_response, requests.Response):
             scrapy_logger.error("请求下载错误，非正常响应")
             return False
@@ -1124,14 +1124,15 @@ def handler_video_douyin(aweme: Aweme):
     scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
                                   os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
     if video_size > MAX_VIDEO_SIZE:
-        scrapy_logger.error(aweme.aweme_info['url'], f'文件太大，{save_path} {human_readable_size}')
+        scrapy_logger.error(aweme.aweme_info['url']+f' 文件太大，{save_path} {human_readable_size}')
         return False
     elif video_size:
         aweme.post_data.update({'files': {'media': save_path, 'caption': media_name, 'type': 'video'}})
         r = request_webhook('/main', aweme.post_data, scrapy_logger)
         return r
     else:
-        scrapy_logger.error(aweme.aweme_info['url'], '获取失败')
+        scrapy_logger.error(aweme.aweme_info['url'] +' 获取数据失败')
+        return False
 
 
 def handler_note_douyin(aweme: Aweme):
