@@ -50,6 +50,7 @@ async def retry_send(fun, **kwargs) -> list:
             print("sleep {} seconds".format(second))
             time.sleep(second)
         print("Get RetryAfter Error：\n" + traceback.format_exc())
+    return []
 
 
 def process_message(message: telegram.Message, data):
