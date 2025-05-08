@@ -24,7 +24,7 @@ def clear_name(text):
     result = re.sub(':\S+?:', '', result)
     # 只保留字母、数字、下划线，其余全部删除
     result = re.sub(r'[^\w]', '', result)
-    result = replace_char(result)
+    result = result.replace('_', '\_')
     if result == '':
         return '没有名字'
     return result
