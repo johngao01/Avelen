@@ -16,6 +16,7 @@ from typing import cast
 from database import exec_sql_get_data, add_user
 import subprocess
 from urllib.parse import urlparse
+import emoji
 
 headers = {
     'referer': 'https://www.baidu.com/',
@@ -26,6 +27,20 @@ SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
 ADDRESS, NAME = range(2)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
+
+
+def clear_name(text):
+    # 去除中英文小括号及其内容
+    result = re.sub(r'[（(【].*?[】)）]', '', text)
+    # 去除表情
+    result = emoji.demojize(result)
+    result = re.sub(':\S+?:', '', result)
+    # 只保留字母、数字、下划线，其余全部删除
+    result = re.sub(r'[^\w]', '', result)
+    result = result.replace('_', r'\_')
+    if result == '':
+        return '没有名字'
+    return result
 
 
 async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
@@ -235,9 +250,8 @@ async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = exec_sql_get_data(f"select username from statistic order by num desc")
         text = ''
         for username in result:
-            for char in MARKDOWN_CHARS:
-                username = username.replace(char, f'\\{char}')
-            text += f'\#{username} '
+            username = clear_name(username)
+            text += f'\#{username}   '
         await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
 
 
