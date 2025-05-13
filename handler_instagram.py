@@ -83,7 +83,7 @@ class Profile:
             self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
         else:
             self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
-        self.url = 'https://www.instagram.com/' + self.username
+        self.url = 'https://www.instagram.com/' + self.pk
 
 
 class Post:
@@ -93,6 +93,10 @@ class Post:
         self.caption = node['caption']
         self.url = 'https://www.instagram.com/p/' + self.shortcode
         self.owner_username = node['owner']['username']
+        if 'nickname' in node:
+            self.nickname = node['nickname']
+        else:
+            self.nickname = self.owner_username
         self.owner_pk = node['owner']['pk']
         self.media_id = node['id']
         self.create_time = datetime.fromtimestamp(node['taken_at'])
@@ -177,10 +181,11 @@ def largest_media(medias):
 
 def graphql_request(payload_data):
     try:
-        r = requests.post(graphql_url, headers=instagram_headers, data=payload_data)
-        r.raise_for_status()
+        rs = requests.post(graphql_url, headers=instagram_headers, data=payload_data)
+        rs.raise_for_status()
     except Exception as e:
         print(e)
+        return None
     else:
         return r
 
@@ -227,7 +232,7 @@ def download_file(media: Media):
 def handler_post(post):
     wait_send = []
     post_data = {
-        'username': post.owner_username,
+        'username': post.nickname,
         'nickname': post.owner_username,
         'url': post.url,
         'userid': post.owner_pk,

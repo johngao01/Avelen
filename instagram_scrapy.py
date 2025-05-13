@@ -27,24 +27,29 @@ def scrapy_profile_post(profile: Profile):
     instagram_logger.info(
         f'开始获取 {profile.username} 截至 {str(profile.latest_time)} 的instagram，她的主页是 {profile.url}')
     while has_next_page:
-        page_data = get_posts(profile.username, after=end_cursor)
+        page_data = get_posts(profile.pk, after=end_cursor)
         if page_data:
             page_posts = page_data['data']['xdt_api__v1__feed__user_timeline_graphql_connection']['edges']
-            page_posts = [Post(post['node']) for post in page_posts]
+            page_posts_count = len(page_posts)
             page_info = page_data['data']['xdt_api__v1__feed__user_timeline_graphql_connection']['page_info']
             end_cursor = page_info['end_cursor']
             has_next_page = page_info['has_next_page']
             for post in page_posts:
+                post = post['node']
+                post['nickname'] = profile.username
+                post = Post(post)
                 if post.create_time > profile.latest_time:
+                    page_posts_count -= 1
                     save_json(post)
                     results.append(post)
                     print(post.url)
                 else:
                     if post.is_pined:
-                        continue
-                    else:
-                        instagram_logger.info(f'获取 {profile.username} 完成，获取到{len(results)}个内容')
-                        return results
+                        page_posts_count -= 1
+            if page_posts_count == 0:
+                continue
+    instagram_logger.info(f'获取 {profile.username} 完成，获取到{len(results)}个内容')
+    return results
 
 
 def from_local_json():
@@ -106,8 +111,9 @@ if __name__ == '__main__':
                 else:
                     log_error(p.url, result)
             print(f"replace into user values ('{latest_post.owner_pk}','{latest_post.owner_username}',"
-                    f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
-            update_db(latest_post.owner_pk, latest_post.owner_username, latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
+                  f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
+            update_db(latest_post.owner_pk, latest_post.owner_username,
+                      latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
             print("sleep 60 seconds\n")
             sleep(60)
     except Exception as e:
