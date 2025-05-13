@@ -130,6 +130,7 @@ def start(scraping: Following, has_send):
         return
     new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
     latest_weibo = max(new_weibo, key=lambda x: x['weibo_time'])
+    error = 0
     for weibo in new_weibo:
         if weibo['weibo_url'] in has_send:
             continue
@@ -149,12 +150,13 @@ def start(scraping: Following, has_send):
                     store_message_data(r)
                     rate_control(r, weibo_logger)
                 else:
+                    error += 1
                     log_error(weibo['weibo_url'])
                     weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
             else:
                 continue
     weibo_logger.info('\n')
-    if len(new_weibo) > 0:
+    if len(new_weibo) > 0 and error == 0:
         update_db(scraping.userid, scraping.username, latest_weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S'))
 
 

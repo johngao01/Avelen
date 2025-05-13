@@ -113,6 +113,7 @@ def start(scraping: Following, has_send):
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     if len(new_aweme) == 0:
         scrapy_logger.info(f"{scrapy.username} 没有新作品\n")
+    error = 0
     for i, aweme in enumerate(new_aweme, start=1):
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
@@ -134,6 +135,7 @@ def start(scraping: Following, has_send):
                 rate_control(r, scrapy_logger)
                 continue
             else:
+                error += 1
                 update_db(scraping.user_sec_uid, scraping.username, previous_time)
                 log_error(aweme.aweme_url)
                 scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
@@ -141,7 +143,8 @@ def start(scraping: Following, has_send):
         else:
             log_error(aweme.aweme_url)
             continue
-    update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
+    if error == 0:
+        update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
 if __name__ == '__main__':
