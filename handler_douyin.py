@@ -961,6 +961,10 @@ class AwemeMedia:
     @property
     def download_url(self):
         if self.content_type == 'video':
+            for play_addr in ['play_addr_h264', 'play_addr_265', 'play_addr']:
+                if play_addr in self._node:
+                    if 'url_list' in self._node[play_addr]:
+                        return self._node[play_addr]['url_list'][0]
             return f'https://aweme.snssdk.com/aweme/v1/play/?video_id={self.content_id}&radio=1080p&line=0'
         else:
             if 'url_list' in self._node:
