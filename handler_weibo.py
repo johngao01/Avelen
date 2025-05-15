@@ -352,16 +352,16 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
     info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
     if weibo_dict['mblog_vip_type'] == 1:
         weibo_logger.info(info + 'V+微博')
-        return
+        return 'skip'
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
         weibo_logger.info(info + '转发微博')
-        return
+        return 'skip'
     if userid:
         # 剔除快转微博
         if weibo_dict['user']['idstr'] != userid:
             weibo_logger.info(info + '转发微博')
-            return
+            return 'skip'
     if 'mix_media_info' in weibo_dict and weibo_dict['mix_media_info']['items']:
         weibo_logger.info(info + '图片视频微博')
         r = handler_mix_media_weibo(weibo_info, post_data, weibo_dict['mix_media_info'])
@@ -384,8 +384,10 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
                 return r
             else:
                 weibo_logger.info(info + '文字微博')
+                return 'skip'
         else:
             weibo_logger.info(info + '文字微博')
+            return 'skip'
 
 
 def handler_mix_media_weibo(weibo_info, post_data, mix_media_data):

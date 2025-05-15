@@ -41,7 +41,7 @@ def scrapy_like(uid, scrapy_log: MyLogger):
             break
         if len(lists) == 0:
             break
-    scrapy_log.info(f'获取喜欢的微博完成')
+    scrapy_log.info(f'获取到{len(all_weibo)}个喜欢的微博，获取喜欢的微博完成')
     return all_weibo
 
 
@@ -140,21 +140,22 @@ def start(scraping: Following, has_send):
             else:
                 r = handle_weibo(weibo['weibo_url'], userid=scraping.userid, username=scraping.username)
         except Exception:
+            error += 1
             log_error(weibo['weibo_url'])
             weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
             weibo_logger.error(traceback.format_exc())
         else:
-            if type(r) is requests.Response:
-                if r.status_code == 200:
-                    download_log(r)
-                    store_message_data(r)
-                    rate_control(r, weibo_logger)
-                else:
-                    error += 1
-                    log_error(weibo['weibo_url'])
-                    weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
-            else:
+            if type(r) is requests.Response and r.status_code == 200:
+                download_log(r)
+                store_message_data(r)
+                rate_control(r, weibo_logger)
                 continue
+            elif type(r) is str and 'skip' in r:
+                continue
+            else:
+                error += 1
+                log_error(weibo['weibo_url'])
+                weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
     weibo_logger.info('\n')
     if len(new_weibo) > 0 and error == 0:
         update_db(scraping.userid, scraping.username, latest_weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S'))
