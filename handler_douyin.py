@@ -1017,6 +1017,7 @@ def get_url_id(share_info: str):
 
 
 def get_aweme_detail(aweme_id):
+
     params = {'device_platform': 'webapp', 'aid': '6383', 'channel': 'channel_pc_web', 'pc_client_type': 1,
               'version_code': '190500', 'version_name': '19.5.0', 'cookie_enabled': 'true', 'screen_width': 1920,
               'screen_height': 1080, 'browser_language': 'zh-CN', 'browser_platform': 'Win32',
@@ -1031,10 +1032,18 @@ def get_aweme_detail(aweme_id):
     rs = requests.get(api_post_url, params=params, headers=headers, timeout=5)
     if rs.text == '':
         print('空数据')
+        json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
+        if json_path:
+            with open(json_path,encoding='utf-8') as f:
+                return json.load(f)
         return
     response_json = json.loads(rs.text)
     if response_json['aweme_detail'] is None:
         print(response_json['filter_detail']['notice'])
+        json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
+        if json_path:
+            with open(json_path,encoding='utf-8') as f:
+                return json.load(f)
         return
     aweme = response_json['aweme_detail']
     return aweme
@@ -1166,7 +1175,10 @@ def handler_note_douyin(aweme: Aweme):
 def handler_douyin(aweme):
     if aweme is None:
         return False
-    aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
+    if 'create_time' in aweme:
+        aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
+    else:
+        aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
     user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], '')
     aweme = Aweme(user, aweme)
     if aweme.is_video:

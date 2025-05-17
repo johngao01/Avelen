@@ -5,6 +5,7 @@ import os
 from time import sleep
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import cv2
 import requests
@@ -135,3 +136,10 @@ def rate_control(r, logger):
 def log_error(url, text=''):
     with open('error.txt', 'a') as f:
         f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 处理 {url} 失败  {text}\n")
+
+
+def find_file_by_name(root_dir, target_filename):
+    root_path = Path(root_dir)
+    for path in root_path.rglob(target_filename):
+        return str(path)  # 找到第一个匹配项后返回
+    return None
