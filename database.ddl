@@ -1,82 +1,75 @@
-CREATE DATABASE `nicebot` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION = 'N' */
+CREATE DATABASE nicebot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE `document`
+USE nicebot;
+
+CREATE TABLE `user`
 (
-    `file_id`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_unique_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_name`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_type`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_size`      int                                                           DEFAULT NULL,
-    `message_id`     int                                                           DEFAULT NULL,
-    `media_group_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `url`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
+    `USERID`       VARCHAR(255) NOT NULL,
+    `USERNAME`     VARCHAR(255),
+    `latest_time`  VARCHAR(255),
+    `douyin_weibo` VARCHAR(255),
+    `scrapy_time`  VARCHAR(255),
+    PRIMARY KEY (`USERID`)
+) CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE `messages`
 (
-    `MESSAGE_ID`     int NOT NULL,
-    `CAPTION`        text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-    `CHAT_ID`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `DATE_TIME`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `FORM_USER`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `CHAT`           text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-    `MEDIA_GROUP_ID` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `TEXT_RAW`       text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-    `URL`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `USERID`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `USERNAME`       varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `IDSTR`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `MBLOGID`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `MSG_STR`        longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    `MESSAGE_ID`     INT,
+    `CAPTION`        TEXT,
+    `CHAT_ID`        VARCHAR(255),
+    `DATE_TIME`      VARCHAR(255),
+    `FORM_USER`      VARCHAR(255),
+    `CHAT`           TEXT,
+    `MEDIA_GROUP_ID` VARCHAR(100),
+    `TEXT_RAW`       TEXT,
+    `URL`            VARCHAR(255),
+    `USERID`         VARCHAR(255),
+    `IDSTR`          VARCHAR(255),
+    `MBLOGID`        VARCHAR(255),
     PRIMARY KEY (`MESSAGE_ID`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
+) CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE `document`
+(
+    `file_id`        VARCHAR(255),
+    `file_unique_id` VARCHAR(255),
+    `file_name`      VARCHAR(255),
+    `file_type`      VARCHAR(255),
+    `file_size`      INT,
+    `message_id`     INT,
+    `media_group_id` VARCHAR(100),
+    `url`            VARCHAR(255)
+) CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE `photo`
 (
-    `file_id`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_unique_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `width`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `height`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_size`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_name`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `message_id`     int                                                           DEFAULT NULL,
-    `media_group_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `url`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci;
-
-CREATE TABLE `user`
-(
-    `USERID`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-    `USERNAME`    varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `latest_time` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `platform`    varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `scrapy_time` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `valid`       int                                                           DEFAULT '1',
-    PRIMARY KEY (`USERID`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
+    `file_id`        VARCHAR(255),
+    `file_unique_id` VARCHAR(255),
+    `width`          VARCHAR(255),
+    `height`         VARCHAR(255),
+    `file_size`      VARCHAR(255),
+    `file_name`      VARCHAR(255),
+    `message_id`     INT,
+    `media_group_id` VARCHAR(100),
+    `url`            VARCHAR(255)
+) CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE `video`
 (
-    `file_id`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_unique_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `width`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `height`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `duration`       int                                                           DEFAULT NULL,
-    `file_size`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_name`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `file_type`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `message_id`     varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `media_group_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-    `url`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
+    `file_id`        VARCHAR(255),
+    `file_unique_id` VARCHAR(255),
+    `width`          VARCHAR(255),
+    `height`         VARCHAR(255),
+    `duration`       INT,
+    `file_size`      VARCHAR(255),
+    `file_name`      VARCHAR(255),
+    `file_type`      VARCHAR(255),
+    `message_id`     INT,
+    `media_group_id` VARCHAR(100),
+    `url`            VARCHAR(255)
+) CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
-
