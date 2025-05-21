@@ -32,12 +32,10 @@ for line in lines_seen:
     else:
         continue
     send_url.append(url)
-    if type(r) is requests.Response:
-        if r.status_code == 200:
-            store_message_data(r)
-        else:
-            print(f'处理 {url} 失败')
-            error_line.append(line)
+    if type(r) is requests.Response and r.status_code == 200:
+        store_message_data(r)
+    elif type(r) is str and 'skip' in r:
+        continue
     else:
         print(f'处理 {url} 失败')
         error_line.append(line)
