@@ -167,3 +167,17 @@ def add_user(user_id, username, platform):
     finally:
         cursor.close()
         conn.close()
+
+def remove_user(user_id,):
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('update user set valid=0 where userid=%s', (user_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(e)
+        return False
+    finally:
+        cursor.close()
+        conn.close()
