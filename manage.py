@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 from typing import cast
-from database import exec_sql_get_data, add_user
+from database import exec_sql_get_data, add_user, remove_user
 import subprocess
 from urllib.parse import urlparse
 import emoji
@@ -102,7 +102,7 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     data = cast(str, query.data)
     _, user_id = data.split("|", 1)
     user_name = follows[user_id]['username']
-    context.user_data["selected_username"] = user_id
+    context.user_data["selected_username"] = user_name
     platform = follows[user_id]['platform']
     if platform == 'douyin':
         keyboard_button = InlineKeyboardButton("📎 View on Douyin", url=f"https://www.douyin.com/user/{user_id}")
@@ -113,7 +113,7 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
                                                url=f"https://www.instagram.com/{follows[user_id]['username']}/")
     keyboard = [
         [keyboard_button],
-        [InlineKeyboardButton("❌ 删除", callback_data="delete")],
+        [InlineKeyboardButton("❌ 删除", callback_data=f"delete|{user_id}")],
         [InlineKeyboardButton("⬅️ 返回用户列表", callback_data=f"back|{platform}")]
     ]
     markup = InlineKeyboardMarkup(keyboard)
@@ -129,10 +129,11 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
 async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
+    data = cast(str, query.data)
+    _, user_id = data.split("|", 1)
     username = context.user_data.get("selected_username")
-    user_id = query.from_user.id
     print(user_id, username)
+    remove_user(user_id)
     await query.edit_message_text(f"✅ Unfollowed @{username}")
     return ConversationHandler.END
 
@@ -207,11 +208,13 @@ async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         # 提取第一个 http(s) 开头的 URL
         match = re.search(r'(https?://[^\s]+)', text)
         return match.group(0) if match else None
-
+    text = update.message.text[:-1] if update.message.text[-1] == '/' else update.message.text
     if 'weibo.com' in update.message.text:
-        url = update.message.text
+        url = text
+    elif 'instagram.com' in update.message.text:
+        url = text
     else:
-        url = extract_url(update.message.text)
+        url = extract_url(text)
         print(url)
         if not url:
             await update.message.reply_text("未提取到用户主页地址，请重新开始。")
@@ -234,6 +237,8 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         platform = 'douyin'
     elif 'weibo' in parsed_url.hostname:
         platform = 'weibo'
+    elif 'instagram' in parsed_url.hostname:
+        platform = 'instagram'
     else:
         await update.message.reply_text("未知的平台")
         return ConversationHandler.END
