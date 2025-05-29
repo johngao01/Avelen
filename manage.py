@@ -208,6 +208,7 @@ async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         # 提取第一个 http(s) 开头的 URL
         match = re.search(r'(https?://[^\s]+)', text)
         return match.group(0) if match else None
+
     text = update.message.text[:-1] if update.message.text[-1] == '/' else update.message.text
     if 'weibo.com' in update.message.text:
         url = text
@@ -260,6 +261,11 @@ async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
 
 
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(update.update_id, str(update.message.date), update.message.text)
+    await update.message.reply_text(update.message.text)
+
+
 def main() -> None:
     builder = Application.builder()
     persistence = PicklePersistence(filepath="arbitrarycallbackdatabot")
@@ -304,6 +310,7 @@ def main() -> None:
     application.add_handler(CommandHandler("lm", ls_media))
     application.add_handler(CommandHandler("myfollow", list_my_follow))
     application.add_handler(manage_follow_handler)
+    application.add_handler(MessageHandler(filters.Text(), echo))
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
