@@ -262,7 +262,8 @@ async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(update.update_id, str(update.message.date), update.message.text)
+    print(update.effective_user.language_code, update.message.chat_id, update.message.id, update.message.date,
+          update.message.text)
     await update.message.reply_text(update.message.text)
 
 
