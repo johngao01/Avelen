@@ -8,28 +8,32 @@ with open('cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
     cookies = f.read()
 instagram_headers = {
     'accept': '*/*',
-    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5',
+    'cache-control': 'no-cache',
     'content-type': 'application/x-www-form-urlencoded',
-    'cookie': cookies,
     'origin': 'https://www.instagram.com',
+    'pragma': 'no-cache',
     'priority': 'u=1, i',
     'referer': 'https://www.instagram.com/',
     'sec-ch-prefers-color-scheme': 'light',
-    'sec-ch-ua': '"Google Chrome";v="129", "Not=A?Brand";v="8", "Chromium";v="129"',
-    'sec-ch-ua-full-version-list': '"Google Chrome";v="129.0.6668.90", "Not=A?Brand";v="8.0.0.0", "Chromium";v="129.0.6668.90"',
+    'sec-ch-ua': '"Chromium";v="136", "Microsoft Edge";v="136", "Not.A/Brand";v="99"',
+    'sec-ch-ua-full-version-list': '"Chromium";v="136.0.7103.113", "Microsoft Edge";v="136.0.3240.92", "Not.A/Brand";v="99.0.0.0"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-model': '""',
     'sec-ch-ua-platform': '"Windows"',
-    'sec-ch-ua-platform-version': '"15.0.0"',
+    'sec-ch-ua-platform-version': '"19.0.0"',
     'sec-fetch-dest': 'empty',
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-origin',
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
-    'x-asbd-id': '129477',
-    'x-fb-friendly-name': 'LSPlatformGraphQLLightspeedRequestForIGDQuery',
-    'x-fb-lsd': 'IOlBer4tOLe1g3Wezxmxib',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
+    'x-asbd-id': '359341',
+    'x-bloks-version-id': 'f4e32caf235c4c3198ceb3d7599c397741599ea3447ec2f785d4575aeb99766b',
+    'x-csrftoken': 'MzVviRiQxCoVvnKFyuvrxSqk5vDLi26G',
+    'x-fb-friendly-name': 'PolarisProfilePostsQuery',
+    'x-fb-lsd': 'FASx-b1QHr26PyPKzuK9UW',
     'x-ig-app-id': '936619743392459',
-    'x-ig-d': 'www',
+    'x-root-field-name': 'xdt_api__v1__feed__user_timeline_graphql_connection',
+    'cookie': cookies,
 }
 data = {
     'av': '17841456631306168',
@@ -57,10 +61,10 @@ data = {
     'fb_api_req_friendly_name': 'LSPlatformGraphQLLightspeedRequestForIGDQuery',
     'variables': '{"deviceId":"e645281c-1c20-4fe2-ab5c-576765e998ed","requestId":0,"requestPayload":"{\\"database\\":1,\\"epoch_id\\":0,\\"last_applied_cursor\\":null,\\"sync_params\\":\\"{\\\\\\"bloks_version\\\\\\":\\\\\\"834a5e272ad60874513e8388fb7e1f1e894653cb45a6b1160396fcd3618ba96b\\\\\\",\\\\\\"full_height\\\\\\":200,\\\\\\"locale\\\\\\":\\\\\\"zh_CN\\\\\\",\\\\\\"preview_height\\\\\\":200,\\\\\\"preview_height_large\\\\\\":400,\\\\\\"preview_width\\\\\\":150,\\\\\\"preview_width_large\\\\\\":300,\\\\\\"scale\\\\\\":1,\\\\\\"snapshot_num_threads_per_page\\\\\\":15}\\",\\"version\\":8700946419928250}","requestType":1}',
     'server_timestamps': 'true',
-    'doc_id': '7289167067878883',
+    'doc_id': '9830436980396988',
 }
 instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
-graphql_url = 'https://www.instagram.com/api/graphql'
+graphql_url = 'https://www.instagram.com/graphql/query'
 if 'instagram_scrapy.py' in sys.argv[0]:
     r = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)
     # 正则表达式查找并捕获token的值
@@ -183,11 +187,10 @@ def graphql_request(payload_data):
     try:
         rs = requests.post(graphql_url, headers=instagram_headers, data=payload_data)
         rs.raise_for_status()
+        return rs.json()
     except Exception as e:
         print(e)
         return None
-    else:
-        return r
 
 
 def get_post_detail(shortcode):

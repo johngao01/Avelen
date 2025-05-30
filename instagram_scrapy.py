@@ -5,19 +5,22 @@ from handler_instagram import *
 
 
 def get_posts(username, after='', before='null', first=12, last='null'):
-    variables = {"data": {"count": 12, "include_relationship_info": 'true', "latest_besties_reel_media": 'true',
-                          "latest_reel_media": 'true'}, "username": username}
+    variables = {"data": {"count": 12, "include_reel_media_seen_timestamp": True, "include_relationship_info": True,
+                 "latest_besties_reel_media": True, "latest_reel_media": True}, "username": username,
+        "__relay_internal__pv__PolarisIsLoggedInrelayprovider": True,
+        "__relay_internal__pv__PolarisShareSheetV3relayprovider": True}
     if after != '':
         variables.update({"after": after, "before": before, "first": first, "last": last})
+    # instagram_headers 会影响爬取失败
     response = graphql_request({
         'fb_dtsg': fb_dtsg,
         'fb_api_caller_class': 'RelayModern',
         'fb_api_req_friendly_name': 'PolarisProfilePostsQuery',
         'variables': json.dumps(variables),
         'server_timestamps': 'true',
-        'doc_id': '7354141574647290',
+        'doc_id': '9830436980396988',
     })
-    return response.json()
+    return response
 
 
 def scrapy_profile_post(profile: Profile):
