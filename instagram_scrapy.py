@@ -113,11 +113,12 @@ if __name__ == '__main__':
                         log_error(p.url, result.status_code)
                 else:
                     log_error(p.url, result)
-            print(f"replace into user values ('{latest_post.owner_pk}','{latest_post.owner_username}',"
+            print(f"replace into user values ('{latest_post.owner_username}','{latest_post.nickname}',"
                   f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
-            update_db(latest_post.owner_pk, latest_post.owner_username,
+            update_db(latest_post.owner_username, latest_post.nickname,
                       latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
             print("sleep 60 seconds\n")
-            sleep(60)
+            if len(sys.argv) < 2:
+                sleep(60)
     except Exception as e:
         print(e)
