@@ -18,7 +18,6 @@ from handler_weibo import *
 from handler_instagram import *
 
 DEVELOPER_CHAT_ID = 708424141
-logger = MyLogger('nice', 'bot')
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
