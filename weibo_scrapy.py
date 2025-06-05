@@ -13,7 +13,7 @@ def get_latest_edit_time(weibo_info):
         return standardize_date(weibo_info['created_at'])
 
 
-def scrapy_like(uid, scrapy_log: MyLogger):
+def scrapy_like(uid, scrapy_log):
     scrapy_log.info(f'开始获取喜欢的微博，她的主页是 https://www.weibo.com/u/{uid}')
     page = 0
     all_weibo = []
@@ -59,7 +59,7 @@ def one_page_latest(user_id: str, page):
         pass
 
 
-def scrapy_latest(user: Following, scrapy_log: MyLogger):
+def scrapy_latest(user: Following, scrapy_log):
     scrapy_log.info(
         f'开始获取 {user.username} 截至 {str(user.latest_time)} 微博，她的主页是 https://www.weibo.com/u/{user.userid}')
     page = 1
