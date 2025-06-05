@@ -1,10 +1,8 @@
 import hashlib
 import json
-import logging
 import os
 from time import sleep
 from datetime import datetime
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import cv2
@@ -22,35 +20,6 @@ WEB_HOOK_URL = 'http://localhost:5000'
 count = 0  # 发送了消息数量
 times = 0  # 第几次发送
 rate = 30  # 每分钟限制发送消息数
-
-
-class MyLogger(logging.Logger):
-    def __init__(self, name, filename, stream=True, mode='a', log_time=True):
-        self.log_time = log_time
-        super().__init__(name)
-        filepath = f'{filename}.log'
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        file_handler = RotatingFileHandler(filepath, mode=mode, maxBytes=5*1024*1024, encoding='utf-8')
-        file_handler.setLevel(logging.NOTSET)
-        f_format = logging.Formatter("%(asctime)s : %(message)s") if log_time else logging.Formatter("%(message)s")
-        file_handler.setFormatter(f_format)
-        self.addHandler(file_handler)
-        if stream:
-            stream_handler = logging.StreamHandler()
-            stream_handler.setLevel(logging.INFO)
-            stream_handler.setFormatter(f_format)
-            self.addHandler(stream_handler)
-        self.log_history = []
-
-    def _log(self, level, msg, args, **kwargs):
-        super()._log(level, msg, args, **kwargs)
-        if self.log_time:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            msg = f'{timestamp} - {msg}'
-        self.log_history.append(msg)
-
-    def log(self, level, msg, *args, **kwargs):
-        self._log(level, msg, args, **kwargs)
 
 
 def convert_bytes_to_human_readable(num_bytes):
@@ -81,7 +50,7 @@ def download_log(response):
     message = messages[-1]
     log = (message['USERNAME'] + " " + message['CREATE_TIME'] + " " + message['DATE_TIME'] +
            " " + message['URL'] + " " + message['TEXT_RAW'].replace('\n', ' '))
-    with open('send.log', 'a') as f:
+    with open('logs/send.log', 'a') as f:
         f.write(log + "\n")
 
 

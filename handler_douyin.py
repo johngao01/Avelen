@@ -11,8 +11,24 @@ from urllib.parse import urlencode, quote
 from database import store_message_data
 from utils import *
 from gmssl import sm3, func
+import sys
+from loguru import logger
 
-scrapy_logger = MyLogger('douyin', 'scrapy_douyin', mode='a')
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+)
+logger.add(
+    f"logs/scrapy_douyin.log",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+    encoding="utf-8",
+    filter=lambda record: record["extra"].get("name") == "scrapy_douyin"
+)
+scrapy_logger = logger.bind(name="scrapy_douyin")
 
 with open('cookies/cookies.txt', mode='r', encoding='utf8') as cookie_file:
     cookies = cookie_file.read()

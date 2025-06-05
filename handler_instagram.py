@@ -3,6 +3,8 @@ import sys
 from os.path import splitext, basename, getsize
 from urllib.parse import urlparse
 from utils import *
+import sys
+from loguru import logger
 
 with open('cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
     cookies = f.read()
@@ -63,7 +65,20 @@ data = {
     'server_timestamps': 'true',
     'doc_id': '9830436980396988',
 }
-instagram_logger = MyLogger('instagram', 'scrapy_instagram', mode='a')
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+)
+logger.add(
+    f"logs/scrapy_instagram.log",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+    encoding="utf-8",
+    filter=lambda record: record["extra"].get("name") == "scrapy_instagram"
+)
+instagram_logger = logger.bind(name="scrapy_instagram")
 graphql_url = 'https://www.instagram.com/graphql/query'
 if 'instagram_scrapy.py' in sys.argv[0]:
     r = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)

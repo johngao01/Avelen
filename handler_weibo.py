@@ -1,7 +1,7 @@
 import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+import sys
 from PIL import Image
 
 from utils import *
@@ -41,8 +41,21 @@ weibo_header = {
     'cookie': 'SUBP=0033WrSXqPxfM72-Ws9jqgMF55529P9D9W51vhsNfUfV2YL.VHulT9DN;WBPSESS=gJ7ElPMf_3q2cdj5JUfmvBCyTLpPuA6sKwpyMFrI2wvAnu3g9Yr-LXk8RZ0EwVzH3ZNo_Vdp2RXzXjs4BBoJzDZC3qLHqRffDSd1XU3RNsAnzJYtEo9D7HKvjaX3HOZw-Y992VC7yPKctxof_ywVOPWptY43SWIw3VEaRwGiDLY=;SUB=_2AkMSoiDDf8NxqwFRmfsVyW7qaYp0zQ3EieKk_tEYJRMxHRl-yT8XqlxZtRB6OSIOKwYh5I1-rxzEimXIcPYLDv47DUz8;XSRF-TOKEN=4_zeJNqfBCsDMNEPpT3GCLnR'
 }
 del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736']
-
-weibo_logger = MyLogger('scrapy_weibo', 'scrapy_weibo', mode='a')
+from loguru import logger
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+)
+logger.add(
+    f"logs/scrapy_weibo.log",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+    encoding="utf-8",
+    filter=lambda record: record["extra"].get("name") == "scrapy_weibo"
+)
+weibo_logger = logger.bind(name="scrapy_weibo")
 
 
 class Following:
