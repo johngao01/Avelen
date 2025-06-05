@@ -117,7 +117,7 @@ def start(scraping: Following, has_send):
     for i, aweme in enumerate(new_aweme, start=1):
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
-            print(i, aweme.aweme_url, aweme.create_time_str, aweme.describe.replace('\n', ' '))
+            # print(i, aweme.aweme_url, aweme.create_time_str, aweme.describe.replace('\n', ' '))
             continue
         aweme.save_json()
         if aweme.is_video:
