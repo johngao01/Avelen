@@ -40,8 +40,9 @@ weibo_header = {
     'referer': 'https://weibo.com/',
     'cookie': 'SUBP=0033WrSXqPxfM72-Ws9jqgMF55529P9D9W51vhsNfUfV2YL.VHulT9DN;WBPSESS=gJ7ElPMf_3q2cdj5JUfmvBCyTLpPuA6sKwpyMFrI2wvAnu3g9Yr-LXk8RZ0EwVzH3ZNo_Vdp2RXzXjs4BBoJzDZC3qLHqRffDSd1XU3RNsAnzJYtEo9D7HKvjaX3HOZw-Y992VC7yPKctxof_ywVOPWptY43SWIw3VEaRwGiDLY=;SUB=_2AkMSoiDDf8NxqwFRmfsVyW7qaYp0zQ3EieKk_tEYJRMxHRl-yT8XqlxZtRB6OSIOKwYh5I1-rxzEimXIcPYLDv47DUz8;XSRF-TOKEN=4_zeJNqfBCsDMNEPpT3GCLnR'
 }
-del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736']
+del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736', '3671086183ed683ec092b43b83fa461c']
 from loguru import logger
+
 logger.remove()
 logger.add(
     sys.stderr,
@@ -119,17 +120,19 @@ def save_json(edit_count, username, idstr, json_data):
         json.dump(json_data, json_write, ensure_ascii=False, indent=4)
 
 
-def download_image(weibo_info, photo_url, pic, index):
+def download_image(weibo_info, pic, index):
     """
     多线程下载图片微博中的jpg、mov、gif
     :param weibo_info: 微博数据
-    :param photo_url: 图片的下载地址
     :param pic: 图片节点
     :param index: 图片的序号
     :return:
     """
     photo_video = []
-    file_type = photo_url.split('/')[-1].split('?')[0].split('.')[-1]
+    pic_id = pic['pic_id']
+    largest_url = pic['largest']['url']
+    photo_url = f"https://wx4.sinaimg.cn/large/{pic_id}"
+    file_type = largest_url.split('/')[-1].split('?')[0].split('.')[-1]
     media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + "_" + str(index) + "." + file_type
     save_path = os.path.join(weibo_info['save_dir'], media_name)
     if os.path.exists(save_path):
@@ -299,8 +302,7 @@ def handler_photo_weibo(weibo_info, pic_infos, post_data):
     with ThreadPoolExecutor() as executor:
         # 使用线程池来执行下载任务
         future_to_url = {
-            executor.submit(download_image, weibo_info, pic_infos[pic_id].get('largest').get('url'),
-                            pic_infos[pic_id], i): (
+            executor.submit(download_image, weibo_info, pic_infos[pic_id], i): (
                 pic_id, i) for i, pic_id in enumerate(pic_ids, start=1)}
         for future in as_completed(future_to_url):
             try:
@@ -363,9 +365,9 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
         weibo_info, post_data = parse_weibo_data(weibo_data, username)
     weibo_dict = weibo_info['data']
     info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
-    if weibo_dict['mblog_vip_type'] == 1:
-        weibo_logger.info(info + 'V+微博')
-        return 'skip'
+    # if weibo_dict['mblog_vip_type'] == 1:
+    #     weibo_logger.info(info + 'V+微博')
+    #     return 'skip'
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
         weibo_logger.info(info + '转发微博')
@@ -411,8 +413,7 @@ def handler_mix_media_weibo(weibo_info, post_data, mix_media_data):
         with ThreadPoolExecutor() as executor:
             # 使用线程池来执行下载任务
             future_to_url = {
-                executor.submit(download_image, weibo_info, pic_infos[i].get('largest').get('url'),
-                                pic_infos[i], i + 1): i for i in range(len(pic_infos))}
+                executor.submit(download_image, weibo_info, pic_infos[i], i + 1): i for i in range(len(pic_infos))}
             for future in as_completed(future_to_url):
                 try:
                     result = future.result()
