@@ -64,11 +64,10 @@ class Scrapy:
                 print(resp)
                 continue
             page_add = 0
-            if 'aweme_list' not in data_json:
-                scrapy_logger.warning(f'{self.username} 的作品可能被屏蔽了。')
-                return
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
+            if 'max_cursor' not in data_json:
+                continue
             self.max_cursor = data_json['max_cursor']
             page_awemes = data_json['aweme_list']
             page_latest_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的抖音的时间
