@@ -1129,7 +1129,7 @@ def handler_video_douyin(aweme: Aweme):
     aweme_video = aweme.aweme_video()
     media_name = aweme_video.save_name
     save_path = aweme_video.save_path()
-    if os.path.exists(save_path):
+    if os.path.exists(save_path) and os.path.getsize(save_path):
         video_size = os.path.getsize(save_path)
     else:
         error = 0
