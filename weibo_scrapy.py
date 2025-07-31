@@ -25,7 +25,7 @@ def scrapy_like(uid, scrapy_log):
             'with_total': 'true',
         }
         try:
-            response = requests.get('https://weibo.com/ajax/statuses/likelist', params=params, headers=cookie_headers)
+            response = requests.get('https://weibo.com/ajax/statuses/likelist', params=params, headers=cookie_headers, timeout=30)
             lists = response.json()['data']['list']
         except Exception as e:
             weibo_logger.error(str(e))
@@ -50,7 +50,7 @@ def one_page_latest(user_id: str, page):
               'page_type': 'searchall', 'page': page}
     url = 'https://m.weibo.cn/api/container/getIndex?'
     try:
-        r = requests.get(url, params=params, headers=headers, verify=False)
+        r = requests.get(url, params=params, headers=headers, verify=False, timeout=30)
         r.raise_for_status()
         json_data = r.json()
         return json_data
