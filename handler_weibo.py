@@ -141,7 +141,7 @@ def download_image(weibo_info, pic, index):
         response = requests.get(photo_url, headers=weibo_info['header'], stream=True)
         save_content(save_path, response)
         if response.status_code != 200:
-            weibo_logger.info("禁止访问的内容：" + weibo_info['url'])
+            weibo_logger.info("禁止访问的内容：" + photo_url)
             return photo_video
     with open(save_path, mode='rb') as f:
         pic_content = f.read()
@@ -150,7 +150,7 @@ def download_image(weibo_info, pic, index):
         size = len(pic_content)
         human_readable_size = convert_bytes_to_human_readable(size)
         if md5value in del_file:
-            weibo_logger.info("和谐的内容：" + weibo_info['url'])
+            weibo_logger.info("和谐的内容：" + photo_url)
         else:
             file_data = {
                 'media': save_path,
@@ -365,9 +365,9 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
         weibo_info, post_data = parse_weibo_data(weibo_data, username)
     weibo_dict = weibo_info['data']
     info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
-    # if weibo_dict['mblog_vip_type'] == 1:
-    #     weibo_logger.info(info + 'V+微博')
-    #     return 'skip'
+    if weibo_dict['mblog_vip_type'] == 1:
+        weibo_logger.info(info + 'V+微博')
+        return 'skip'
     if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
             weibo_dict.get('retweeted_status').get('user'), dict):
         weibo_logger.info(info + '转发微博')

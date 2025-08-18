@@ -130,6 +130,7 @@ def start(scraping: Following, has_send):
         return
     new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
     latest_weibo = max(new_weibo, key=lambda x: x['weibo_time'])
+    logger.info(f"{new_weibo[0]['weibo_time']}  {new_weibo[-1]['weibo_time']}")
     error = 0
     for weibo in new_weibo:
         if weibo['weibo_url'] in has_send:
