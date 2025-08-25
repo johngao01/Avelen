@@ -18,7 +18,7 @@ download_count = 0
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="{time} | {level} | {message}")
 logger.add(
-    "logs/download.log",
+    f"logs/{target_chat_id}.log",
     filter=lambda record: record["extra"].get("name") == "download"
 )
 download_logger = logger.bind(name="download")
@@ -56,7 +56,7 @@ def download(message, media_group):
 def get_chat_history(client, chat):
     # 获取一个聊天的聊天记录
     entity = client.get_entity(chat)
-    for message in client.iter_messages(entity, reverse=True, min_id=29358-1):
+    for message in client.iter_messages(entity, reverse=True, min_id=31906-1):
         try:
             if not message.media:
                 print("此消息无媒体内容:", message.id, message.text)
