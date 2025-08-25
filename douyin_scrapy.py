@@ -49,8 +49,12 @@ class Scrapy:
                 })
             params['X-Bogus'] = self.new_xbogus.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
             if self.username == 'favorite':
-                resp = requests.get(url="https://www.douyin.com/aweme/v1/web/aweme/favorite/", headers=favorite_headers,
-                                    params=params, timeout=30)
+                if self.user_sec_uid.endswith('WeSiDAItgr_J1c'):
+                    resp = requests.get(url="https://www.douyin.com/aweme/v1/web/aweme/favorite/", headers=douyin_headers,
+                                        params=params, timeout=30)
+                else:
+                    resp = requests.get(url="https://www.douyin.com/aweme/v1/web/aweme/favorite/", headers=favorite_headers,
+                                        params=params, timeout=30)
             else:
                 resp = requests.get(url='https://www.douyin.com/aweme/v1/web/aweme/post/', headers=self.header,
                                     params=params, timeout=30)
