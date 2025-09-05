@@ -6,7 +6,7 @@ from tools.utils import *
 import sys
 from loguru import logger
 
-with open('cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
+with open('../cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
     cookies = f.read()
 instagram_headers = {
     'accept': '*/*',
@@ -72,7 +72,7 @@ logger.add(
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
 )
 logger.add(
-    f"logs/scrapy_instagram.log",
+    f"../logs/scrapy_instagram.log",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
     encoding="utf-8",

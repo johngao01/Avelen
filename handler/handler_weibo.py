@@ -6,7 +6,7 @@ from PIL import Image
 
 from tools.utils import *
 
-with open('cookies/johnjohn01.txt') as cookie_file:
+with open('../cookies/johnjohn01.txt') as cookie_file:
     cookies = cookie_file.read()
 
 headers = {
@@ -40,7 +40,7 @@ logger.add(
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
 )
 logger.add(
-    f"logs/scrapy_weibo.log",
+    f"../logs/scrapy_weibo.log",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
     encoding="utf-8",
