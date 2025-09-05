@@ -229,13 +229,7 @@ async def send_single(data):
                                                  caption=caption)
     if send_response is None:
         print("send_single发送失败，", path)
-        return
+        return None
     messages = [send_response]
     results = await send_message_after(tg_bot, data, messages)
     return results
-
-
-async def backup():
-    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
-    with open('/root/pythonproject/weibo_tg_bot/sqlite.db', 'rb') as f:
-        await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=f)

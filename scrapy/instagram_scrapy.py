@@ -1,7 +1,7 @@
 import random
 
-from database import *
-from handler_instagram import *
+from tools.database import *
+from handler.handler_instagram import *
 
 
 def get_posts(username, after='', before='null', first=12, last='null'):

@@ -1,7 +1,7 @@
 import traceback
 import urllib3
-from database import *
-from handler_weibo import *
+from tools.database import *
+from handler.handler_weibo import *
 
 urllib3.disable_warnings()
 

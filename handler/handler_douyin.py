@@ -8,8 +8,8 @@ from random import randint, random, choice
 from re import compile
 from time import time
 from urllib.parse import urlencode, quote
-from database import store_message_data
-from utils import *
+from tools.database import store_message_data
+from tools.utils import *
 from gmssl import sm3, func
 import sys
 from loguru import logger

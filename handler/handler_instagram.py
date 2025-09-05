@@ -2,7 +2,7 @@ import re
 import sys
 from os.path import splitext, basename, getsize
 from urllib.parse import urlparse
-from utils import *
+from tools.utils import *
 import sys
 from loguru import logger
 

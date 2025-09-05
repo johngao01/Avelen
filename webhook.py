@@ -58,13 +58,6 @@ async def main():
         return jsonify(result)
 
 
-@app.route('/backup', methods=['GET'], endpoint='backup')
-@catch_errors
-async def backup():
-    await send.backup()
-    return "backup done"
-
-
 @app.route("/")
 def hello_world():
     return "<p>Hello, World!</p>"

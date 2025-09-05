@@ -1,6 +1,4 @@
-from handler_douyin import *
-from handler_weibo import *
-from handler_instagram import *
+from handler import *
 from database import get_send_url
 
 # 使用set存储行，避免重复

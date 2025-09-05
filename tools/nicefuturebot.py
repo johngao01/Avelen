@@ -1,6 +1,5 @@
 import html
 import traceback
-from re import compile
 from urllib.parse import parse_qs
 
 import telegram.error
@@ -12,10 +11,8 @@ from telegram.ext import (
     ContextTypes, MessageHandler, filters
 )
 
-from database import *
-from handler_douyin import *
-from handler_weibo import *
-from handler_instagram import *
+from tools.database import *
+from handler import *
 
 DEVELOPER_CHAT_ID = 708424141
 
