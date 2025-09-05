@@ -6,41 +6,31 @@ from PIL import Image
 
 from tools.utils import *
 
-headers = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                  'Chrome/104.0.0.0 Safari/537.36',
-    'referer': 'https://weibo.com/',
-    'Content-Type': 'application/json'
-}
 with open('cookies/johnjohn01.txt') as cookie_file:
     cookies = cookie_file.read()
-cookie_headers = {
-    'authority': 'weibo.com',
-    'accept': 'application/json, text/plain, */*',
-    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-    'cache-control': 'no-cache',
-    'client-version': 'v2.44.70',
-    'cookie': cookies,
-    'pragma': 'no-cache',
-    'referer': 'https://weibo.com/u/page/like/7767780215',
-    'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Microsoft Edge";v="122"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"Windows"',
-    'sec-fetch-dest': 'empty',
-    'sec-fetch-mode': 'cors',
-    'sec-fetch-site': 'same-origin',
-    'server-version': 'v2024.02.27.1',
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0',
-    'x-requested-with': 'XMLHttpRequest',
-    'x-xsrf-token': 'sQCVBYffKOsd70RbAHuH0TPm',
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    "Referer": "https://weibo.com/",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Cookie": cookies,
+    "X-Requested-With": "XMLHttpRequest",
 }
+# 获取点赞的内容
+cookie_headers = {
+    **headers,
+    'referer': 'https://weibo.com/u/page/like/7767780215',
+}
+# 获取单个微博详细信息
 weibo_header = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                   'Chrome/104.0.0.0 Safari/537.36',
     'referer': 'https://weibo.com/',
     'cookie': 'SUBP=0033WrSXqPxfM72-Ws9jqgMF55529P9D9W51vhsNfUfV2YL.VHulT9DN;WBPSESS=gJ7ElPMf_3q2cdj5JUfmvBCyTLpPuA6sKwpyMFrI2wvAnu3g9Yr-LXk8RZ0EwVzH3ZNo_Vdp2RXzXjs4BBoJzDZC3qLHqRffDSd1XU3RNsAnzJYtEo9D7HKvjaX3HOZw-Y992VC7yPKctxof_ywVOPWptY43SWIw3VEaRwGiDLY=;SUB=_2AkMSoiDDf8NxqwFRmfsVyW7qaYp0zQ3EieKk_tEYJRMxHRl-yT8XqlxZtRB6OSIOKwYh5I1-rxzEimXIcPYLDv47DUz8;XSRF-TOKEN=4_zeJNqfBCsDMNEPpT3GCLnR'
 }
-del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736', '3671086183ed683ec092b43b83fa461c']
+del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736',
+            '3671086183ed683ec092b43b83fa461c']
 from loguru import logger
 
 logger.remove()

@@ -25,7 +25,8 @@ def scrapy_like(uid, scrapy_log):
             'with_total': 'true',
         }
         try:
-            response = requests.get('https://weibo.com/ajax/statuses/likelist', params=params, headers=cookie_headers, timeout=30)
+            response = requests.get('https://weibo.com/ajax/statuses/likelist', params=params, headers=headers,
+                                    timeout=30)
             lists = response.json()['data']['list']
         except Exception as e:
             weibo_logger.error(str(e))
@@ -45,12 +46,13 @@ def scrapy_like(uid, scrapy_log):
     return all_weibo
 
 
-def one_page_latest(user_id: str, page):
-    params = {'container_ext': 'profile_uid:' + user_id, 'containerid': '107603' + user_id,
-              'page_type': 'searchall', 'page': page}
+def one_page_latest(user_id: str, page, since_id=''):
+    params = {'containerid': '230413' + user_id + "_-_WEIBO_SECOND_PROFILE_WEIBO_ORI"}
+    if page > 1 and since_id != '':
+        params.update({'page_type': '03', 'since_id': since_id})
     url = 'https://m.weibo.cn/api/container/getIndex?'
     try:
-        r = requests.get(url, params=params, headers=headers, verify=False, timeout=30)
+        r = requests.get(url, params=params, headers=headers, timeout=30)
         r.raise_for_status()
         json_data = r.json()
         return json_data
@@ -65,58 +67,63 @@ def scrapy_latest(user: Following, scrapy_log):
     page = 1
     weibo_list = []
     keep = 5
+    since_id = ''
     while keep:
         page_add = 0
         # 此方法获取的信息不能下载v+内容，但不需要cookie
-        info = one_page_latest(user_id=user.userid, page=page)
+        info = one_page_latest(user_id=user.userid, page=page, since_id=since_id)
         if info is None:
             continue
-        if info['ok']:
+        mblogs = []
+        page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
+        if info['ok'] == 1:
             cards = info['data']['cards']
-            cards_num = len(cards)
             page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
             for card in cards:
                 if card['card_type'] == 9:
-                    weibo_info = card['mblog']
-                    weibo_id = weibo_info['idstr'] if 'idstr' in weibo_info else weibo_info['id']
-                    if 'edit_at' in weibo_info:
-                        latest_edit_time = standardize_date(weibo_info['edit_at'])
-                    else:
-                        latest_edit_time = standardize_date(weibo_info['created_at'])
-                    save_json(weibo_edit_count(weibo_info), user.username, weibo_id, weibo_info)
-                    weibo_info['weibo_time'] = latest_edit_time
-                    weibo_url = "https://www.weibo.com" + "/" + user.userid + "/" + weibo_id
-                    if latest_edit_time < page_weibo_min_time:
-                        page_weibo_min_time = latest_edit_time
-                    if latest_edit_time > user.latest_time:
-                        page_add += 1
-                        weibo_info['weibo_url'] = weibo_url
-                        weibo_list.append(weibo_info)
-                    elif weibo_info.get('mblog_vip_type', 0) and latest_edit_time > user.latest_time:
-                        page_add += 1
-                        weibo_info['weibo_url'] = weibo_url
-                        weibo_list.append(weibo_info)
+                    mblogs.append(card.get('mblog'))
+                elif card['card_type'] == 11:
+                    for card_in_group in card.get('card_group', []):
+                        if card_in_group['card_type'] == 9:
+                            mblogs.append(card_in_group.get('mblog'))
                 else:
-                    cards_num -= 1
-            scrapy_info = f'{user.username} 获取第{page}页完成，一共有{cards_num}个微博'
-            if cards_num == 0:
-                keep -= 1
-            if page_add > 0:
-                scrapy_info += f"，本页获得{page_add}个新微博,共有{len(weibo_list)}个新微博"
-            else:
-                scrapy_info += f"，本页没有新微博,共有{len(weibo_list)}个新微博"
-            if page_weibo_min_time <= user.latest_time:
-                scrapy_info += f"，获取新微博完成。"
-                scrapy_log.info(scrapy_info)
-                break
-            else:
-                scrapy_log.info(scrapy_info)
-            page += 1
+                    pass
         if info['ok'] == 0 and info.get('msg') == '请求过于频繁':
             scrapy_log.info(f'{info.get("msg")}')
             time.sleep(60)
         elif info['ok'] == 0 and info.get('msg') == "这里还没有内容":
             keep -= 1
+        elif info['ok'] == -100:
+            scrapy_log.info(f'需要验证')
+        for weibo_info in mblogs:
+            weibo_id = weibo_info['idstr'] if 'idstr' in weibo_info else weibo_info['id']
+            if 'edit_at' in weibo_info:
+                latest_edit_time = standardize_date(weibo_info['edit_at'])
+            else:
+                latest_edit_time = standardize_date(weibo_info['created_at'])
+            save_json(weibo_edit_count(weibo_info), user.username, weibo_id, weibo_info)
+            weibo_info['weibo_time'] = latest_edit_time
+            weibo_url = "https://www.weibo.com" + "/" + user.userid + "/" + weibo_id
+            if latest_edit_time < page_weibo_min_time:
+                page_weibo_min_time = latest_edit_time
+            if latest_edit_time > user.latest_time and weibo_info.get('mblog_vip_type', 0) != 1:
+                page_add += 1
+                weibo_info['weibo_url'] = weibo_url
+                weibo_list.append(weibo_info)
+
+        scrapy_info = f'{user.username} 获取第{page}页完成，一共有{len(mblogs)}个微博'
+        if page_add > 0:
+            scrapy_info += f"，本页获得{page_add}个新微博,共有{len(weibo_list)}个新微博"
+        else:
+            scrapy_info += f"，本页没有新微博,共有{len(weibo_list)}个新微博"
+        if page_weibo_min_time <= user.latest_time:
+            scrapy_info += f"，获取新微博完成。"
+            scrapy_log.info(scrapy_info)
+            break
+        else:
+            scrapy_log.info(scrapy_info)
+        page += 1
+        since_id = info['cardlistInfo']['since_id']
     return weibo_list
 
 
