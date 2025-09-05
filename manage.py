@@ -120,7 +120,7 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     result = exec_sql_get_data(f"select num from statistic where userid='{user_id}'")
     num = result[0]
     await query.edit_message_text(
-        f"<b>{user_name}</b>\n<b>最新作品</b>：{str(follows[user_id]['latest_time'])}\n<b>作品数量：</b>{num}",
+        f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(follows[user_id]['latest_time'])}\n<b>作品数量：</b>{num}",
         reply_markup=markup, parse_mode=ParseMode.HTML)
     return MANAGING_USER
 
@@ -134,7 +134,7 @@ async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = context.user_data.get("selected_username")
     print(user_id, username)
     remove_user(user_id)
-    await query.edit_message_text(f"✅ Unfollowed @{username}")
+    await query.edit_message_text(f"✅ Unfollowed #{username}")
     return ConversationHandler.END
 
 
@@ -286,13 +286,16 @@ def main() -> None:
         entry_points=[CommandHandler("manage", start_manage)],
         states={
             SELECTING_PLATFORM: [
+                CommandHandler("manage", start_manage),
                 CallbackQueryHandler(handle_platform_selected, pattern=r"^platform\|")
             ],
             SELECTING_USER: [
+                CommandHandler("manage", start_manage),
                 CallbackQueryHandler(handle_user_selected, pattern=r"^user\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
             MANAGING_USER: [
+                CommandHandler("manage", start_manage),
                 CallbackQueryHandler(handle_delete, pattern=r"^delete\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
@@ -302,8 +305,14 @@ def main() -> None:
     add_handler = ConversationHandler(
         entry_points=[CommandHandler('add', add_follow)],
         states={
-            ADDRESS: [MessageHandler(filters.Text(), get_address)],
-            NAME: [MessageHandler(filters.Text(), get_name)],
+            ADDRESS: [
+                CommandHandler('add', add_follow),
+                MessageHandler(filters.Text(), get_address)
+            ],
+            NAME: [
+                CommandHandler('add', add_follow),
+                MessageHandler(filters.Text(), get_name)
+            ],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
     )
