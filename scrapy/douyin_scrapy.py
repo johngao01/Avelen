@@ -154,7 +154,11 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    all_followings = get_all_following('douyin')
+    if len(sys.argv) > 1:
+        valid = sys.argv[1]
+    else:
+        valid = 1
+    all_followings = get_all_following('douyin', valid)
     send_url = get_send_url('douyin')
     try:
         for f in all_followings:
