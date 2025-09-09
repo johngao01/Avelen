@@ -47,7 +47,7 @@ def scrapy_like(uid, scrapy_log):
 
 
 def one_page_latest(user_id: str, page, since_id=''):
-    params = {'containerid': '230413' + user_id + "_-_WEIBO_SECOND_PROFILE_WEIBO_ORI"}
+    params = {'containerid': '230413' + user_id + "_-_WEIBO_SECOND_PROFILE_WEIBO"}
     if page > 1 and since_id != '':
         params.update({'page_type': '03', 'since_id': since_id})
     url = 'https://m.weibo.cn/api/container/getIndex?'
@@ -74,6 +74,9 @@ def scrapy_latest(user: Following, scrapy_log):
         info = one_page_latest(user_id=user.userid, page=page, since_id=since_id)
         if info is None:
             continue
+        if info['data']['cards'][0]['card_type'] == 58 and info['data']['cards'][0]['name'] == '暂无微博':
+            scrapy_log.info(f'{user.username} 可能没有微博，或微博设置为私密，跳过')
+            break
         mblogs = []
         page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
         if info['ok'] == 1:
@@ -114,6 +117,7 @@ def scrapy_latest(user: Following, scrapy_log):
         scrapy_info = f'{user.username} 获取第{page}页完成，一共有{len(mblogs)}个微博'
         if page_add > 0:
             scrapy_info += f"，本页获得{page_add}个新微博,共有{len(weibo_list)}个新微博"
+            since_id = info['data']['cardlistInfo']['since_id']
         else:
             scrapy_info += f"，本页没有新微博,共有{len(weibo_list)}个新微博"
         if page_weibo_min_time <= user.latest_time:
@@ -123,7 +127,6 @@ def scrapy_latest(user: Following, scrapy_log):
         else:
             scrapy_log.info(scrapy_info)
         page += 1
-        since_id = info['cardlistInfo']['since_id']
     return weibo_list
 
 
