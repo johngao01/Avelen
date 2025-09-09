@@ -173,7 +173,11 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    all_followings = get_all_following('weibo')
+    if len(sys.argv) > 1:
+        valid = sys.argv[1]
+    else:
+        valid = 1
+    all_followings = get_all_following('weibo', valid)
     send_weibo_url = get_send_url('weibo')
     try:
         for following in all_followings:

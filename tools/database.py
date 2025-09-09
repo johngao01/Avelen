@@ -58,12 +58,12 @@ def store_message_data(response):
     conn.close()
 
 
-def get_all_following(platform):
+def get_all_following(platform, valid=1):
     conn = get_db_conn()
     cursor = conn.cursor()
     sql = f'''SELECT userid, username, latest_time 
               FROM `user`
-              where platform='{platform}' and valid=1 order by scrapy_time;'''
+              where platform='{platform}' and valid={valid} order by scrapy_time;'''
     cursor.execute(sql)
     data = [item for item in cursor.fetchall()]
     cursor.close()
@@ -158,7 +158,8 @@ def add_user(user_id, username, platform):
     conn = get_db_conn()
     cursor = conn.cursor()
     try:
-        cursor.execute('insert into user (userid, username, platform) values (%s, %s, %s) ', (user_id, username, platform))
+        cursor.execute('insert into user (userid, username, platform) values (%s, %s, %s) ',
+                       (user_id, username, platform))
         conn.commit()
         return True
     except Exception as e:
@@ -168,7 +169,8 @@ def add_user(user_id, username, platform):
         cursor.close()
         conn.close()
 
-def remove_user(user_id,):
+
+def remove_user(user_id, ):
     conn = get_db_conn()
     cursor = conn.cursor()
     try:
