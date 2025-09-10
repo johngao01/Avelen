@@ -19,7 +19,7 @@ SCRAPY_FAVORITE_LIMIT = 60
 WEB_HOOK_URL = 'http://localhost:5000'
 count = 0  # 发送了消息数量
 times = 0  # 第几次发送
-rate = 30  # 每分钟限制发送消息数
+rate = 60  # 每分钟限制发送消息数
 
 
 def convert_bytes_to_human_readable(num_bytes):
