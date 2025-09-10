@@ -3,7 +3,7 @@ from database import get_send_url
 
 # 使用set存储行，避免重复
 lines_seen = set()
-with open('error.txt', 'r', encoding='utf-8') as file:
+with open('../error.txt', 'r', encoding='utf-8') as file:
     lines = file.readlines()
 print(f'一共有{len(lines)}行')
 
@@ -39,7 +39,7 @@ for line in lines_seen:
         error_line.append(line)
         continue
 
-with open('error.txt', 'w', encoding='utf-8') as file:
+with open('../error.txt', 'w', encoding='utf-8') as file:
     for line in error_line:
         line = line.strip()  # 去掉行末尾的空白字符
         file.write(line + '\n')
