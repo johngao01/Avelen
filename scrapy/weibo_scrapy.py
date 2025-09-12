@@ -117,10 +117,10 @@ def scrapy_latest(user: Following, scrapy_log):
         scrapy_info = f'{user.username} 获取第{page}页完成，一共有{len(mblogs)}个微博'
         if page_add > 0:
             scrapy_info += f"，本页获得{page_add}个新微博,共有{len(weibo_list)}个新微博"
-            since_id = info['data']['cardlistInfo']['since_id']
+            since_id = info['data'].get('cardlistInfo', {}).get('since_id', '')
         else:
             scrapy_info += f"，本页没有新微博,共有{len(weibo_list)}个新微博"
-        if page_weibo_min_time <= user.latest_time:
+        if page_weibo_min_time <= user.latest_time or since_id == '':
             scrapy_info += f"，获取新微博完成。"
             scrapy_log.info(scrapy_info)
             break
