@@ -7,6 +7,7 @@ from pathlib import Path
 
 import cv2
 import requests
+import urllib.request
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 download_save_root_directory = '/root/download'
@@ -14,7 +15,8 @@ MAX_PHOTO_SIZE = 10 * 1024 * 1024
 MAX_PHOTO_TOTAL_PIXEL = 7000
 MAX_VIDEO_SIZE = 2000 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 2000 * 1024 * 1024
-
+ERROR_TOKEN = "5355419947:AAEHOGlkz7hlOO38XRRZ9vVhtAnVGjwbjKw"
+DEVELOPER_CHAT_ID = 708424141
 SCRAPY_FAVORITE_LIMIT = 60
 WEB_HOOK_URL = 'http://localhost:5000'
 count = 0  # 发送了消息数量
@@ -112,3 +114,21 @@ def find_file_by_name(root_dir, target_filename):
     for path in root_path.rglob(target_filename):
         return str(path)  # 找到第一个匹配项后返回
     return None
+
+
+def handle_error(msg, mode='HTML'):
+    try:
+        json_data = {
+            "chat_id": DEVELOPER_CHAT_ID,
+            'text': msg,
+            'parse_mode': mode
+        }
+        url = f'https://api.telegram.org/bot{ERROR_TOKEN}/sendMessage'
+        data = json.dumps(json_data).encode('utf-8')
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+        response = urllib.request.urlopen(req, timeout=15)
+        json_str = response.read().decode('utf-8')
+        _json_data = json.loads(json_str)
+        return {"success": [1], "error": []}
+    except Exception as e:
+        return {"success": [], "error": [1]}
