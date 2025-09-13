@@ -1,3 +1,4 @@
+import sys
 import traceback
 import urllib3
 from tools.database import *
@@ -74,12 +75,17 @@ def scrapy_latest(user: Following, scrapy_log):
         info = one_page_latest(user_id=user.userid, page=page, since_id=since_id)
         if info is None:
             continue
-        if info['data']['cards'][0]['card_type'] == 58 and info['data']['cards'][0]['name'] == '暂无微博':
-            scrapy_log.info(f'{user.username} 可能没有微博，或微博设置为私密，跳过')
-            break
+        if info['ok'] == -100:
+            if 'api/geetest' in info.get('url',''):
+                scrapy_log.info(f'需要验证, '+ info['url'])
+                sleep(180)
+                sys.exit(-1)
         mblogs = []
         page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
         if info['ok'] == 1:
+            if info['data']['cards'][0]['card_type'] == 58 and info['data']['cards'][0]['name'] == '暂无微博':
+                scrapy_log.info(f'{user.username} 可能没有微博，或微博设置为私密，跳过')
+                break
             cards = info['data']['cards']
             page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
             for card in cards:
