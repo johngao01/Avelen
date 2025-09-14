@@ -186,7 +186,6 @@ async def edit_commands(application):
     command = [BotCommand("myfollow", "我的关注"),
                BotCommand("manage", "管理关注"),
                BotCommand("lm", "查看/media文件夹"),
-               BotCommand("add", "添加爬取关注"),
                BotCommand("cancel", "取消操作")]
     await application.bot.set_my_commands(commands=command)
     await application.bot.send_message(DEVELOPER_CHAT_ID,
