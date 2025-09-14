@@ -1,4 +1,6 @@
 import re
+import subprocess
+import emoji
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -11,12 +13,10 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
-from telegram.constants import ParseMode
+from telegram.constants import ParseMode, ChatAction
 from typing import cast
-from database import exec_sql_get_data, add_user, remove_user
-import subprocess
+from database import exec_sql_get_data, add_user, update_user
 from urllib.parse import urlparse
-import emoji
 
 headers = {
     'referer': 'https://www.baidu.com/',
@@ -24,9 +24,20 @@ headers = {
 }
 DEVELOPER_CHAT_ID = 708424141
 SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
-ADDRESS, NAME = range(2)
+ASK_SAVE_USERNAME, ASK_OPERATION, STORE_DATA = range(3)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
+follow_types = {
+    '0': '删除',
+    '1': '特别关注',
+    '2': '普通关注'
+}
+
+bottoms = [
+    InlineKeyboardButton(f"删除", callback_data="0"),
+    InlineKeyboardButton(f"特别关注", callback_data="1"),
+    InlineKeyboardButton(f"普通关注", callback_data="2")
+]
 
 
 def clear_name(text):
@@ -67,19 +78,20 @@ async def handle_platform_selected(update: Update, context: ContextTypes.DEFAULT
 
     _, platform = query.data.split("|", 1)
     context.user_data['platform'] = platform
+    await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
     result = exec_sql_get_data(
-        f"select userid, username, latest_time, platform, scrapy_time from user where platform='{platform}' and valid=1")
+        f"select userid, username, latest_time, platform, valid from user where platform='{platform}' and valid>0")
     result = list(sorted(result, key=lambda x: x[2], reverse=True))
     num = len(result)
     keyboard = []
     row = []
     for user in result:
-        user_id, username, latest_time, platform, scrapy_time = user
+        user_id, username, latest_time, platform, valid = user
         follows[user_id] = {
             'username': username,
             'latest_time': latest_time,
             'platform': platform,
-            'scrapy_time': scrapy_time
+            'valid': valid
         }
         btn = InlineKeyboardButton(f"{username}", callback_data=f"user|{user_id}")
         row.append(btn)
@@ -105,35 +117,48 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["selected_username"] = user_name
     platform = follows[user_id]['platform']
     if platform == 'douyin':
-        keyboard_button = InlineKeyboardButton("📎 View on Douyin", url=f"https://www.douyin.com/user/{user_id}")
+        keyboard_button = InlineKeyboardButton("📎 在抖音上查看", url=f"https://www.douyin.com/user/{user_id}")
     elif platform == 'weibo':
-        keyboard_button = InlineKeyboardButton("📎 View on Weibo", url=f"https://weibo.com/u/{user_id}")
+        keyboard_button = InlineKeyboardButton("📎 在微博上查看", url=f"https://weibo.com/u/{user_id}")
     else:
-        keyboard_button = InlineKeyboardButton("📎 View on Instagram",
+        keyboard_button = InlineKeyboardButton("📎 在Instagram上查看",
                                                url=f"https://www.instagram.com/{follows[user_id]['username']}/")
+    if follows[user_id]['valid'] == 1:
+        update_button = InlineKeyboardButton("👤 普通关注", callback_data=f"downgrade|{user_id}")
+    else:
+        update_button = InlineKeyboardButton("⭐️ 特别关注", callback_data=f"upgrade|{user_id}")
     keyboard = [
         [keyboard_button],
-        [InlineKeyboardButton("❌ 删除", callback_data=f"delete|{user_id}")],
+        [InlineKeyboardButton("❌ 取消关注", callback_data=f"delete|{user_id}")],
+        [update_button],
         [InlineKeyboardButton("⬅️ 返回用户列表", callback_data=f"back|{platform}")]
     ]
+
     markup = InlineKeyboardMarkup(keyboard)
+    await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
     result = exec_sql_get_data(f"select num from statistic where userid='{user_id}'")
     num = result[0]
     await query.edit_message_text(
-        f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(follows[user_id]['latest_time'])}\n<b>作品数量：</b>{num}",
+        f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(follows[user_id]['latest_time'])}\n"
+        f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(follows[user_id]['valid'])]}",
         reply_markup=markup, parse_mode=ParseMode.HTML)
     return MANAGING_USER
 
 
-# === Delete user ===
-async def handle_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = cast(str, query.data)
     _, user_id = data.split("|", 1)
     username = context.user_data.get("selected_username")
-    print(user_id, username)
-    remove_user(user_id)
+    print(user_id, username, _)
+    if _ == 'upgrade':
+        valid = 1
+    elif _ == 'downgrade':
+        valid = 2
+    else:
+        valid = 0
+    update_user(valid, user_id)
     await query.edit_message_text(f"✅ Unfollowed #{username}")
     return ConversationHandler.END
 
@@ -152,7 +177,7 @@ async def handle_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancels and ends the conversation."""
     await update.message.reply_text(
-        "Bye! You can redo anytime!!!"
+        "再见!!!"
     )
     return ConversationHandler.END
 
@@ -186,16 +211,24 @@ async def ls_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
-async def add_follow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if update.effective_chat.id != DEVELOPER_CHAT_ID:
-        await update.message.reply_text("你没有权限使用此命令")
-        return ConversationHandler.END
-    await update.message.reply_text("请输入关注的主页地址：")
-    return ADDRESS
+async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id == DEVELOPER_CHAT_ID:
+        await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
+        result = exec_sql_get_data(f"select username from statistic order by num desc")
+        text = ''
+        for username in result:
+            username = clear_name(username)
+            text += f'\#{username}   '
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
 
 
-# 接收主页地址
-async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(update.effective_user.language_code, update.message.chat_id, update.message.id, update.message.date,
+          update.message.text)
+    await update.message.reply_text(update.message.text)
+
+
+async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     def expand_url(short_url: str) -> str:
         try:
             response = requests.get(short_url, timeout=5, allow_redirects=True, headers=headers)
@@ -209,32 +242,20 @@ async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         match = re.search(r'(https?://[^\s]+)', text)
         return match.group(0) if match else None
 
-    text = update.message.text[:-1] if update.message.text[-1] == '/' else update.message.text
-    if 'weibo.com' in update.message.text:
-        url = text
-    elif 'instagram.com' in update.message.text:
-        url = text
-    else:
-        url = extract_url(text)
+    matches = re.compile(r"(https?://[^\s]+)").findall(update.message.text.strip())
+
+    url = matches[0]
+    if 'v.doyin.com' in url:
+        url = extract_url(url)
         print(url)
         if not url:
             await update.message.reply_text("未提取到用户主页地址，请重新开始。")
             return ConversationHandler.END
         url = expand_url(url)
         print(url)
-    context.user_data['url'] = url
-    await update.message.reply_text(f"请输入用户名：", parse_mode=ParseMode.MARKDOWN)
-    return NAME
-
-
-# 接收姓名并结束
-async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    name = update.message.text
-    url = context.user_data.get("url")
-
-    print(f"添加用户：{name}, 主页地址：{url}")
+    context.user_data["url"] = url
     parsed_url = urlparse(url)
-    if 'douyin' in parsed_url.hostname:
+    if 'douyin.com' in parsed_url.hostname:
         platform = 'douyin'
     elif 'weibo' in parsed_url.hostname:
         platform = 'weibo'
@@ -245,26 +266,71 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     url_path = parsed_url.path
     user_id = url_path.split('/')[-1]
-    text = f'<a href="{url}"> {name} </a>已添加\n用户id：{user_id}\n平台：{platform}'
-    add_user(user_id, name, platform)
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+    if not user_id:
+        await update.message.reply_text("❌ 无法提取到用户id")
+        return ConversationHandler.END
+
+    context.user_data["user_id"] = user_id
+    context.user_data["platform"] = platform
+    exist = exec_sql_get_data(f"select * from user where userid='{user_id}'")
+
+    if exist:
+        context.user_data["type"] = 'old'
+        user_id, username, latest_time, platform, scrapy_time, valid = exist[0]
+        if valid == 1:
+            reply_bottoms = [bottoms[0], bottoms[2]]
+        elif valid == 2:
+            reply_bottoms = [bottoms[0], bottoms[1]]
+        else:
+            reply_bottoms = [bottoms[1], bottoms[2]]
+        await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
+        result = exec_sql_get_data(f"select * from statistic where userid='{user_id}'")
+        user_name, num = result[0][0], result[0][-1]
+        await update.message.reply_text(
+            f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(latest_time or '')}\n"
+            f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}\n选择关注类型", parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([reply_bottoms])
+        )
+        return STORE_DATA
+    else:
+        context.user_data["type"] = 'new'
+        await update.message.reply_text(
+            f"😀 新关注 输入用户名 或者 /cancel 取消操作"
+        )
+        return ASK_SAVE_USERNAME
+
+
+async def ask_save_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["username"] = update.message.text
+    await update.message.reply_text(
+        f"选择关注类型",
+        reply_markup=InlineKeyboardMarkup([bottoms[1:]])
+    )
+    return STORE_DATA
+
+
+async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
+    url = context.user_data["url"]
+    user_id = context.user_data["user_id"]
+    platform = context.user_data["platform"]
+    username = context.user_data["username"]
+    query = update.callback_query
+    await query.answer()
+    valid = cast(str, query.data)
+    if context.user_data["type"] == 'new':
+        add_user(user_id, username, platform, valid)
+        await query.edit_message_text(f"✅ 新增 {follow_types[str(valid)]} [{username}]({url}) 成功",
+                                      parse_mode=ParseMode.MARKDOWN_V2)
+    else:
+        update_user(valid, user_id)
+        if valid == '0':
+            await query.edit_message_text(f"✅ 取消关注 [{username}]({url}) 成功", parse_mode=ParseMode.MARKDOWN_V2)
+        else:
+            await query.edit_message_text(f"✅ 修改 [{username}]({url}) 为 {follow_types[str(valid)]} 成功",
+                                          parse_mode=ParseMode.MARKDOWN_V2)
     return ConversationHandler.END
-
-
-async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id == DEVELOPER_CHAT_ID:
-        result = exec_sql_get_data(f"select username from statistic order by num desc")
-        text = ''
-        for username in result:
-            username = clear_name(username)
-            text += f'\#{username}   '
-        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
-
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(update.effective_user.language_code, update.message.chat_id, update.message.id, update.message.date,
-          update.message.text)
-    await update.message.reply_text(update.message.text)
 
 
 def main() -> None:
@@ -281,7 +347,6 @@ def main() -> None:
     builder.persistence(persistence)
     builder.arbitrary_callback_data(True)
     application = builder.build()
-
     manage_follow_handler = ConversationHandler(
         entry_points=[CommandHandler("manage", start_manage)],
         states={
@@ -296,31 +361,30 @@ def main() -> None:
             ],
             MANAGING_USER: [
                 CommandHandler("manage", start_manage),
-                CallbackQueryHandler(handle_delete, pattern=r"^delete\|"),
+                CallbackQueryHandler(update_user_valid, pattern=r"^[delete|upgrade|downgrade]\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     add_handler = ConversationHandler(
-        entry_points=[CommandHandler('add', add_follow)],
+        entry_points=[MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url)],
         states={
-            ADDRESS: [
-                CommandHandler('add', add_follow),
-                MessageHandler(filters.Text(), get_address)
+            ASK_SAVE_USERNAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_save_username)
             ],
-            NAME: [
-                CommandHandler('add', add_follow),
-                MessageHandler(filters.Text(), get_name)
-            ],
+            STORE_DATA: [
+                CallbackQueryHandler(store_data, pattern=r"[0|1|2]")
+            ]
         },
-        fallbacks=[CommandHandler('cancel', cancel)],
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
     application.add_handler(add_handler)
     application.add_handler(CommandHandler("lm", ls_media))
     application.add_handler(CommandHandler("myfollow", list_my_follow))
     application.add_handler(manage_follow_handler)
     application.add_handler(MessageHandler(filters.Text(), echo))
+
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

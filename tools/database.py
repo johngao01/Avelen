@@ -154,12 +154,12 @@ def update_db(user_id, username, latest_time):
     conn.close()
 
 
-def add_user(user_id, username, platform):
+def add_user(user_id, username, platform, valid=2):
     conn = get_db_conn()
     cursor = conn.cursor()
     try:
-        cursor.execute('insert into user (userid, username, platform) values (%s, %s, %s) ',
-                       (user_id, username, platform))
+        cursor.execute('insert into user (userid, username, platform, valid) values (%s, %s, %s, %s) ',
+                       (user_id, username, platform, valid))
         conn.commit()
         return True
     except Exception as e:
@@ -170,11 +170,11 @@ def add_user(user_id, username, platform):
         conn.close()
 
 
-def remove_user(user_id, ):
+def update_user(valid, user_id):
     conn = get_db_conn()
     cursor = conn.cursor()
     try:
-        cursor.execute('update user set valid=0 where userid=%s', (user_id,))
+        cursor.execute('update user set valid=%s where userid=%s', (valid, user_id,))
         conn.commit()
         return True
     except Exception as e:
