@@ -28,15 +28,16 @@ ASK_SAVE_USERNAME, ASK_OPERATION, STORE_DATA = range(3)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
 follow_types = {
-    '0': '删除',
-    '1': '特别关注',
-    '2': '普通关注'
+    '0': '❌ 取消追踪',
+    '1': '⭐️ 特别关注',
+    '2': '👤 普通关注'
 }
+PAGE_SIZE = 50
 
 bottoms = [
-    InlineKeyboardButton(f"删除", callback_data="0"),
-    InlineKeyboardButton(f"特别关注", callback_data="1"),
-    InlineKeyboardButton(f"普通关注", callback_data="2")
+    InlineKeyboardButton(f"❌ 取消追踪", callback_data="0"),
+    InlineKeyboardButton(f"⭐️ 特别关注", callback_data="1"),
+    InlineKeyboardButton(f"👤 普通关注", callback_data="2")
 ]
 
 
@@ -61,7 +62,7 @@ async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     row = []
     for platform in ['douyin', 'weibo', 'instagram']:
-        btn = InlineKeyboardButton(f"{platform}", callback_data=f"platform|{platform}")
+        btn = InlineKeyboardButton(f"{platform}", callback_data=f"platform|{platform}|1")
         row.append(btn)
     keyboard.append(row)
     markup = InlineKeyboardMarkup(keyboard)
@@ -76,16 +77,19 @@ async def handle_platform_selected(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     await query.answer()
 
-    _, platform = query.data.split("|", 1)
+    _, platform, page = query.data.split("|", 2)
+    page = int(page)
     context.user_data['platform'] = platform
     await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
     result = exec_sql_get_data(
-        f"select userid, username, latest_time, platform, valid from user where platform='{platform}' and valid>0")
+        f"select userid, username, latest_time, platform, valid from user where platform='{platform}'")
     result = list(sorted(result, key=lambda x: x[2], reverse=True))
     num = len(result)
+    total_pages = num // PAGE_SIZE + 1
     keyboard = []
     row = []
-    for user in result:
+    start, end = (page - 1) * PAGE_SIZE, page * PAGE_SIZE
+    for user in result[start:end]:
         user_id, username, latest_time, platform, valid = user
         follows[user_id] = {
             'username': username,
@@ -100,10 +104,24 @@ async def handle_platform_selected(update: Update, context: ContextTypes.DEFAULT
             row = []
     keyboard.append(row)
     keyboard.append([InlineKeyboardButton(f"返回选择平台", callback_data=f"back|myfollow")])
+    if num > PAGE_SIZE:
+        if page == 1:
+            keyboard.append([InlineKeyboardButton(f"下一页", callback_data=f"platform|{platform}|{page + 1}"),
+                             InlineKeyboardButton(f"最后一页", callback_data=f"platform|{platform}|{total_pages}")])
+        elif page == total_pages:
+            keyboard.append([InlineKeyboardButton(f"第一页", callback_data=f"platform|{platform}|{1}"),
+                             InlineKeyboardButton(f"上一页", callback_data=f"platform|{platform}|{total_pages - 1}")])
+        elif page + 1 == total_pages:
+            keyboard.append([InlineKeyboardButton(f"上一页", callback_data=f"platform|{platform}|{page - 1}"),
+                             InlineKeyboardButton(f"最后一页", callback_data=f"platform|{platform}|{total_pages}")])
+        else:
+            keyboard.append([InlineKeyboardButton(f"上一页", callback_data=f"platform|{platform}|{page - 1}"),
+                             InlineKeyboardButton(f"下一页", callback_data=f"platform|{platform}|{page + 1}"),
+                             InlineKeyboardButton(f"最后一页", callback_data=f"platform|{platform}|{total_pages}")])
     markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(f"有{num}个用户，选择管理一个用户:", reply_markup=markup)
-
+    await query.edit_message_text(
+        f"有{num}个用户，当前显示第{start + 1}个到第{min(end, num)}个。点击管理一个用户:",
+        reply_markup=markup)
     return SELECTING_USER
 
 
@@ -290,7 +308,8 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_name, num = result[0][0], result[0][-1]
         await update.message.reply_text(
             f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(latest_time or '')}\n"
-            f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}\n选择关注类型 或者 /cancel ", parse_mode="HTML",
+            f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}\n修改关注类型 或者 /cancel ",
+            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([reply_bottoms])
         )
         return STORE_DATA
@@ -357,6 +376,7 @@ def main() -> None:
             ],
             SELECTING_USER: [
                 CommandHandler("manage", start_manage),
+                CallbackQueryHandler(handle_platform_selected, pattern=r"^platform\|"),
                 CallbackQueryHandler(handle_user_selected, pattern=r"^user\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
