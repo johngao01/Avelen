@@ -76,10 +76,9 @@ def scrapy_latest(user: Following, scrapy_log):
         if info is None:
             continue
         if info['ok'] == -100:
-            if 'api/geetest' in info.get('url',''):
-                scrapy_log.info(f'需要验证, '+ info['url'])
+            if 'api/geetest' in info.get('url', ''):
+                scrapy_log.info(f'需要验证, ' + info['url'])
                 sleep(180)
-                sys.exit(-1)
         mblogs = []
         page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
         if info['ok'] == 1:
