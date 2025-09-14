@@ -290,7 +290,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_name, num = result[0][0], result[0][-1]
         await update.message.reply_text(
             f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(latest_time or '')}\n"
-            f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}\n选择关注类型", parse_mode="HTML",
+            f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}\n选择关注类型 或者 /cancel ", parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([reply_bottoms])
         )
         return STORE_DATA
@@ -372,9 +372,11 @@ def main() -> None:
         entry_points=[MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url)],
         states={
             ASK_SAVE_USERNAME: [
+                MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ask_save_username)
             ],
             STORE_DATA: [
+                MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url),
                 CallbackQueryHandler(store_data, pattern=r"[0|1|2]")
             ]
         },
