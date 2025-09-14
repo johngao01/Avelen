@@ -189,6 +189,8 @@ async def edit_commands(application):
                BotCommand("add", "添加爬取关注"),
                BotCommand("cancel", "取消操作")]
     await application.bot.set_my_commands(commands=command)
+    await application.bot.send_message(DEVELOPER_CHAT_ID,
+                                       text="bot start...")
     print("bot start ------------------->")
 
 
