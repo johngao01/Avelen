@@ -264,7 +264,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     matches = re.compile(r"(https?://[^\s]+)").findall(update.message.text.strip())
 
     url = matches[0]
-    if 'v.doyin.com' in url:
+    if 'v.douyin.com' in url:
         url = extract_url(url)
         print(url)
         if not url:
