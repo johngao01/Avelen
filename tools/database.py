@@ -71,11 +71,11 @@ def get_all_following(platform, valid=1):
     return data
 
 
-def exec_sql_get_data(sql):
+def exec_sql_get_data(sql, data=None):
     conn = get_db_conn()
     cursor = conn.cursor()
     try:
-        cursor.execute(sql)
+        cursor.execute(sql, data)
     except Exception as e:
         print(e)
         conn.rollback()

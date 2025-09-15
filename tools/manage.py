@@ -32,7 +32,7 @@ follow_types = {
     '1': '⭐️ 特别关注',
     '2': '👤 普通关注'
 }
-PAGE_SIZE = 50
+PAGE_SIZE = 30
 
 bottoms = [
     InlineKeyboardButton(f"❌ 取消追踪", callback_data="0"),
@@ -62,7 +62,7 @@ async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     row = []
     for platform in ['douyin', 'weibo', 'instagram']:
-        btn = InlineKeyboardButton(f"{platform}", callback_data=f"platform|{platform}|1")
+        btn = InlineKeyboardButton(f"{platform}", callback_data=f"s|{platform}|1")
         row.append(btn)
     keyboard.append(row)
     markup = InlineKeyboardMarkup(keyboard)
@@ -73,18 +73,35 @@ async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
     return SELECTING_PLATFORM
 
 
-async def handle_platform_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
-
-    _, platform, page = query.data.split("|", 2)
-    page = int(page)
-    context.user_data['platform'] = platform
-    await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
-    result = exec_sql_get_data(
-        f"select userid, username, latest_time, platform, valid from user where platform='{platform}'")
+    if query:
+        await query.answer()
+        _, search_text, page = query.data.split("|", 2)
+        page = int(page)
+        context.user_data['search_text'] = search_text
+        await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
+    else:
+        if update.effective_chat.id != DEVELOPER_CHAT_ID:
+            await echo(update, context)
+            return ConversationHandler.END
+        search_text = update.message.text
+        page = 1
+    print(search_text)
+    sql = """
+          SELECT userid, username, latest_time, platform, valid
+          FROM user
+          WHERE userid LIKE %s
+             OR username LIKE %s
+             OR platform = %s
+             OR CAST(valid AS CHAR) = %s \
+          """
+    result = exec_sql_get_data(sql, (f"%{search_text}%", f"%{search_text}%", search_text, search_text,))
     result = list(sorted(result, key=lambda x: x[2], reverse=True))
     num = len(result)
+    if num == 0:
+        await update.message.reply_text(f"无结果")
+        return ConversationHandler.END
     total_pages = num // PAGE_SIZE + 1
     keyboard = []
     row = []
@@ -97,7 +114,7 @@ async def handle_platform_selected(update: Update, context: ContextTypes.DEFAULT
             'platform': platform,
             'valid': valid
         }
-        btn = InlineKeyboardButton(f"{username}", callback_data=f"user|{user_id}")
+        btn = InlineKeyboardButton(f"{username}", callback_data=f"user|{search_text}|{user_id}")
         row.append(btn)
         if len(row) == 3:
             keyboard.append(row)
@@ -106,22 +123,26 @@ async def handle_platform_selected(update: Update, context: ContextTypes.DEFAULT
     keyboard.append([InlineKeyboardButton(f"返回选择平台", callback_data=f"back|myfollow")])
     if num > PAGE_SIZE:
         if page == 1:
-            keyboard.append([InlineKeyboardButton(f"下一页", callback_data=f"platform|{platform}|{page + 1}"),
-                             InlineKeyboardButton(f"最后一页", callback_data=f"platform|{platform}|{total_pages}")])
+            keyboard.append([InlineKeyboardButton(f"下一页", callback_data=f"s|{search_text}|{page + 1}"),
+                             InlineKeyboardButton(f"最后一页", callback_data=f"s|{search_text}|{total_pages}")])
         elif page == total_pages:
-            keyboard.append([InlineKeyboardButton(f"第一页", callback_data=f"platform|{platform}|{1}"),
-                             InlineKeyboardButton(f"上一页", callback_data=f"platform|{platform}|{total_pages - 1}")])
+            keyboard.append([InlineKeyboardButton(f"第一页", callback_data=f"s|{search_text}|{1}"),
+                             InlineKeyboardButton(f"上一页", callback_data=f"s|{search_text}|{total_pages - 1}")])
         elif page + 1 == total_pages:
-            keyboard.append([InlineKeyboardButton(f"上一页", callback_data=f"platform|{platform}|{page - 1}"),
-                             InlineKeyboardButton(f"最后一页", callback_data=f"platform|{platform}|{total_pages}")])
+            keyboard.append([InlineKeyboardButton(f"上一页", callback_data=f"s|{search_text}|{page - 1}"),
+                             InlineKeyboardButton(f"最后一页", callback_data=f"s|{search_text}|{total_pages}")])
         else:
-            keyboard.append([InlineKeyboardButton(f"上一页", callback_data=f"platform|{platform}|{page - 1}"),
-                             InlineKeyboardButton(f"下一页", callback_data=f"platform|{platform}|{page + 1}"),
-                             InlineKeyboardButton(f"最后一页", callback_data=f"platform|{platform}|{total_pages}")])
+            keyboard.append([InlineKeyboardButton(f"上一页", callback_data=f"s|{search_text}|{page - 1}"),
+                             InlineKeyboardButton(f"下一页", callback_data=f"s|{search_text}|{page + 1}"),
+                             InlineKeyboardButton(f"最后一页", callback_data=f"s|{search_text}|{total_pages}")])
     markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        f"有{num}个用户，当前显示第{start + 1}个到第{min(end, num)}个。点击管理一个用户:",
-        reply_markup=markup)
+    if query:
+        await query.edit_message_text(
+            f"有{num}个用户，当前显示第{start + 1}个到第{min(end, num)}个。点击管理一个用户:",
+            reply_markup=markup)
+    else:
+        await update.message.reply_text(f"有{num}个用户，当前显示第{start + 1}个到第{min(end, num)}个。点击管理一个用户:",
+                                        reply_markup=markup)
     return SELECTING_USER
 
 
@@ -130,7 +151,7 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
 
     data = cast(str, query.data)
-    _, user_id = data.split("|", 1)
+    _, search_text, user_id = data.split("|", 2)
     user_name = follows[user_id]['username']
     context.user_data["selected_username"] = user_name
     platform = follows[user_id]['platform']
@@ -149,7 +170,7 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
         [keyboard_button],
         [InlineKeyboardButton("❌ 取消关注", callback_data=f"delete|{user_id}")],
         [update_button],
-        [InlineKeyboardButton("⬅️ 返回用户列表", callback_data=f"back|{platform}")]
+        [InlineKeyboardButton("⬅️ 返回用户列表", callback_data=f"back|{search_text}|1")]
     ]
 
     markup = InlineKeyboardMarkup(keyboard)
@@ -157,7 +178,7 @@ async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYP
     result = exec_sql_get_data(f"select num from statistic where userid='{user_id}'")
     num = result[0]
     await query.edit_message_text(
-        f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(follows[user_id]['latest_time'])}\n"
+        f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>最新作品</b>：{str(follows[user_id]['latest_time'])}\n"
         f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(follows[user_id]['valid'])]}",
         reply_markup=markup, parse_mode=ParseMode.HTML)
     return MANAGING_USER
@@ -189,7 +210,7 @@ async def handle_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == 'back|myfollow':
         return await start_manage(update, context)
     else:
-        return await handle_platform_selected(update, context)
+        return await query_data(update, context)
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -372,20 +393,24 @@ def main() -> None:
     builder.arbitrary_callback_data(True)
     application = builder.build()
     manage_follow_handler = ConversationHandler(
-        entry_points=[CommandHandler("manage", start_manage)],
+        entry_points=[CommandHandler("manage", start_manage),
+                      MessageHandler(filters.Text() & ~filters.COMMAND, query_data)],
         states={
             SELECTING_PLATFORM: [
                 CommandHandler("manage", start_manage),
-                CallbackQueryHandler(handle_platform_selected, pattern=r"^platform\|")
+                MessageHandler(filters.Text() & ~filters.COMMAND, query_data),
+                CallbackQueryHandler(query_data, pattern=r"^s\|")
             ],
             SELECTING_USER: [
                 CommandHandler("manage", start_manage),
-                CallbackQueryHandler(handle_platform_selected, pattern=r"^platform\|"),
+                MessageHandler(filters.Text() & ~filters.COMMAND, query_data),
+                CallbackQueryHandler(query_data, pattern=r"^s\|"),
                 CallbackQueryHandler(handle_user_selected, pattern=r"^user\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
             MANAGING_USER: [
                 CommandHandler("manage", start_manage),
+                MessageHandler(filters.Text() & ~filters.COMMAND, query_data),
                 CallbackQueryHandler(update_user_valid, pattern=r"^[delete|upgrade|downgrade]\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
