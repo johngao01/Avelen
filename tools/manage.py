@@ -34,12 +34,6 @@ follow_types = {
 }
 PAGE_SIZE = 30
 
-bottoms = [
-    InlineKeyboardButton(f"❌ 取消追踪", callback_data="0"),
-    InlineKeyboardButton(f"⭐️ 特别关注", callback_data="1"),
-    InlineKeyboardButton(f"👤 普通关注", callback_data="2")
-]
-
 
 def clear_name(text):
     # 去除中英文小括号及其内容
@@ -56,6 +50,9 @@ def clear_name(text):
 
 
 async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    当输入 /manage 命令时会进入这个函数，返回3个平台的按钮，点击后进入query_datac查找数据
+    """
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
@@ -73,20 +70,55 @@ async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
     return SELECTING_PLATFORM
 
 
+async def query_user_info(user_id):
+    exist = exec_sql_get_data(f"select * from user where userid='{user_id}'")
+    if exist:
+        user_id, username, latest_time, platform, scrapy_time, valid = exist[0]
+        if platform == 'douyin':
+            keyboard_button = InlineKeyboardButton("📎 在抖音上查看", url=f"https://www.douyin.com/user/{user_id}")
+        elif platform == 'weibo':
+            keyboard_button = InlineKeyboardButton("📎 在微博上查看", url=f"https://weibo.com/u/{user_id}")
+        else:
+            keyboard_button = InlineKeyboardButton("📎 在Instagram上查看",
+                                                   url=f"https://www.instagram.com/{follows[user_id]['username']}/")
+
+        keyboard = [[keyboard_button]]
+        button1 = InlineKeyboardButton("👤 普通关注", callback_data=f"downgrade|{user_id}")
+        button2 = InlineKeyboardButton("⭐️ 特别关注", callback_data=f"upgrade|{user_id}")
+        button3 = InlineKeyboardButton("❌ 取消关注", callback_data=f"delete|{user_id}")
+        if valid == 0:
+            keyboard.extend([[button1], [button2]])
+        elif valid == 1:
+            keyboard.extend([[button3], [button1]])
+        else:
+            keyboard.extend([[button3], [button2]])
+        result = exec_sql_get_data(f"select * from statistic where userid='{user_id}'")
+        user_name, num = result[0][0], result[0][-1]
+        info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}"
+        return exist[0], info, keyboard
+    return None
+
+
 async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    输入任意字符进入此函数，也可以通过 callback_query 进入（为：^s\|）。通过关键字查找所有的用户并分页展示出来
+    """
     query = update.callback_query
     if query:
+        # 通过 callback_query , 数据形如 s/{search_text}/{page}
         await query.answer()
         _, search_text, page = query.data.split("|", 2)
         page = int(page)
         context.user_data['search_text'] = search_text
         await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
     else:
+        # 通过输入任意字符串进入，然后使用字符串查找数据
         if update.effective_chat.id != DEVELOPER_CHAT_ID:
             await echo(update, context)
             return ConversationHandler.END
         search_text = update.message.text
         page = 1
+    context.user_data['page'] = page
     if search_text.isdigit():
         sql = """SELECT userid, username, latest_time, platform, valid
                  FROM user
@@ -128,7 +160,7 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append(row)
             row = []
     keyboard.append(row)
-    keyboard.append([InlineKeyboardButton(f"返回选择平台", callback_data=f"back|myfollow")])
+    keyboard.append([InlineKeyboardButton(f"返回选择平台", callback_data=f"back|platform")])
     if num > PAGE_SIZE:
         if page == 1:
             keyboard.append([InlineKeyboardButton(f"下一页", callback_data=f"s|{search_text}|{page + 1}"),
@@ -155,40 +187,18 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_user_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    处理 query_data 中选择的数据，展示当前用户的详细数据
+    """
     query = update.callback_query
     await query.answer()
-
     data = cast(str, query.data)
     _, search_text, user_id = data.split("|", 2)
-    user_name = follows[user_id]['username']
-    context.user_data["selected_username"] = user_name
-    platform = follows[user_id]['platform']
-    if platform == 'douyin':
-        keyboard_button = InlineKeyboardButton("📎 在抖音上查看", url=f"https://www.douyin.com/user/{user_id}")
-    elif platform == 'weibo':
-        keyboard_button = InlineKeyboardButton("📎 在微博上查看", url=f"https://weibo.com/u/{user_id}")
-    else:
-        keyboard_button = InlineKeyboardButton("📎 在Instagram上查看",
-                                               url=f"https://www.instagram.com/{follows[user_id]['username']}/")
-    if follows[user_id]['valid'] == 1:
-        update_button = InlineKeyboardButton("👤 普通关注", callback_data=f"downgrade|{user_id}")
-    else:
-        update_button = InlineKeyboardButton("⭐️ 特别关注", callback_data=f"upgrade|{user_id}")
-    keyboard = [
-        [keyboard_button],
-        [InlineKeyboardButton("❌ 取消关注", callback_data=f"delete|{user_id}")],
-        [update_button],
-        [InlineKeyboardButton("⬅️ 返回用户列表", callback_data=f"back|{search_text}|1")]
-    ]
-
-    markup = InlineKeyboardMarkup(keyboard)
+    page = context.user_data.get('page', 1)
     await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
-    result = exec_sql_get_data(f"select num from statistic where userid='{user_id}'")
-    num = result[0]
-    await query.edit_message_text(
-        f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>最新作品</b>：{str(follows[user_id]['latest_time'])}\n"
-        f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(follows[user_id]['valid'])]}",
-        reply_markup=markup, parse_mode=ParseMode.HTML)
+    data = await query_user_info(user_id)
+    data[2].append([InlineKeyboardButton("⬅️ 返回用户列表", callback_data=f"back|{search_text}|{page}")])
+    await query.edit_message_text(data[1], reply_markup=InlineKeyboardMarkup(data[2]), parse_mode=ParseMode.HTML)
     return MANAGING_USER
 
 
@@ -197,8 +207,6 @@ async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = cast(str, query.data)
     _, user_id = data.split("|", 1)
-    username = context.user_data.get("selected_username")
-    print(user_id, username, _)
     if _ == 'upgrade':
         valid = 1
     elif _ == 'downgrade':
@@ -206,7 +214,9 @@ async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         valid = 0
     update_user(valid, user_id)
-    await query.edit_message_text(f"✅ Unfollowed #{username}")
+    data = await query_user_info(user_id)
+    await query.edit_message_text(f"修改成功\n" + data[1], reply_markup=InlineKeyboardMarkup(data[2]),
+                                  parse_mode=ParseMode.HTML)
     return ConversationHandler.END
 
 
@@ -215,7 +225,7 @@ async def handle_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = cast(str, query.data)
-    if data == 'back|myfollow':
+    if data == 'back|platform':
         return await start_manage(update, context)
     else:
         return await query_data(update, context)
@@ -324,27 +334,12 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["user_id"] = user_id
     context.user_data["platform"] = platform
-    exist = exec_sql_get_data(f"select * from user where userid='{user_id}'")
-
-    if exist:
+    await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
+    data = await query_user_info(user_id)
+    if data:
         context.user_data["type"] = 'old'
-        user_id, username, latest_time, platform, scrapy_time, valid = exist[0]
-        if valid == 1:
-            reply_bottoms = [bottoms[0], bottoms[2]]
-        elif valid == 2:
-            reply_bottoms = [bottoms[0], bottoms[1]]
-        else:
-            reply_bottoms = [bottoms[1], bottoms[2]]
-        context.user_data['username'] = username
-        await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
-        result = exec_sql_get_data(f"select * from statistic where userid='{user_id}'")
-        user_name, num = result[0][0], result[0][-1]
-        await update.message.reply_text(
-            f"<b>#{user_name}</b>\n<b>最新作品</b>：{str(latest_time or '')}\n"
-            f"<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}\n修改关注类型 或者 /cancel ",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([reply_bottoms])
-        )
+        context.user_data['username'] = data[0][1]
+        await update.message.reply_text(data[1], parse_mode="HTML", reply_markup=InlineKeyboardMarkup(data[2]))
         return STORE_DATA
     else:
         context.user_data["type"] = 'new'
@@ -358,7 +353,8 @@ async def ask_save_username(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data["username"] = update.message.text
     await update.message.reply_text(
         f"选择关注类型",
-        reply_markup=InlineKeyboardMarkup([bottoms[1:]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"⭐️ 特别关注", callback_data="1")],
+                                           [InlineKeyboardButton(f"👤 普通关注", callback_data="2")]])
     )
     return STORE_DATA
 
@@ -376,13 +372,6 @@ async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         add_user(user_id, username, platform, valid)
         await query.edit_message_text(f"✅ 新增 {follow_types[str(valid)]} [{username}]({url}) 成功",
                                       parse_mode=ParseMode.MARKDOWN_V2)
-    else:
-        update_user(valid, user_id)
-        if valid == '0':
-            await query.edit_message_text(f"✅ 取消关注 [{username}]({url}) 成功", parse_mode=ParseMode.MARKDOWN_V2)
-        else:
-            await query.edit_message_text(f"✅ 修改 [{username}]({url}) 为 {follow_types[str(valid)]} 成功",
-                                          parse_mode=ParseMode.MARKDOWN_V2)
     return ConversationHandler.END
 
 
@@ -434,7 +423,8 @@ def main() -> None:
             ],
             STORE_DATA: [
                 MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url),
-                CallbackQueryHandler(store_data, pattern=r"[0|1|2]")
+                CallbackQueryHandler(store_data, pattern=r"[0|1|2]"),
+                CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade)\|")
             ]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
