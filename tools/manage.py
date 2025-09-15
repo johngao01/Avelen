@@ -272,7 +272,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
         url = expand_url(url)
         print(url)
-    context.user_data["url"] = url
+    context.user_data["url"] = url.split('?')[0]
     parsed_url = urlparse(url)
     if 'douyin.com' in parsed_url.hostname:
         platform = 'douyin'
