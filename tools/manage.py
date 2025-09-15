@@ -111,13 +111,19 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start, end = (page - 1) * PAGE_SIZE, page * PAGE_SIZE
     for user in result[start:end]:
         user_id, username, latest_time, platform, valid = user
+        if valid == 0:
+            username_remark = '❌ ' + username
+        elif valid == 1:
+            username_remark = '⭐️ ' + username
+        else:
+            username_remark = '👤 ' + username
         follows[user_id] = {
             'username': username,
             'latest_time': latest_time,
             'platform': platform,
             'valid': valid
         }
-        btn = InlineKeyboardButton(f"{username}", callback_data=f"user|{search_text}|{user_id}")
+        btn = InlineKeyboardButton(f"{username_remark}", callback_data=f"user|{search_text}|{user_id}")
         row.append(btn)
         if len(row) == 3:
             keyboard.append(row)
