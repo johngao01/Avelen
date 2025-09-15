@@ -261,8 +261,11 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         match = re.search(r'(https?://[^\s]+)', text)
         return match.group(0) if match else None
 
-    matches = re.compile(r"(https?://[^\s]+)").findall(update.message.text.strip())
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await update.message.reply_text("你没有权限使用此命令")
+        return ConversationHandler.END
 
+    matches = re.compile(r"(https?://[^\s]+)").findall(update.message.text.strip())
     url = matches[0]
     if 'v.douyin.com' in url:
         url = extract_url(url)
