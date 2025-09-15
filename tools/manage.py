@@ -87,7 +87,6 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
         search_text = update.message.text
         page = 1
-    print(search_text)
     if search_text.isdigit():
         sql = """SELECT userid, username, latest_time, platform, valid
                  FROM user
@@ -420,7 +419,7 @@ def main() -> None:
             MANAGING_USER: [
                 CommandHandler("manage", start_manage),
                 MessageHandler(filters.Text() & ~filters.COMMAND, query_data),
-                CallbackQueryHandler(update_user_valid, pattern=r"^[delete|upgrade|downgrade]\|"),
+                CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade)\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
         },
