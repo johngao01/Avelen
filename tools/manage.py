@@ -303,6 +303,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_bottoms = [bottoms[0], bottoms[1]]
         else:
             reply_bottoms = [bottoms[1], bottoms[2]]
+        context.user_data['username'] = username
         await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
         result = exec_sql_get_data(f"select * from statistic where userid='{user_id}'")
         user_name, num = result[0][0], result[0][-1]
