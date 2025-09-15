@@ -88,15 +88,18 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         search_text = update.message.text
         page = 1
     print(search_text)
-    sql = """
-          SELECT userid, username, latest_time, platform, valid
-          FROM user
-          WHERE userid LIKE %s
-             OR username LIKE %s
-             OR platform = %s
-             OR CAST(valid AS CHAR) = %s \
-          """
-    result = exec_sql_get_data(sql, (f"%{search_text}%", f"%{search_text}%", search_text, search_text,))
+    if search_text.isdigit():
+        sql = """SELECT userid, username, latest_time, platform, valid
+                 FROM user
+                 WHERE valid = %s"""
+        result = exec_sql_get_data(sql, (int(search_text),))
+    else:
+        sql = """SELECT userid, username, latest_time, platform, valid
+                 FROM user
+                 WHERE userid LIKE %s
+                    OR username LIKE %s
+                    OR platform = %s"""
+        result = exec_sql_get_data(sql, (f"%{search_text}%", f"%{search_text}%", search_text,))
     result = list(sorted(result, key=lambda x: x[2], reverse=True))
     num = len(result)
     if num == 0:
