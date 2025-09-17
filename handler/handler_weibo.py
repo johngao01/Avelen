@@ -278,9 +278,12 @@ def get_weibo_data(weibo_link):
         return False
     if 'message' in data and (data['message'] == '暂无查看权限' or data['message'] == '该微博不存在'):
         weibo_logger.error(data['message'] + "\t" + weibo_link)
-        return False
+        return True
     elif 'message' in data and (data['message'] == '访问频次过高，请稍后再试'):
         time.sleep(90)
+    elif data.get('message') == "该内容请至手机客户端查看":
+        print(data['message'])
+        return True
     data['weibo_url'] = weibo_link
     return data
 
@@ -352,6 +355,8 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
         weibo_data = get_weibo_data(weibo_url)
         if weibo_data is False:
             return
+        if weibo_data is True:
+            return 'skip'
         weibo_info, post_data = parse_weibo_data(weibo_data, username)
     weibo_dict = weibo_info['data']
     info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
