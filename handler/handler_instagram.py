@@ -1,13 +1,44 @@
-import re
-import sys
 from os.path import splitext, basename, getsize
 from urllib.parse import urlparse
 from tools.utils import *
 import sys
 from loguru import logger
+import re
 
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+)
+logger.add(
+    f"../logs/scrapy_instagram.log",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
+    encoding="utf-8",
+    filter=lambda record: record["extra"].get("name") == "scrapy_instagram"
+)
+instagram_logger = logger.bind(name="scrapy_instagram")
 with open('../cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
     cookies = f.read()
+
+
+def parse_cookie_header(header):
+    pattern = re.compile(r'(?:^|;\s*)([^=;\s]+)=(?:"([^"]*)"|([^;]*))')
+    res = {}
+    for m in pattern.finditer(header):
+        key = m.group(1)
+        val = m.group(2) if m.group(2) is not None else (m.group(3) or '')
+        # 处理 \ooo 八进制转义
+        val = re.sub(r'\\([0-7]{3})', lambda mo: chr(int(mo.group(1), 8)), val)
+        val = val.replace('\\"', '"').replace('\\\\', '\\')
+        res[key] = val
+    return res
+
+
+parsed = parse_cookie_header(cookies)
+csrftoken = parsed.get('csrftoken', '')
+logger.info(f"csrftoken: {csrftoken}")
 instagram_headers = {
     'accept': '*/*',
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5',
@@ -30,7 +61,7 @@ instagram_headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
     'x-asbd-id': '359341',
     'x-bloks-version-id': 'f4e32caf235c4c3198ceb3d7599c397741599ea3447ec2f785d4575aeb99766b',
-    'x-csrftoken': 'MzVviRiQxCoVvnKFyuvrxSqk5vDLi26G',
+    'x-csrftoken': csrftoken,
     'x-fb-friendly-name': 'PolarisProfilePostsQuery',
     'x-fb-lsd': 'FASx-b1QHr26PyPKzuK9UW',
     'x-ig-app-id': '936619743392459',
@@ -65,20 +96,7 @@ data = {
     'server_timestamps': 'true',
     'doc_id': '9830436980396988',
 }
-logger.remove()
-logger.add(
-    sys.stderr,
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
-)
-logger.add(
-    f"../logs/scrapy_instagram.log",
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
-    encoding="utf-8",
-    filter=lambda record: record["extra"].get("name") == "scrapy_instagram"
-)
-instagram_logger = logger.bind(name="scrapy_instagram")
+
 graphql_url = 'https://www.instagram.com/graphql/query'
 if 'instagram_scrapy.py' in sys.argv[0]:
     r = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)
