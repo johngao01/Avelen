@@ -67,7 +67,7 @@ def scrapy_latest(user: Following, scrapy_log):
         f'开始获取 {user.username} 截至 {str(user.latest_time)} 微博，她的主页是 https://www.weibo.com/u/{user.userid}')
     page = 1
     weibo_list = []
-    keep = 5
+    keep = 3
     since_id = ''
     while keep:
         page_add = 0
@@ -78,7 +78,12 @@ def scrapy_latest(user: Following, scrapy_log):
         if info['ok'] == -100:
             if 'api/geetest' in info.get('url', ''):
                 scrapy_log.info(f'需要验证, ' + info['url'])
-                sleep(180)
+            elif 'pass' in info.get('url', ''):
+                scrapy_log.info(f'需要登录, ' + info['url'])
+            keep -= 1
+            if keep == 0:
+                sys.exit(-1)
+            sleep(600)
         mblogs = []
         page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
         if info['ok'] == 1:
