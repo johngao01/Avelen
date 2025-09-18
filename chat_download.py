@@ -14,19 +14,16 @@ from FastTelethonhelper import fast_download, human_readable_size  # 异步函�
 # ========== 配置区 ==========
 api_id = 22203014
 api_hash = '6b373c6531660f41b039d5d85d703f4f'
-download_root_dir = '/root/download'
+download_root_dir = r'H:\medias'
 # ============================
 with open("data.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 media_group_dict = {}
 download_count = 0
-BIG_FILE = 10 * 1024 * 1024 * 1024 
+BIG_FILE = 10 * 1024 * 1024 * 1024
 
 
-
-
-
-async def download(client: TelegramClient, message, media_group, chat_id):
+async def download(client: TelegramClient, message, media_group, chat_id, download_logger):
     """
     异步下载单条消息的 media。
     使用 fast_download 处理大文件（视频等），小图片直接用 client.download_media。
@@ -53,20 +50,21 @@ async def download(client: TelegramClient, message, media_group, chat_id):
     try:
         # 若已存在且大小 >0 则跳过下载
         if os.path.exists(filepath) and os.path.getsize(filepath) == file_size:
-            pass
+            download_count += 1
+            return
         else:
             try:
                 if file_size > BIG_FILE:
                     r = await message.reply("Downloading..")
                     # 大文件使用 fast_download（它是异步的）
-                    await fast_downrload(client, message, r, filepath)
+                    await fast_download(client, message, r, filepath)
                 else:
                     # 小文件用内置的下载方法（可靠）
                     await client.download_media(message, file=filepath)
             except Exception as e:
-                download_logger.error(f"下载异常 message_id={getattr(message,'id',None)} error={e}")
+                download_logger.error(f"下载异常 message_id={getattr(message, 'id', None)} error={e}")
     except Exception as e:
-        download_logger.error(f"处理文件时发生错误 message_id={getattr(message,'id',None)} error={e}")
+        download_logger.error(f"处理文件时发生错误 message_id={getattr(message, 'id', None)} error={e}")
 
     # 统计并打印结果
     download_count += 1
@@ -93,7 +91,7 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
     chat = f'https://t.me/{chat_id}'
     entity = await client.get_entity(chat)
 
-    async for message in client.iter_messages(entity, reverse=True, min_id=min_id_start-1):
+    async for message in client.iter_messages(entity, reverse=True, min_id=min_id_start - 1):
         just_download = ''
         try:
             if not getattr(message, "media", None):
@@ -115,12 +113,11 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
                 }
                 download_logger.info(f"{message.id}\t{message.date.strftime('%Y-%m-%d %H:%M:%S')}\t{message.text}")
                 data[chat_id]['min_id'] = message.id
-                if message.text not in data[chat_id]['download_history']:
-                    data[chat_id]['download_history'].append(message.text)
+                data[chat_id]['title'] = message.text
                 with open("data.json", "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=4)
 
-            await download(client, message, media_group, chat_id)
+            await download(client, message, media_group, chat_id, download_logger)
 
             # 如果有回复，也下载回复里的媒体
             if message.replies:
@@ -136,7 +133,7 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
                     hash=0
                 ))
                 for reply_msg in replies.messages:
-                    await download(client, reply_msg, media_group, chat_id)
+                    await download(client, reply_msg, media_group, chat_id, download_logger)
 
         except Exception as e:
             print("发生错误", getattr(message, "id", None), str(e))
@@ -151,9 +148,9 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
 
 async def main():
     # 使用异步客户端
-    async with TelegramClient('me', api_id, api_hash) as client:
-        
-        for k,v in data.items():
+    import socks
+    async with TelegramClient('me', api_id, api_hash, proxy=(socks.HTTP, '127.0.0.1', 10808, True)) as client:
+        for k, v in data.items():
             await get_chat_history(client, k, v['min_id'])
             # 保存 media_group_dict
             with open('data.pkl', 'wb') as f:
@@ -162,5 +159,4 @@ async def main():
 
 
 if __name__ == '__main__':
-
     asyncio.run(main())
