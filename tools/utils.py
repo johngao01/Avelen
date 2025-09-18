@@ -17,7 +17,7 @@ MAX_VIDEO_SIZE = 2000 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 2000 * 1024 * 1024
 ERROR_TOKEN = "5355419947:AAEHOGlkz7hlOO38XRRZ9vVhtAnVGjwbjKw"
 DEVELOPER_CHAT_ID = 708424141
-SCRAPY_FAVORITE_LIMIT = 60
+SCRAPY_FAVORITE_LIMIT = 100
 WEB_HOOK_URL = 'http://localhost:5000'
 count = 0  # 发送了消息数量
 times = 0  # 第几次发送
@@ -97,7 +97,7 @@ def request_webhook(method, post_data, logger):
 def rate_control(r, logger):
     global count, times, rate
     count = count + len(r.json()['messages'])
-    if count // 30 > times:
+    if count // rate > times:
         times += 1
         sleep_time = 60 * (1 + times / 10)
         logger.info(str(count) + f"  sleep {sleep_time} seconds")
