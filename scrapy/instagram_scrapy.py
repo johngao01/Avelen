@@ -3,12 +3,17 @@ import random
 from tools.database import *
 from handler.handler_instagram import *
 
+all_followings = get_all_following('instagram')
+following_dict = {}
+for follow in all_followings:
+    following_dict[follow[0]] = follow[1]
+
 
 def get_posts(username, after='', before='null', first=12, last='null'):
     variables = {"data": {"count": 12, "include_reel_media_seen_timestamp": True, "include_relationship_info": True,
-                 "latest_besties_reel_media": True, "latest_reel_media": True}, "username": username,
-        "__relay_internal__pv__PolarisIsLoggedInrelayprovider": True,
-        "__relay_internal__pv__PolarisShareSheetV3relayprovider": True}
+                          "latest_besties_reel_media": True, "latest_reel_media": True}, "username": username,
+                 "__relay_internal__pv__PolarisIsLoggedInrelayprovider": True,
+                 "__relay_internal__pv__PolarisShareSheetV3relayprovider": True}
     if after != '':
         variables.update({"after": after, "before": before, "first": first, "last": last})
     # instagram_headers 会影响爬取失败
@@ -59,10 +64,16 @@ def from_local_json():
     for star in os.listdir(root_dir):
         following_posts = []
         star_dir = os.path.join(root_dir, star)
+        nickname = star
+        for k, v in following_dict.items():
+            if k == star:
+                nickname = v
+                break
         for file in os.listdir(star_dir):
             path = os.path.join(star_dir, file)
             with open(path, mode='r', encoding='utf8') as json_read:
                 item = json.load(json_read)
+                item['nickname'] = nickname
             following_posts.append(Post(item))
         following_posts = sorted(following_posts, key=lambda x: x.create_time)
         yield following_posts
@@ -80,7 +91,6 @@ def random_select_once(elements):
 def start():
     if len(sys.argv) < 2:
         instagram_logger.info("开始爬取用户数据")
-        all_followings = get_all_following('instagram')
         for following in random_select_once(all_followings):
             following = Profile(*following)
             profile_posts = scrapy_profile_post(following)
@@ -98,10 +108,11 @@ if __name__ == '__main__':
             if not posts:
                 continue
             latest_post = max(posts, key=lambda x: x.create_time)
+            total = len(posts)
             for i, p in enumerate(posts, start=1):
                 if p.url in send_url:
                     continue
-                instagram_logger.info(' '.join([str(i), p.url, p.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+                instagram_logger.info(' '.join([str(i) + "/" + str(total), p.url, p.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                                                 p.text.replace('\n', ''), str(p.media_count)]))
                 result = handler_post(p)
                 if type(result) is requests.Response:
