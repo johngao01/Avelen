@@ -1,4 +1,3 @@
-import sys
 import traceback
 import urllib3
 from tools.database import *
@@ -67,9 +66,8 @@ def scrapy_latest(user: Following, scrapy_log):
         f'开始获取 {user.username} 截至 {str(user.latest_time)} 微博，她的主页是 https://www.weibo.com/u/{user.userid}')
     page = 1
     weibo_list = []
-    keep = 3
     since_id = ''
-    while keep:
+    while True:
         page_add = 0
         # 此方法获取的信息不能下载v+内容，但不需要cookie
         info = one_page_latest(user_id=user.userid, page=page, since_id=since_id)
@@ -80,10 +78,7 @@ def scrapy_latest(user: Following, scrapy_log):
                 scrapy_log.info(f'需要验证, ' + info['url'])
             elif 'pass' in info.get('url', ''):
                 scrapy_log.info(f'需要登录, ' + info['url'])
-            keep -= 1
-            if keep == 0:
-                sys.exit(-1)
-            sleep(600)
+            input("请打开浏览器访问上面的链接进行验证，验证完成后按回车继续")
         mblogs = []
         page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
         if info['ok'] == 1:
@@ -105,7 +100,7 @@ def scrapy_latest(user: Following, scrapy_log):
             scrapy_log.info(f'{info.get("msg")}')
             time.sleep(60)
         elif info['ok'] == 0 and info.get('msg') == "这里还没有内容":
-            keep -= 1
+            break
         elif info['ok'] == -100:
             scrapy_log.info(f'需要验证')
         for weibo_info in mblogs:
