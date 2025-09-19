@@ -20,7 +20,7 @@ with open("data.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 media_group_dict = {}
 download_count = 0
-BIG_FILE = 10 * 1024 * 1024 * 1024
+BIG_FILE = 10 * 1024 * 1024
 
 
 async def download(client: TelegramClient, message, media_group, chat_id, download_logger):
@@ -55,9 +55,9 @@ async def download(client: TelegramClient, message, media_group, chat_id, downlo
         else:
             try:
                 if file_size > BIG_FILE:
-                    r = await message.reply("Downloading..")
+                    print(f'开始下载大文件：{file_size}')
                     # 大文件使用 fast_download（它是异步的）
-                    await fast_download(client, message, r, filepath)
+                    await fast_download(client, message, None, filepath)
                 else:
                     # 小文件用内置的下载方法（可靠）
                     await client.download_media(message, file=filepath)
@@ -92,7 +92,6 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
     entity = await client.get_entity(chat)
 
     async for message in client.iter_messages(entity, reverse=True, min_id=min_id_start - 1):
-        just_download = ''
         try:
             if not getattr(message, "media", None):
                 print("此消息无媒体内容:", message.id, message.text)
@@ -121,19 +120,23 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
 
             # 如果有回复，也下载回复里的媒体
             if message.replies:
-                replies = await client(functions.messages.GetRepliesRequest(
-                    peer=entity,
-                    msg_id=message.id,
-                    offset_id=0,
-                    offset_date=None,
-                    add_offset=0,
-                    limit=200,
-                    max_id=0,
-                    min_id=0,
-                    hash=0
-                ))
-                for reply_msg in replies.messages:
-                    await download(client, reply_msg, media_group, chat_id, download_logger)
+                try:
+                    replies = await client(functions.messages.GetRepliesRequest(
+                        peer=entity,
+                        msg_id=message.id,
+                        offset_id=0,
+                        offset_date=None,
+                        add_offset=0,
+                        limit=200,
+                        max_id=0,
+                        min_id=0,
+                        hash=0
+                    ))
+                except Exception as e:
+                    continue
+                else:
+                    for reply_msg in replies.messages:
+                        await download(client, reply_msg, media_group, chat_id, download_logger)
 
         except Exception as e:
             print("发生错误", getattr(message, "id", None), str(e))
