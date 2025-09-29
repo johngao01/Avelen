@@ -1060,7 +1060,7 @@ def get_aweme_detail(aweme_id):
         if json_path:
             with open(json_path,encoding='utf-8') as f:
                 return json.load(f)
-        return
+        return response_json['filter_detail']['notice']
     aweme = response_json['aweme_detail']
     return aweme
 
