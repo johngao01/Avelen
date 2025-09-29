@@ -78,7 +78,9 @@ def scrapy_latest(user: Following, scrapy_log):
                 scrapy_log.info(f'需要验证, ' + info['url'])
             elif 'pass' in info.get('url', ''):
                 scrapy_log.info(f'需要登录, ' + info['url'])
-            input("请打开浏览器访问上面的链接进行验证，验证完成后按回车继续")
+            user_input = input("请打开浏览器访问上面的链接进行验证，验证完成后按回车继续爬取，q退出爬取")
+            if user_input == 'q':
+                break
         mblogs = []
         page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的微博的时间
         if info['ok'] == 1:
@@ -147,14 +149,15 @@ def start(scraping: Following, has_send):
     latest_weibo = max(new_weibo, key=lambda x: x['weibo_time'])
     logger.info(f"{new_weibo[0]['weibo_time']}  {new_weibo[-1]['weibo_time']}")
     error = 0
-    for weibo in new_weibo:
+    total = len(new_weibo)
+    for i, weibo in enumerate(new_weibo, start=1):
         if weibo['weibo_url'] in has_send:
             continue
         try:
             if scraping.username == 'favorite':
-                r = handle_weibo(weibo['weibo_url'], weibo_data=weibo)
+                r = handle_weibo(f"{i}/{total}", weibo['weibo_url'], weibo_data=weibo)
             else:
-                r = handle_weibo(weibo['weibo_url'], userid=scraping.userid, username=scraping.username)
+                r = handle_weibo(f"{i}/{total}", weibo['weibo_url'], userid=scraping.userid, username=scraping.username)
         except Exception:
             error += 1
             log_error(weibo['weibo_url'])

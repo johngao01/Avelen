@@ -348,7 +348,7 @@ def handler_video_weibo(weibo_info, post_data, video_url):
         log_error(weibo_info['url'], '下载失败')
 
 
-def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
+def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=None):
     if weibo_data:
         weibo_info, post_data = parse_weibo_data(weibo_data, username)
     else:
@@ -359,7 +359,7 @@ def handle_weibo(weibo_url, weibo_data=None, userid=None, username=None):
             return 'skip'
         weibo_info, post_data = parse_weibo_data(weibo_data, username)
     weibo_dict = weibo_info['data']
-    info = weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
+    info = weibo_index + '\t' + weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
     if weibo_dict['mblog_vip_type'] == 1:
         weibo_logger.info(info + 'V+微博')
         return 'skip'
