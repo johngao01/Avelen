@@ -19,14 +19,17 @@ send_url = get_send_url('')
 for line in lines_seen:
     splits = line.split(' ')
     url = splits[3]
-    print(url)
     if url in send_url:
         print(url, '完成')
         continue
     if 'weibo' in url:
         r = handle_weibo(url)
     elif 'douyin' in url:
-        r = handler_douyin(get_aweme_detail(get_url_id(url)[1]))
+        aweme_detail = get_aweme_detail(get_url_id(url)[1])
+        if type(aweme_detail) is str and '抱歉，作品不见了' in aweme_detail:
+            print(url, aweme_detail, '完成')
+            continue
+        r = handler_douyin(aweme_detail)
     else:
         continue
     send_url.append(url)
