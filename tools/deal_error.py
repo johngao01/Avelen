@@ -16,14 +16,15 @@ with open('error.txt', 'w', encoding='utf-8') as file:
             lines_seen.add(line)
 error_line = []
 send_url = get_send_url('')
-for line in lines_seen:
+total = len(lines_seen)
+for i, url in enumerate(lines_seen, start=1):
     splits = line.split(' ')
     url = splits[3]
     if url in send_url:
         print(url, '完成')
         continue
     if 'weibo' in url:
-        r = handle_weibo(url)
+        r = handle_weibo(f"{i}/{total}", url)
     elif 'douyin' in url:
         aweme_detail = get_aweme_detail(get_url_id(url)[1])
         if type(aweme_detail) is str and '抱歉，作品不见了' in aweme_detail:
