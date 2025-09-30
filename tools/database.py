@@ -63,7 +63,7 @@ def get_all_following(platform, valid=1):
     cursor = conn.cursor()
     sql = f'''SELECT userid, username, latest_time 
               FROM `user`
-              where platform='{platform}' and valid={valid} order by scrapy_time;'''
+              where platform='{platform}' and valid={valid} order by scrapy_time desc;'''
     cursor.execute(sql)
     data = [item for item in cursor.fetchall()]
     cursor.close()
