@@ -149,8 +149,7 @@ def start(scraping: Following, has_send):
         else:
             log_error(aweme.aweme_url)
             continue
-    if error == 0:
-        update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
+    update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
 
 
 if __name__ == '__main__':

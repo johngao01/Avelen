@@ -176,8 +176,7 @@ def start(scraping: Following, has_send):
                 log_error(weibo['weibo_url'])
                 weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
     weibo_logger.info('\n')
-    if len(new_weibo) > 0 and error == 0:
-        update_db(scraping.userid, scraping.username, latest_weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S'))
+    update_db(scraping.userid, scraping.username, latest_weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S'))
 
 
 if __name__ == '__main__':
