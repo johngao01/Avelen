@@ -354,12 +354,20 @@ def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=
     else:
         weibo_data = get_weibo_data(weibo_url)
         if weibo_data is False:
-            return
+            return False
         if weibo_data is True:
             return 'skip'
+        if 'user' not in weibo_data:
+            json_path = find_file_by_name('/root/download/weibo/json', f'{weibo_url.split('/')[-1]}.json')
+            if json_path:
+                with open(json_path, encoding='utf-8') as f:
+                    weibo_data = json.load(f)
+            else:
+                return False
         weibo_info, post_data = parse_weibo_data(weibo_data, username)
     weibo_dict = weibo_info['data']
-    info = weibo_index + '\t' + weibo_url + '\t' + post_data['create_time'] + '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
+    info = weibo_index + '\t' + weibo_url + '\t' + post_data['create_time'] + \
+           '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
     if weibo_dict['mblog_vip_type'] == 1:
         weibo_logger.info(info + 'V+微博')
         return 'skip'
