@@ -215,7 +215,7 @@ async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         valid = 0
     update_user(valid, user_id)
     data = await query_user_info(user_id)
-    await query.edit_message_text(f"修改成功\n" + data[1], reply_markup=InlineKeyboardMarkup(data[2]),
+    await query.edit_message_text(f"修改成功\n" + data[1], reply_markup=InlineKeyboardMarkup([data[2][0]]),
                                   parse_mode=ParseMode.HTML)
     return ConversationHandler.END
 
@@ -314,6 +314,8 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ConversationHandler.END
         url = expand_url(url)
         print(url)
+    if url[-1] == '/':
+        url = url[:-1]
     context.user_data["url"] = url.split('?')[0]
     parsed_url = urlparse(url)
     if 'douyin.com' in parsed_url.hostname:
