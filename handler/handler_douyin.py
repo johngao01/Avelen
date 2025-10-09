@@ -2,6 +2,7 @@ import os.path
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from re import sub
+from types import SimpleNamespace
 from typing import Any, Dict, Optional
 from hashlib import md5
 from random import randint, random, choice
@@ -13,7 +14,6 @@ from tools.utils import *
 from gmssl import sm3, func
 import sys
 from loguru import logger
-
 
 logger.remove()
 logger.add(
@@ -44,7 +44,7 @@ favorite_headers = {
     'cookie': cookies1,
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
 }
-
+VIDEO_INDEX = -1
 video_aweme_detail_url = 'https://www.douyin.com/aweme/v1/web/aweme/detail/?'
 domain = 'https://www.douyin.com/'
 video_url = 'https://www.douyin.com/video/'
@@ -951,7 +951,7 @@ class Aweme:
 
 
 class AwemeMedia:
-    def __init__(self, media_aweme: Aweme, content_index, node: Optional[Dict[str, Any]] = None, content_type = None):
+    def __init__(self, media_aweme: Aweme, content_index, node: Optional[Dict[str, Any]] = None, content_type=None):
         self._aweme = media_aweme
         self._node = node
         self.aweme_id = self._aweme.aweme_id
@@ -963,7 +963,7 @@ class AwemeMedia:
         if content_type:
             self.content_type = content_type
         else:
-            self.content_type=  'video' if self._aweme.is_video else 'image'
+            self.content_type = 'video' if self._aweme.is_video else 'image'
 
     @property
     def content_id(self):
@@ -974,13 +974,88 @@ class AwemeMedia:
                 return self._node['uri']
             return self._node['label_large']['uri']
 
+    @staticmethod
+    def generate_data_object(
+            data: dict | list,
+    ) -> SimpleNamespace | list[SimpleNamespace]:
+        def depth_conversion(element):
+            if isinstance(element, dict):
+                return SimpleNamespace(
+                    **{k: depth_conversion(v) for k, v in element.items()}
+                )
+            elif isinstance(element, list):
+                return [depth_conversion(item) for item in element]
+            else:
+                return element
+
+        return depth_conversion(data)
+
+    @staticmethod
+    def safe_extract(
+            data: SimpleNamespace | list[SimpleNamespace],
+            attribute_chain: str,
+            default: str | int | list | dict | SimpleNamespace = "",
+    ):
+        attributes = attribute_chain.split(".")
+        for attribute in attributes:
+            if "[" in attribute:
+                parts = attribute.split("[", 1)
+                attribute = parts[0]
+                index = parts[1].split("]", 1)[0]
+                try:
+                    index = int(index)
+                    data = getattr(data, attribute, None)[index]
+                except (IndexError, TypeError, ValueError):
+                    return default
+            else:
+                data = getattr(data, attribute, None)
+                if not data:
+                    return default
+        return data or default
+
+    def __extract_video_download(self, data):
+        bit_rate: list[SimpleNamespace] = self.safe_extract(
+            data,
+            "video.bit_rate",
+            [],
+        )
+        try:
+            bit_rate: list[tuple[int, int, int, int, int, list[str]]] = [
+                (
+                    i.FPS,
+                    i.bit_rate,
+                    i.play_addr.data_size,
+                    i.play_addr.height,
+                    i.play_addr.width,
+                    i.play_addr.url_list,
+                )
+                for i in bit_rate
+            ]
+            bit_rate.sort(
+                key=lambda x: (
+                    max(
+                        x[3],
+                        x[4],
+                    ),
+                    x[0],
+                    x[1],
+                    x[2],
+                ),
+            )
+            return bit_rate[-1][-1][VIDEO_INDEX] if bit_rate else ""
+        except AttributeError:
+            url = self.safe_extract(
+                bit_rate[0],
+                f"play_addr.url_list[{VIDEO_INDEX}]",
+            )
+            return url
+
     @property
     def download_url(self):
         if self.content_type == 'video':
-            for play_addr in ['play_addr_h264', 'play_addr_265', 'play_addr']:
-                if play_addr in self._node:
-                    if 'url_list' in self._node[play_addr]:
-                        return self._node[play_addr]['url_list'][0]
+            download_addr = self.__extract_video_download(self.generate_data_object(self._aweme._node))
+            if download_addr:
+                return download_addr
             return f'https://aweme.snssdk.com/aweme/v1/play/?video_id={self.content_id}&radio=1080p&line=0'
         else:
             if 'url_list' in self._node:
@@ -1033,7 +1108,6 @@ def get_url_id(share_info: str):
 
 
 def get_aweme_detail(aweme_id):
-
     params = {'device_platform': 'webapp', 'aid': '6383', 'channel': 'channel_pc_web', 'pc_client_type': 1,
               'version_code': '190500', 'version_name': '19.5.0', 'cookie_enabled': 'true', 'screen_width': 1920,
               'screen_height': 1080, 'browser_language': 'zh-CN', 'browser_platform': 'Win32',
@@ -1050,15 +1124,15 @@ def get_aweme_detail(aweme_id):
         print('空数据')
         json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
         if json_path:
-            with open(json_path,encoding='utf-8') as f:
+            with open(json_path, encoding='utf-8') as f:
                 return json.load(f)
-        return
+        return None
     response_json = json.loads(rs.text)
     if response_json['aweme_detail'] is None:
         print(response_json['filter_detail']['notice'])
         json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
         if json_path:
-            with open(json_path,encoding='utf-8') as f:
+            with open(json_path, encoding='utf-8') as f:
                 return json.load(f)
         return response_json['filter_detail']['notice']
     aweme = response_json['aweme_detail']
@@ -1155,14 +1229,14 @@ def handler_video_douyin(aweme: Aweme):
     scrapy_logger.info('  '.join([aweme.username, aweme.aweme_url, aweme.create_time_str,
                                   os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
     if video_size > MAX_VIDEO_SIZE:
-        scrapy_logger.error(aweme.aweme_info['url']+f' 文件太大，{save_path} {human_readable_size}')
+        scrapy_logger.error(aweme.aweme_info['url'] + f' 文件太大，{save_path} {human_readable_size}')
         return False
     elif video_size:
         aweme.post_data.update({'files': {'media': save_path, 'caption': media_name, 'type': 'video'}})
         r = request_webhook('/main', aweme.post_data, scrapy_logger)
         return r
     else:
-        scrapy_logger.error(aweme.aweme_info['url'] +' 获取数据失败')
+        scrapy_logger.error(aweme.aweme_info['url'] + ' 获取数据失败')
         return False
 
 
@@ -1187,6 +1261,7 @@ def handler_note_douyin(aweme: Aweme):
     else:
         log_error(aweme.aweme_info['url'], '获取失败')
         return False
+
 
 def handler_douyin(aweme):
     if aweme is None:
