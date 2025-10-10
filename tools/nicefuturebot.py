@@ -12,7 +12,9 @@ from telegram.ext import (
 )
 
 from tools.database import *
-from handler import *
+from handler.handler_weibo import *
+from handler.handler_douyin import *
+from handler.handler_instagram import *
 
 DEVELOPER_CHAT_ID = 708424141
 
@@ -91,8 +93,8 @@ async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = await delete(update, context)
     if url:
         if 'weibo' in url:
-            r = handle_weibo(url)
-            store_message_data(r)
+            r1 = handle_weibo('1/1', url)
+            store_message_data(r1)
         elif 'douyin' in url:
             link, aweme_id = get_url_id(url)
             aweme = get_aweme_detail(aweme_id)
@@ -125,10 +127,10 @@ async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weibo_link = update.message.text
     message_id = update.message.message_id
     logger.info(weibo_link)
-    r = handle_weibo(weibo_link)
-    if type(r) is requests.Response:
-        if r.status_code == 200:
-            store_message_data(r)
+    r1 = handle_weibo('1/1', weibo_link)
+    if type(r1) is requests.Response:
+        if r1.status_code == 200:
+            store_message_data(r1)
         else:
             logger.error(f"处理微博 {weibo_link} 失败")
     else:
@@ -280,8 +282,8 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for message_id in messages_id:
                 delete_db_message(message_id)
             if 'weibo' in url:
-                r = handle_weibo(url)
-                store_message_data(r)
+                r1 = handle_weibo('1/1',url)
+                store_message_data(r1)
             elif 'douyin' in url:
                 link, aweme_id = get_url_id(url)
                 aweme = get_aweme_detail(aweme_id)
