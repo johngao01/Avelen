@@ -155,7 +155,7 @@ def start(scraping: Following, has_send):
             continue
         try:
             if scraping.username == 'favorite':
-                r = handle_weibo(f"{i}/{total}", weibo['weibo_url'], weibo_data=weibo)
+                r = handle_weibo(f"{i}/{total}", weibo['weibo_url'], weibo_data=weibo, username=scraping.username)
             else:
                 r = handle_weibo(f"{i}/{total}", weibo['weibo_url'], userid=scraping.userid, username=scraping.username)
         except Exception:

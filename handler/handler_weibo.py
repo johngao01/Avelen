@@ -234,11 +234,9 @@ def parse_weibo_data(weibo_data, username):
     user_id = weibo_data['user']['idstr']
     weibo_id = weibo_data['idstr']
     mblogid = weibo_data['mblogid']
-    if username:
-        save_dir = os.path.join(download_save_root_directory, 'weibo', username)
-    else:
+    save_dir = os.path.join(download_save_root_directory, 'weibo', username)
+    if username == 'favorite':
         username = weibo_data['user']['screen_name']
-        save_dir = os.path.join(download_save_root_directory, 'weibo', weibo_data['user']['screen_name'])
     # save_json(weibo_edit_count(weibo_data), username, weibo_id, weibo_data)
     create_time = standardize_date(weibo_data['created_at'])
     weibo_url = f'https://www.weibo.com/{user_id}/{weibo_id}'
