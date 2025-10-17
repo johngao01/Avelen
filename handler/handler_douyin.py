@@ -1129,12 +1129,13 @@ def get_aweme_detail(aweme_id):
         return None
     response_json = json.loads(rs.text)
     if response_json['aweme_detail'] is None:
-        print(response_json['filter_detail']['notice'])
+        if 'notice' in response_json['filter_detail']:
+            result = response_json['filter_detail']['notice']
+            return result
         json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
         if json_path:
             with open(json_path, encoding='utf-8') as f:
                 return json.load(f)
-        return response_json['filter_detail']['notice']
     aweme = response_json['aweme_detail']
     return aweme
 

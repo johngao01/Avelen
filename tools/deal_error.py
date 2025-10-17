@@ -9,14 +9,16 @@ error_line = []
 send_url = get_send_url('')
 lines_seen = set(lines)
 total = len(lines_seen)
+url_pattern = re.compile(r'https://www\.(douyin|weibo)+\.com\S+')
 for i, line in enumerate(lines_seen, start=1):
-    splits = line.split(' ')
-    url = splits[3]
+    # 正则表达式获取url链接
+    urls = url_pattern.search(line)
+    url = urls[0]
     if url in send_url:
         print(url, '完成')
         continue
     if 'weibo' in url:
-        r = handle_weibo(f"{i}/{total}", url)
+        r = handle_weibo(f"{i}/{total}", url, username='favorite')
     elif 'douyin' in url:
         aweme_detail = get_aweme_detail(get_url_id(url)[1])
         if type(aweme_detail) is str and '抱歉，作品不见了' in aweme_detail:
