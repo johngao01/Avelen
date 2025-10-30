@@ -271,7 +271,7 @@ def handler_post(post):
         'username': post.nickname,
         'nickname': post.owner_username,
         'url': post.url,
-        'userid': post.owner_pk,
+        'userid': post.owner_username,
         'idstr': post.shortcode,
         'mblogid': post.media_id,
         'create_time': post.create_time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -294,8 +294,8 @@ def handler_post(post):
         post_data.update({'files': wait_send})
     elif len(wait_send) == 1:
         post_data.update({'files': wait_send[0]})
-    r = request_webhook('/main', post_data, instagram_logger)
-    return r
+    result = request_webhook('/main', post_data, instagram_logger)
+    return result
 
 
 def save_json(post: Post):
