@@ -92,8 +92,19 @@ async def query_user_info(user_id):
             keyboard.extend([[button3], [button1]])
         else:
             keyboard.extend([[button3], [button2]])
-        result = exec_sql_get_data(f"select * from statistic where userid='{user_id}'")
-        user_name, num = result[0][0], result[0][-1]
+        sql = """SELECT u.USERNAME,
+                        u.USERID,
+                        u.platform,
+                        COUNT(DISTINCT m.IDSTR) AS num
+                 FROM user u
+                          LEFT JOIN messages m ON u.USERID = m.USERID
+                 WHERE u.USERID = %s
+                 GROUP BY u.USERID"""
+        result = exec_sql_get_data(sql, (user_id,))
+        if result:
+            user_name, num = result[0][0], result[0][-1]
+        else:
+            user_name, num = user_id, 0
         info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}"
         return exist[0], info, keyboard
     return None
