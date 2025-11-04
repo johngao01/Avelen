@@ -62,7 +62,7 @@ def process_message(message: telegram.Message, data):
         'MESSAGE_ID': message.message_id,
         'CAPTION': message.caption or '',
         'CHAT_ID': message.chat_id or '',
-        'DATE_TIME': datetime.strftime(message.date, "%Y-%m-%d %H:%M:%S"),
+        'DATE_TIME': message.date,
         'FORM_USER': message.from_user.id,
         'CHAT': message.chat.id,
         'MEDIA_GROUP_ID': message.media_group_id or '',
