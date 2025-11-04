@@ -17,6 +17,7 @@ from telegram.constants import ParseMode, ChatAction
 from typing import cast
 from database import exec_sql_get_data, add_user, update_user
 from urllib.parse import urlparse
+from report import *
 
 headers = {
     'referer': 'https://www.baidu.com/',
@@ -130,7 +131,7 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         search_text = update.message.text
         page = 1
     context.user_data['page'] = page
-    if search_text.isdigit():
+    if search_text.isdigit() and int(search_text) < 5:
         sql = """SELECT userid, username, latest_time, platform, valid
                  FROM user
                  WHERE valid = %s"""
@@ -254,7 +255,8 @@ async def edit_commands(application):
     command = [BotCommand("myfollow", "我的关注"),
                BotCommand("manage", "管理关注"),
                BotCommand("lm", "查看/media文件夹"),
-               BotCommand("cancel", "取消操作")]
+               BotCommand("cancel", "取消操作"),
+               BotCommand("report", "报告")]
     await application.bot.set_my_commands(commands=command)
     await application.bot.send_message(DEVELOPER_CHAT_ID,
                                        text="bot start...")
@@ -388,6 +390,20 @@ async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+async def report_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        return await echo(update, context)
+    if context.args:
+        report_day = context.args[0]
+    else:
+        report_day = datetime.now().strftime("%Y-%m-%d")
+    niceme_report_data = niceme_report(report_day)
+    await context.bot.send_message(DEVELOPER_CHAT_ID, niceme_report_data, parse_mode='html')
+    tiktok_report_data = tiktok_report(report_day)
+    await context.bot.send_message(DEVELOPER_CHAT_ID, tiktok_report_data, parse_mode='html')
+    return None
+
+
 def main() -> None:
     builder = Application.builder()
     persistence = PicklePersistence(filepath="arbitrarycallbackdatabot")
@@ -446,6 +462,7 @@ def main() -> None:
     application.add_handler(CommandHandler("lm", ls_media))
     application.add_handler(CommandHandler("myfollow", list_my_follow))
     application.add_handler(manage_follow_handler)
+    application.add_handler(CommandHandler('report', report_data))
     application.add_handler(MessageHandler(filters.Text(), echo))
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
