@@ -63,13 +63,14 @@ def niceme_report(report_day):
     )
 
     result = f"""#niceme统计信息
-<b>日期</b>：{report_day}
-<b>消息总数</b>：{total_messages}
-<b>用户数量</b>：{user_count}    <b>作品数量</b>：{work_count}
-<b>图片数量</b>：{file_count[0]}    <b>视频数量</b>：{file_count[1]}
+日期：{report_day}
+消息总数：{total_messages}
+用户数量：{user_count}    作品数量：{work_count}
+图片数量：{file_count[0]}    视频数量：{file_count[1]}
 """
     for k, v in platform_stats.items():
-        result += f"<b>{k}</b>: {v} "
+        result += f"{k}: {v}    "
+    print(result)
     return result
 
 
@@ -96,11 +97,12 @@ def tiktok_report(report_day):
     # 当天新增的bot的用户数
     report_day_bot_new_user = cursor.fetchone()[0]
     result = f"""#tiktok_bot统计信息
-<b>日期</b>：{report_day}
-<b>当天爬取的aweme数量</b>：{report_day_scrapy_aweme_num}
-<b>当天使用bot的用户数</b>：{report_day_bot_user_num}
-<b>当天新增的bot的用户数</b>：{report_day_bot_new_user}
+日期：{report_day}
+当天爬取的aweme数量：{report_day_scrapy_aweme_num}
+当天使用bot的用户数：{report_day_bot_user_num}
+当天新增的bot的用户数：{report_day_bot_new_user}
 """
+    print(result)
     return result
 
 
