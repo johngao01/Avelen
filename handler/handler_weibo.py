@@ -234,6 +234,8 @@ def parse_weibo_data(weibo_data, username):
     user_id = weibo_data['user']['idstr']
     weibo_id = weibo_data['idstr']
     mblogid = weibo_data['mblogid']
+    if username is None:
+        username = 'favorite'
     save_dir = os.path.join(download_save_root_directory, 'weibo', username)
     if username == 'favorite':
         username = weibo_data['user']['screen_name']
