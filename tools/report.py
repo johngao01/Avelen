@@ -83,16 +83,16 @@ def tiktok_report(report_day):
         charset="utf8mb4"
     )
     cursor = conn.cursor()
-    cursor.execute("select count(*) from aweme where DATE(DATE_ADD(SCRAPY_AT, INTERVAL 8 HOUR))=%s", (report_day))
+    cursor.execute("select count(*) from aweme where DATE(SCRAPY_AT)=%s", (report_day))
     # 当天爬取的aweme数量
     report_day_scrapy_aweme_num = cursor.fetchone()[0]
     cursor.execute(
-        "select count(distinct chat_id) from (select * from messages where DATE(DATE_ADD(`DATE_TIME`, INTERVAL 8 HOUR))=%s) a",
+        "select count(distinct chat_id) from (select * from messages where DATE(`DATE_TIME`)=%s) a",
         (report_day,))
     # 当天使用bot的用户数
     report_day_bot_user_num = cursor.fetchone()[0]
     cursor.execute(
-        "select count(distinct chat_id) from (select * from `users` where DATE(DATE_ADD(created_at, INTERVAL 8 HOUR))=%s) a",
+        "select count(distinct chat_id) from (select * from `users` where DATE(created_at)=%s) a",
         (report_day,))
     # 当天新增的bot的用户数
     report_day_bot_new_user = cursor.fetchone()[0]
