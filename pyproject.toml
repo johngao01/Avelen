@@ -1,0 +1,21 @@
+[project]
+name = "weibo-tg-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "emoji",
+    "Flask",
+    "gmssl",
+    "opencv-python",
+    "Pillow",
+    "PyMySQL",
+    "pandas",
+    "python-telegram-bot[callback-data]",
+    "Requests",
+    "Telethon",
+    "urllib3",
+    "loguru",
+    "cryptography",
+]
