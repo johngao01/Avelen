@@ -4,8 +4,10 @@ gmssl
 opencv_python
 Pillow
 PyMySQL
-python-telegram-bot
+pandas
+python-telegram-bot[callback-data]
 Requests
 Telethon
 urllib3
 loguru
+cryptography
