@@ -9,7 +9,7 @@ from telegram import Bot
 
 def niceme_report(report_day):
     conn = pymysql.connect(
-        host="38.49.57.25",
+        host="127.0.0.1",
         user="root",
         password="31305a0fbd",
         database="nicebot",
