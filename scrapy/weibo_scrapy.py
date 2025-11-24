@@ -411,7 +411,7 @@ def start(scraping: Following, has_send):
     if scraping.username == 'favorite':
         new_weibo = scrapy_like(scraping.userid, weibo_logger)
     else:
-        new_weibo = scrapy_latest_via_api(scraping, weibo_logger)
+        new_weibo = scrapy_latest_via_com(scraping, weibo_logger)
     if len(new_weibo) == 0:
         weibo_logger.info(f'{scraping.username} 没有新微博\n')
         return
