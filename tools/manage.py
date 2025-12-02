@@ -81,7 +81,7 @@ async def query_user_info(user_id):
             keyboard_button = InlineKeyboardButton("📎 在微博上查看", url=f"https://weibo.com/u/{user_id}")
         else:
             keyboard_button = InlineKeyboardButton("📎 在Instagram上查看",
-                                                   url=f"https://www.instagram.com/{follows[user_id]['username']}/")
+                                                   url=f"https://www.instagram.com/{user_id}/")
 
         keyboard = [[keyboard_button]]
         button1 = InlineKeyboardButton("👤 普通关注", callback_data=f"downgrade|{user_id}")
