@@ -20,4 +20,5 @@ dependencies = [
     "cryptography",
     "curl-cffi>=0.13.0",
     "playwright>=1.56.0",
+    "func-timeout>=4.3.5",
 ]

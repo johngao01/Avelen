@@ -271,7 +271,6 @@ def get_weibo_data(weibo_link):
         response = requests.get('https://weibo.com/ajax/statuses/show',
                                 params={'id': weibo_id, 'locale': 'zh-CN'},
                                 headers=weibo_header)
-        print(response.text)
         data = response.json()
     except Exception as e:
         weibo_logger.error("获取微博信息失败：" + weibo_link)

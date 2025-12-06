@@ -2,7 +2,7 @@ import traceback
 import urllib3
 from tools.database import *
 from handler.handler_weibo import *
-
+from func_timeout import func_set_timeout, FunctionTimedOut
 urllib3.disable_warnings()
 
 
@@ -322,8 +322,9 @@ def scrapy_latest_via_com(user: Following, scrapy_log):
     """
         从 https://weibo.com/ 的用户主页通过api获取用户微博
     """
-    from curl_cffi import requests
+    @func_set_timeout(60)
     def one_page_latest(user_id: str, page, since_id=''):
+        from curl_cffi import requests
         params = {'uid': user_id, 'page': page, 'feature': 0}
         if page > 1 and since_id != '':
             params.update({'since_id': since_id})
