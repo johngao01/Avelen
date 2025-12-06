@@ -34,9 +34,12 @@ for i, line in enumerate(lines_seen, start=1):
     elif type(r) is str and 'skip' in r:
         continue
     else:
-        print(f'处理 {url} 失败')
-        error_line.append(line)
-        continue
+        if 'douyin' in url and r is True:
+            pass
+        else:
+            print(f'处理 {url} 失败')
+            error_line.append(line)
+            continue
 
 with open('../error.txt', 'w', encoding='utf-8') as file:
     for line in error_line:
