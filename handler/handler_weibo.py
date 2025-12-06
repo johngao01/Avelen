@@ -27,7 +27,7 @@ weibo_header = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                   'Chrome/104.0.0.0 Safari/537.36',
     'referer': 'https://weibo.com/',
-    'cookie': 'SUBP=0033WrSXqPxfM72-Ws9jqgMF55529P9D9W51vhsNfUfV2YL.VHulT9DN;WBPSESS=gJ7ElPMf_3q2cdj5JUfmvBCyTLpPuA6sKwpyMFrI2wvAnu3g9Yr-LXk8RZ0EwVzH3ZNo_Vdp2RXzXjs4BBoJzDZC3qLHqRffDSd1XU3RNsAnzJYtEo9D7HKvjaX3HOZw-Y992VC7yPKctxof_ywVOPWptY43SWIw3VEaRwGiDLY=;SUB=_2AkMSoiDDf8NxqwFRmfsVyW7qaYp0zQ3EieKk_tEYJRMxHRl-yT8XqlxZtRB6OSIOKwYh5I1-rxzEimXIcPYLDv47DUz8;XSRF-TOKEN=4_zeJNqfBCsDMNEPpT3GCLnR'
+    'cookie': cookies
 }
 del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736',
             '3671086183ed683ec092b43b83fa461c']
@@ -271,6 +271,7 @@ def get_weibo_data(weibo_link):
         response = requests.get('https://weibo.com/ajax/statuses/show',
                                 params={'id': weibo_id, 'locale': 'zh-CN'},
                                 headers=weibo_header)
+        print(response.text)
         data = response.json()
     except Exception as e:
         weibo_logger.error("获取微博信息失败：" + weibo_link)
