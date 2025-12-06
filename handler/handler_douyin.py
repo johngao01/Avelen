@@ -1131,7 +1131,6 @@ def get_aweme_detail(aweme_id):
     if response_json['aweme_detail'] is None:
         if 'notice' in response_json['filter_detail']:
             result = response_json['filter_detail']['notice']
-            return result
         json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
         if json_path:
             with open(json_path, encoding='utf-8') as f:
@@ -1271,7 +1270,7 @@ def handler_douyin(aweme):
         aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
     else:
         aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
-    user = Following(aweme['author']['sec_uid'], aweme['author']['nickname'], '')
+    user = Following(aweme['author']['sec_uid'], 'favorite', '')
     aweme = Aweme(user, aweme)
     if aweme.is_video:
         r = handler_video_douyin(aweme)
