@@ -74,8 +74,7 @@ class Scrapy:
                 continue
             self.max_cursor = data_json['max_cursor']
             page_awemes = data_json['aweme_list']
-            if len(page_awemes) == 0:
-                return
+       
             page_latest_time = datetime(2099, 12, 31, 12, 12, 12)  # 一页中数据最晚发布的抖音的时间
             for aweme in page_awemes:
                 aweme_create_time = datetime.fromtimestamp(aweme['create_time'])
