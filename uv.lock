@@ -265,6 +265,19 @@ wheels = [
 ]
 
 [[package]]
+name = "fasttelethonhelper"
+version = "1.0.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "telethon" },
+    { name = "telethon-tgcrypto" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2d/87/8d300152a005bfdd02ffc8dccd0d08d95a79c58e941b188263aacb269717/FastTelethonhelper-1.0.7.tar.gz", hash = "sha256:9ca0d4fb50c5edb27964ce73e849b9ae8839b3abe4222716ffae2933e7949f44", size = 6522, upload-time = "2022-06-09T06:40:48.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/26/0362aa8ee3528159f2e05e0bf8274ea7ddb8060c7ca7f08b66522c086fff/FastTelethonhelper-1.0.7-py3-none-any.whl", hash = "sha256:539359394b5c9dd288d37aa12550fd6ff35020a9158851ff3f3d922733fe86f7", size = 7192, upload-time = "2022-06-09T06:40:46.484Z" },
+]
+
+[[package]]
 name = "flask"
 version = "3.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -280,12 +293,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/dc/6d/cfe3c0fcc5e477df2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/f9/7f9263c5695f4bd0023734af91bedb2ff8209e8de6ead162f35d8dc762fd/flask-3.1.2-py3-none-any.whl", hash = "sha256:ca1d8112ec8a6158cc29ea4858963350011b5c846a414cdb7a954aa9e967d03c", size = 103308, upload-time = "2025-08-19T21:03:19.499Z" },
 ]
-
-[[package]]
-name = "func-timeout"
-version = "4.3.5"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b3/0d/bf0567477f7281d9a3926c582bfef21bff7498fc0ffd3e9de21811896a0b/func_timeout-4.3.5.tar.gz", hash = "sha256:74cd3c428ec94f4edfba81f9b2f14904846d5ffccc27c92433b8b5939b5575dd", size = 44264, upload-time = "2019-08-19T21:32:07.43Z" }
 
 [[package]]
 name = "gmssl"
@@ -583,6 +590,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pebble"
+version = "5.1.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/af/aa/730e2b815fed3680629bb9c6c84c3480952fb9067939b7549c789b77a6bc/pebble-5.1.3.tar.gz", hash = "sha256:9fdf00dde4abb09907817114ad8cf822836b6d6cc8f43a3f0ec741be276086e7", size = 39027, upload-time = "2025-07-30T21:16:34.87Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/42/218f3d1490af0c5f781f1e54fc1e4a2ca163643807d57890d2a246bd626d/Pebble-5.1.3-py3-none-any.whl", hash = "sha256:8b28b1ede25de4b0d9249516d5fd794c330f8f03b692debe374619317ed0bdd7", size = 36868, upload-time = "2025-07-30T21:16:33.133Z" },
+]
+
+[[package]]
 name = "pillow"
 version = "12.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -842,6 +858,24 @@ wheels = [
 ]
 
 [[package]]
+name = "telethon-tgcrypto"
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tgcrypto" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5a/7a/baf282f4d1b589982f9adac5eefad5561fe76af195e05564092649760f2c/telethon-tgcrypto-0.0.3.tar.gz", hash = "sha256:79a7809ca049de19ca4b228aeaaca7342a396d8ddf7d0f01b035f4e2df1efcdf", size = 1766, upload-time = "2021-03-20T23:26:34.255Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/60/2fad421e538038cbd0f777faba8567852cc181b9addd959d44828ae8905e/telethon_tgcrypto-0.0.3-py3-none-any.whl", hash = "sha256:d1bc278fcc722226689066fd0ad07559582a9730cdef67afc9ca3dd1deb07522", size = 2690, upload-time = "2021-03-20T23:26:32.667Z" },
+]
+
+[[package]]
+name = "tgcrypto"
+version = "1.2.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/59/7cf5ced989e3139a791d5452d58cb8994de589576b80f9267ba76d794f6c/TgCrypto-1.2.5.tar.gz", hash = "sha256:9bc2cac6fb9a12ef5b08f3dd500174fe374d89b660cce981f57e3138559cb682", size = 37280, upload-time = "2022-11-11T19:55:11.436Z" }
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -876,12 +910,13 @@ dependencies = [
     { name = "cryptography" },
     { name = "curl-cffi" },
     { name = "emoji" },
+    { name = "fasttelethonhelper" },
     { name = "flask" },
-    { name = "func-timeout" },
     { name = "gmssl" },
     { name = "loguru" },
     { name = "opencv-python" },
     { name = "pandas" },
+    { name = "pebble" },
     { name = "pillow" },
     { name = "playwright" },
     { name = "pymysql" },
@@ -896,12 +931,13 @@ requires-dist = [
     { name = "cryptography" },
     { name = "curl-cffi", specifier = ">=0.13.0" },
     { name = "emoji" },
+    { name = "fasttelethonhelper", specifier = ">=1.0.7" },
     { name = "flask" },
-    { name = "func-timeout", specifier = ">=4.3.5" },
     { name = "gmssl" },
     { name = "loguru" },
     { name = "opencv-python" },
     { name = "pandas" },
+    { name = "pebble", specifier = ">=5.1.3" },
     { name = "pillow" },
     { name = "playwright", specifier = ">=1.56.0" },
     { name = "pymysql" },
