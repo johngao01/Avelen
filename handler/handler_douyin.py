@@ -44,7 +44,7 @@ favorite_headers = {
     'cookie': cookies1,
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
 }
-VIDEO_INDEX = -1
+VIDEO_INDEX = 0
 video_aweme_detail_url = 'https://www.douyin.com/aweme/v1/web/aweme/detail/?'
 domain = 'https://www.douyin.com/'
 video_url = 'https://www.douyin.com/video/'
