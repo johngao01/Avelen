@@ -3,7 +3,6 @@ import asyncio
 import datetime
 import os
 import sys
-import pickle
 import json
 from re import sub
 
@@ -16,7 +15,7 @@ api_id = 22203014
 api_hash = '6b373c6531660f41b039d5d85d703f4f'
 download_root_dir = r'H:\medias'
 # ============================
-with open("data.json", "r", encoding="utf-8") as f:
+with open("chat_download_history.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 media_group_dict = {}
 download_count = 0
@@ -113,7 +112,7 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
                 download_logger.info(f"{message.id}\t{message.date.strftime('%Y-%m-%d %H:%M:%S')}\t{message.text}")
                 data[chat_id]['min_id'] = message.id
                 data[chat_id]['title'] = message.text
-                with open("data.json", "w", encoding="utf-8") as f:
+                with open("chat_download_history.json", "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=4)
 
             await download(client, message, media_group, chat_id, download_logger)
@@ -151,14 +150,10 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
 
 async def main():
     # 使用异步客户端
-    import socks
-    async with TelegramClient('me', api_id, api_hash, proxy=(socks.HTTP, '127.0.0.1', 10808, True)) as client:
+    # 3指的是 socks.HTTP 代理
+    async with TelegramClient('me', api_id, api_hash, proxy=(3, '127.0.0.1', 10808, True)) as client:
         for k, v in data.items():
             await get_chat_history(client, k, v['min_id'])
-            # 保存 media_group_dict
-            with open('data.pkl', 'wb') as f:
-                pickle.dump(media_group_dict, f)
-            print("全部完成，media_group_dict 已保存到 data.pkl")
 
 
 if __name__ == '__main__':
