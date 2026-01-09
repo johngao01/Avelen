@@ -31,10 +31,13 @@ def get_posts(username, after='', before='null', first=12, last='null'):
 def scrapy_profile_post(profile: Profile):
     end_cursor = ''
     results = []
-    has_next_page = True
+    page = 0
+    keep = True
     instagram_logger.info(
         f'开始获取 {profile.username} 截至 {str(profile.latest_time)} 的instagram，她的主页是 {profile.url}')
-    while has_next_page:
+    while keep:
+        page += 1
+        instagram_logger.info(f'开始获取第 {page} 页数据')
         page_data = get_posts(profile.pk, after=end_cursor)
         if page_data:
             page_posts = page_data['data']['xdt_api__v1__feed__user_timeline_graphql_connection']['edges']
@@ -50,10 +53,12 @@ def scrapy_profile_post(profile: Profile):
                     page_posts_count -= 1
                     save_json(post)
                     results.append(post)
-                    print(post.url)
+                    instagram_logger.info(post.url)
+                if post.is_pined:
+                    page_posts_count -= 1
                 else:
-                    if post.is_pined:
-                        page_posts_count -= 1
+                    if post.create_time < profile.latest_time:
+                        keep = False
             if page_posts_count == 0:
                 continue
     instagram_logger.info(f'获取 {profile.username} 完成，获取到{len(results)}个内容')
@@ -128,8 +133,8 @@ if __name__ == '__main__':
                   f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
             update_db(latest_post.owner_username, latest_post.nickname,
                       latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
-            print("sleep 60 seconds\n")
             if len(sys.argv) < 2:
+                instagram_logger.info("sleep 60 seconds")
                 sleep(60)
     except Exception as e:
         print(e)
