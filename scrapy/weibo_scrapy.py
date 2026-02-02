@@ -355,6 +355,7 @@ def scrapy_latest_via_com(user: Following, scrapy_log):
         page_add = 0
         # 此方法获取的信息不能下载v+内容，但不需要cookie
         info = one_page_latest(user_id=user.userid, page=page, since_id=since_id)
+        since_id = info.get("data", {}).get("since_id", "")
         if info is None:
             continue
         if info['ok'] == -100:
@@ -395,7 +396,7 @@ def scrapy_latest_via_com(user: Following, scrapy_log):
         scrapy_info = f'{user.username} 获取第{page}页完成，一共有{len(mblogs)}个微博'
         if page_add > 0:
             scrapy_info += f"，本页获得{page_add}个新微博,共有{len(weibo_list)}个新微博"
-            since_id = info['data'].get('cardlistInfo', {}).get('since_id', '')
+            # since_id = info['data'].get('cardlistInfo', {}).get('since_id', '')
         else:
             scrapy_info += f"，本页没有新微博,共有{len(weibo_list)}个新微博"
         if page_weibo_min_time <= user.latest_time or since_id == '':
