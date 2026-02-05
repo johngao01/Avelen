@@ -13,6 +13,8 @@ url_pattern = re.compile(r'https://www\.(douyin|weibo)+\.com\S+')
 for i, line in enumerate(lines_seen, start=1):
     # 正则表达式获取url链接
     urls = url_pattern.search(line)
+    if not urls:
+        continue
     url = urls[0]
     if url in send_url:
         print(url, '完成')
