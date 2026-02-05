@@ -747,6 +747,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pydash"
+version = "8.0.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/75/c1/1c55272f49d761cec38ddb80be9817935b9c91ebd6a8988e10f532868d56/pydash-8.0.6.tar.gz", hash = "sha256:b2821547e9723f69cf3a986be4db64de41730be149b2641947ecd12e1e11025a", size = 164338, upload-time = "2026-01-17T16:42:56.576Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/b7/cc5e7974699db40014d58c7dd7c4ad4ffc244d36930dc9ec7d06ee67d7a9/pydash-8.0.6-py3-none-any.whl", hash = "sha256:ee70a81a5b292c007f28f03a4ee8e75c1f5d7576df5457b836ec7ab2839cc5d0", size = 101561, upload-time = "2026-01-17T16:42:55.448Z" },
+]
+
+[[package]]
 name = "pyee"
 version = "13.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -926,11 +938,13 @@ dependencies = [
     { name = "pebble" },
     { name = "pillow" },
     { name = "playwright" },
+    { name = "pydash" },
     { name = "pymysql" },
     { name = "python-telegram-bot", extra = ["callback-data"] },
     { name = "requests" },
     { name = "telethon" },
     { name = "urllib3" },
+    { name = "yt-dlp" },
 ]
 
 [package.metadata]
@@ -948,11 +962,13 @@ requires-dist = [
     { name = "pebble", specifier = ">=5.1.3" },
     { name = "pillow" },
     { name = "playwright", specifier = ">=1.56.0" },
+    { name = "pydash", specifier = ">=8.0.6" },
     { name = "pymysql" },
     { name = "python-telegram-bot", extras = ["callback-data"] },
     { name = "requests" },
     { name = "telethon" },
     { name = "urllib3" },
+    { name = "yt-dlp", specifier = ">=2026.2.4" },
 ]
 
 [[package]]
@@ -974,4 +990,13 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b3/8f/705086c9d734d3b663af0e9bb3d4de6578d08f46b1b101c2442fd9aecaa2/win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0", size = 4867, upload-time = "2024-12-07T15:28:28.314Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/07/c6fe3ad3e685340704d314d765b7912993bcb8dc198f0e7a89382d37974b/win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390", size = 4083, upload-time = "2024-12-07T15:28:26.465Z" },
+]
+
+[[package]]
+name = "yt-dlp"
+version = "2026.2.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/be/8e099f3f34bac6851490525fb1a8b62d525a95fcb5af082e8c52ba884fb5/yt_dlp-2026.2.4.tar.gz", hash = "sha256:24733ef081116f29d8ee6eae7a48127101e6c56eb7aa228dd604a60654760022", size = 3100305, upload-time = "2026-02-04T00:49:27.043Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/38/b17cbeaf6712a4c1b97f7f9ec3a55f3a8ddee678cc88742af47dca0315b7/yt_dlp-2026.2.4-py3-none-any.whl", hash = "sha256:d6ea83257e8127a0097b1d37ee36201f99a292067e4616b2e5d51ab153b3dbb9", size = 3299165, upload-time = "2026-02-04T00:49:25.31Z" },
 ]
