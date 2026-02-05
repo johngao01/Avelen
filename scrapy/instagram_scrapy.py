@@ -73,13 +73,17 @@ def from_local_json():
         for k, v in following_dict.items():
             if k == star:
                 nickname = v
-                break
         for file in os.listdir(star_dir):
             path = os.path.join(star_dir, file)
             with open(path, mode='r', encoding='utf8') as json_read:
                 item = json.load(json_read)
                 item['nickname'] = nickname
-            following_posts.append(Post(item))
+                item['owner']['username'] = nickname
+                item['owner']['pk'] = item['pk']
+            try:
+                following_posts.append(Post(item))
+            except Exception as e:
+                pass
         following_posts = sorted(following_posts, key=lambda x: x.create_time)
         yield following_posts
 
@@ -101,8 +105,9 @@ def start():
             profile_posts = scrapy_profile_post(following)
             yield profile_posts
     else:
-        for profile_posts in from_local_json():
+    for profile_posts in from_local_json():
             yield profile_posts
+        
 
 
 if __name__ == '__main__':
@@ -133,8 +138,8 @@ if __name__ == '__main__':
                   f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
             update_db(latest_post.owner_username, latest_post.nickname,
                       latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
-            if len(sys.argv) < 2:
-                instagram_logger.info("sleep 60 seconds")
-                sleep(60)
+            # if len(sys.argv) < 2:
+            #     instagram_logger.info("sleep 60 seconds")
+            #     sleep(60)
     except Exception as e:
         print(e)
