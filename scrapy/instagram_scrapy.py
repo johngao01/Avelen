@@ -44,7 +44,7 @@ def scrapy_profile_post(profile: Profile):
             page_posts_count = len(page_posts)
             page_info = page_data['data']['xdt_api__v1__feed__user_timeline_graphql_connection']['page_info']
             end_cursor = page_info['end_cursor']
-            has_next_page = page_info['has_next_page']
+            keep = page_info['has_next_page']
             for post in page_posts:
                 post = post['node']
                 post['nickname'] = profile.username
@@ -53,7 +53,7 @@ def scrapy_profile_post(profile: Profile):
                     page_posts_count -= 1
                     save_json(post)
                     results.append(post)
-                    instagram_logger.info(post.url)
+                    instagram_logger.info(f'{post.url}  {post.create_time}')
                 if post.is_pined:
                     page_posts_count -= 1
                 else:
@@ -105,8 +105,8 @@ def start():
             profile_posts = scrapy_profile_post(following)
             yield profile_posts
     else:
-    for profile_posts in from_local_json():
-            yield profile_posts
+        for profile_posts in from_local_json():
+                yield profile_posts
         
 
 
