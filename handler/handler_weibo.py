@@ -2,8 +2,6 @@ import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
-from PIL import Image
-
 from tools.utils import *
 
 with open('../cookies/johnjohn01.txt') as cookie_file:
@@ -50,7 +48,7 @@ weibo_logger = logger.bind(name="scrapy_weibo")
 
 
 class Following:
-    def __init__(self, userid, username, latest_time):
+    def __init__(self, userid, username, latest_time: str):
         self.userid = userid
         self.username = username
         if latest_time is None or latest_time == '':
@@ -137,42 +135,12 @@ def download_image(weibo_info, pic, index):
         pic_content = f.read()
     md5value = bytes2md5(pic_content)
     if pic_content:
-        size = len(pic_content)
-        human_readable_size = convert_bytes_to_human_readable(size)
         if md5value in del_file:
             weibo_logger.info("和谐的内容：" + photo_url)
+            return None
         else:
-            file_data = {
-                'media': save_path,
-                'caption': media_name,
-                'size': size
-            }
-            if file_type == 'jpg':
-                img = Image.open(save_path)
-                msg = '\t'.join([str(index), save_path, str(img.width) + "*" + str(img.height), human_readable_size])
-                weibo_logger.info(msg)
-                if img.width + img.height > MAX_PHOTO_TOTAL_PIXEL:
-                    if size < MAX_DOCUMENT_SIZE:
-                        file_data.update({'type': 'document'})
-                    else:
-                        file_data.update(
-                            {'type': 'document', 'send_url': f"{media_name}太大，[请单击我查看]({photo_url})"})
-                else:
-                    if size < MAX_PHOTO_SIZE:
-                        file_data.update({'type': 'photo'})
-                    elif MAX_PHOTO_SIZE < size < MAX_DOCUMENT_SIZE:
-                        file_data.update({'type': 'document'})
-                    else:
-                        file_data.update(
-                            {'type': 'document',
-                             'send_url': f"{media_name}太大({human_readable_size})，[请单击我查看]({photo_url})"})
-                photo_video.append(file_data)
-            else:
-                if size < MAX_VIDEO_SIZE:
-                    file_data.update({'type': 'video'})
-                else:
-                    file_data.update({'type': 'document',
-                                      'send_url': f"{media_name}太大({human_readable_size})，[请单击我查看]({photo_url})"})
+            file_data = handler_file(save_path, index, weibo_logger)
+            if file_data:
                 photo_video.append(file_data)
             if pic.get('type') == 'livephoto':
                 livephoto_url = pic.get('video')
@@ -196,9 +164,7 @@ def download_image(weibo_info, pic, index):
                     if size < MAX_VIDEO_SIZE:
                         file_data.update({'type': 'video'})
                     else:
-                        file_data.update(
-                            {'type': 'document',
-                             'send_url': f"{media_name}太大({human_readable_size})，[请单击我查看]({livephoto_url})"})
+                        pass
                     photo_video.append(file_data)
                 else:
                     os.remove(save_path)

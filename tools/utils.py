@@ -132,3 +132,39 @@ def handle_error(msg, mode='HTML'):
         return {"success": [1], "error": []}
     except Exception as e:
         return {"success": [], "error": [1]}
+
+
+def handler_file(save_path, index, logger):
+    from PIL import Image
+    media_name = os.path.basename(save_path)
+    size = os.path.getsize(save_path)
+    file_type = media_name.split('.')[-1]
+    human_readable_size = convert_bytes_to_human_readable(size)
+    file_data = {
+        'media': save_path,
+        'caption': media_name,
+        'size': size
+    }
+    if file_type in ['jpg', 'png', 'jpeg']:
+        img = Image.open(save_path)
+        msg = '\t'.join([str(index), save_path, str(img.width) + "*" + str(img.height), human_readable_size])
+        logger.info(msg)
+        if img.width + img.height > MAX_PHOTO_TOTAL_PIXEL:
+            if size < MAX_DOCUMENT_SIZE:
+                file_data.update({'type': 'document'})
+            else:
+                return None
+        else:
+            if size < MAX_PHOTO_SIZE:
+                file_data.update({'type': 'photo'})
+            elif MAX_PHOTO_SIZE < size < MAX_DOCUMENT_SIZE:
+                file_data.update({'type': 'document'})
+            else:
+                return None
+        return file_data
+    else:
+        if size < MAX_VIDEO_SIZE:
+            file_data.update({'type': 'video'})
+        else:
+            return None
+        return file_data
