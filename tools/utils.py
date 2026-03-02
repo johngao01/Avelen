@@ -147,7 +147,7 @@ def handler_file(save_path, index, logger):
     }
     if file_type in ['jpg', 'png', 'jpeg']:
         img = Image.open(save_path)
-        msg = '\t'.join([str(index), save_path, str(img.width) + "*" + str(img.height), human_readable_size])
+        msg = ' '.join(["\t", str(index), save_path, str(img.width) + "*" + str(img.height), human_readable_size])
         logger.info(msg)
         if img.width + img.height > MAX_PHOTO_TOTAL_PIXEL:
             if size < MAX_DOCUMENT_SIZE:
