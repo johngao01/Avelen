@@ -261,7 +261,7 @@ class BilibiliAPI:
             data = resp.json()
             if data["code"] != 0:
                 scrapy_logger.error(f"获取UP主动态失败: {data['message']}")
-                return []
+                return dynamics
             offset = data['data']['offset']
             for item in data["data"]['items']:
                 item['user_id'] = scraping.user_id
@@ -274,6 +274,7 @@ class BilibiliAPI:
                     return dynamics
                 else:
                     dynamics.append(post)
+            time.sleep(2)
 
 
 def handler_video(dynamic: Post, video_url, username, index):
