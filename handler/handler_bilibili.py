@@ -250,7 +250,8 @@ class BilibiliAPI:
     def get_update_dynamics(self, scraping: Following) -> list[Post]:
         dynamics = []
         offset = ''
-        scrapy_logger.info(f"开始获取 {scraping.username} 的动态，"
+        page = 1
+        scrapy_logger.info(f"开始获取 {scraping.username} 截至到 {scraping.latest_time} 的动态，"
                            f"它的主页是：https://space.bilibili.com/{scraping.user_id}/dynamic")
         while True:
             params = {"host_mid": scraping.user_id, "offset": offset}
@@ -263,6 +264,8 @@ class BilibiliAPI:
                 scrapy_logger.error(f"获取UP主动态失败: {data['message']}")
                 return dynamics
             offset = data['data']['offset']
+            total = len(data["data"]['items'])
+            scrapy_logger.info(f"第 {page} 页获取到 {total} 个动态")
             for item in data["data"]['items']:
                 item['user_id'] = scraping.user_id
                 item['username'] = scraping.username
@@ -275,6 +278,7 @@ class BilibiliAPI:
                 else:
                     dynamics.append(post)
             time.sleep(2)
+            page += 1
 
 
 def handler_video(dynamic: Post, video_url, username, index):
