@@ -4,7 +4,10 @@ from handler.handler_bilibili import *
 
 
 def main(scraping: Following):
-    dynamics = api.get_update_dynamics(scraping)
+    if len(sys.argv) < 2:
+        dynamics = api.get_update_dynamics(scraping)
+    else:
+        dynamics = from_local_json(scraping)
     dynamics = sorted(dynamics, key=lambda x: x.pub_time)
     total = len(dynamics)
     for idx, dynamic in enumerate(dynamics, start=1):

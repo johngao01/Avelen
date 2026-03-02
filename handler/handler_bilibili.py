@@ -383,3 +383,18 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
 def skip_url(url):
     with open('../bilibili_skip.txt', 'a') as f:
         f.write(f"失败跳过的 {url}\n")
+
+
+def from_local_json(scraping: Following):
+    dynamics = []
+    for root, dirs, files in os.walk(json_dir):
+        for file in files:
+            path = os.path.join(root, file)
+            if file.startswith("Dynamic") and file.endswith(".json"):
+                with open(path, 'r') as f:
+                    json_data = json.load(f)
+                if 'user_id' in json_data and json_data['user_id'] == scraping.user_id:
+                    post = Post(json_data)
+                    if post.pub_time <= scraping.latest_time:
+                        dynamics.append(post)
+    return dynamics
