@@ -270,11 +270,12 @@ class BilibiliAPI:
                 return dynamics
             offset = data['data']['offset']
             total = len(data["data"]['items'])
-            scrapy_logger.info(f"第 {page} 页获取到 {total} 个动态")
+            page_post = []
             for item in data["data"]['items']:
                 item['user_id'] = scraping.user_id
                 item['username'] = scraping.username
                 post = Post(item)
+                page_post.append(post)
                 post.save_json()
                 if post.pub_time <= scraping.latest_time:
                     if post.is_top():
@@ -282,6 +283,9 @@ class BilibiliAPI:
                     return dynamics
                 else:
                     dynamics.append(post)
+            page_post = sorted(page_post, key=lambda x: x.pub_time)
+            scrapy_logger.info(
+                f"第 {page} 页获取到 {total} 个动态, {page_post[-1].pub_time} --> {page_post[0].pub_time} , 一共获取到 {len(dynamics)} 个动态")
             time.sleep(2)
             page += 1
 
