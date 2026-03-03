@@ -162,6 +162,11 @@ class Post:
     def info(self):
         return f"{self.dynamic_type} {self.pub_time} {self.url}"
 
+    @property
+    def badge_text(self):
+        text = get(self.modules, 'module_dynamic.major.badge.text')
+        return text
+
 
 class BilibiliAPI:
     """B站 API 客户端"""
