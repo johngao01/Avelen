@@ -334,6 +334,9 @@ def handler_video(dynamic: Post, video_url, username, index):
 
 def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
     scrapy_logger.info(f"{index} {dynamic.info()}")
+    if dynamic.badge_text == '充电专属':
+        scrapy_logger.info("\t充电专属内容，跳过处理")
+        skip_url(url)
     draw = get(dynamic.node, 'modules.module_dynamic.major.draw.items')
     opus_response = api.session.get(f'https://www.bilibili.com/opus/{dynamic.id_str}')
     if opus_response.status_code == 200:
