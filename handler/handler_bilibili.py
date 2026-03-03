@@ -389,6 +389,7 @@ def skip_url(url):
 
 def from_local_json(scraping: Following):
     dynamics = []
+    scrapy_logger.info(f"从本地json文件获取 {scraping.username} 的动态")
     for root, dirs, files in os.walk(json_dir):
         for file in files:
             path = os.path.join(root, file)
