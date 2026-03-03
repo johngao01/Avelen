@@ -343,8 +343,8 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
     else:
         scrapy_logger.warning(f"获取 {url} 的 html 内容失败")
         desc = ''
-    if len(desc) > 80:
-        desc = sub('[\\\\/:*?"<>|\n]', "", desc[0:50])
+    if len(desc) > 30:
+        desc = sub('[\\\\/:*?"<>|\n]', "", desc[0:30])
     else:
         desc = sub('[\\\\/:*?"<>|\n]', "", desc)
     if draw is None:
