@@ -338,6 +338,8 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
         result = tree.xpath('//div[@class="opus-module-content opus-paragraph-children"]//span/text()')
         if result:
             desc = result[0]
+            dynamic.node['describe'] = desc
+            dynamic.save_json()
         else:
             desc = ''
     else:
