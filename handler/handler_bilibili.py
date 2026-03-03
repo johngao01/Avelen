@@ -283,6 +283,9 @@ class BilibiliAPI:
 
 def handler_video(dynamic: Post, video_url, username, index):
     scrapy_logger.info(f"{index} {dynamic.info()}")
+    if dynamic.badge_text == '充电专属':
+        scrapy_logger.info("\t充电专属内容，跳过处理")
+        skip_url(video_url)
     ydl_opts.update({'outtmpl': rf'/root/download/bilibili/{username}/%(id)s_%(title)s.%(ext)s'})
     with YoutubeDL(ydl_opts) as ydl:
         # 这种方式比 process_info 更可控
