@@ -367,7 +367,7 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
         src = item.get('src')
         response = api.session.get(src, stream=True)
         if response.status_code != 200:
-            scrapy_logger.error(f"下载 {src} 失败")
+            scrapy_logger.error(f"下载 {src} 失败" + f" {response.text}")
             return None
         ext = src.split('.')[-1]
         filename = dynamic.id_str + f"_{desc}_{idx}.{ext}"
