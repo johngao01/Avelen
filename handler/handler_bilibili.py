@@ -268,6 +268,8 @@ class BilibiliAPI:
             if data["code"] != 0:
                 scrapy_logger.error(f"获取UP主动态失败: {data['message']}")
                 return dynamics
+            if not data['data']['has_more']:
+                return dynamics
             offset = data['data']['offset']
             total = len(data["data"]['items'])
             page_post = []
