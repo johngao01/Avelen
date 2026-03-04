@@ -10,7 +10,19 @@ from loguru import logger
 from tools.utils import *
 from yt_dlp import YoutubeDL
 from pydash import get
+from rich.console import Console
+from rich.progress import (
+    Progress,
+    TextColumn,
+    BarColumn,
+    DownloadColumn,
+    TransferSpeedColumn,
+    TimeRemainingColumn,
+    SpinnerColumn
+)
 
+# 初始化 Rich 控制台
+console = Console()
 logger.remove()
 logger.add(
     sys.stderr,
@@ -58,27 +70,6 @@ with open(cookies_file, mode='r', encoding='utf8') as cookie_file:
         cookies_list.append(f"{name}={value}")
     cookies_str = ";".join(cookies_list)
 
-# 配置（根据需要调整）
-ydl_opts = {
-    'logger': scrapy_logger,
-    # cookies 文件（Windows 示例路径）
-    'cookiefile': cookies_file,
-    # 输出模板，便于知道文件保存位置；可按需修改
-    # 'outtmpl': r'/root/download/bilibili/%(uploader)s/%(id)s_%(title)s.%(ext)s',
-    # 合并视频+音频
-    'format': 'bestvideo+bestaudio',
-    'fragment_retries': 10,
-    'retries': 10,
-    # 忽略可跳过的错误（下载失败时继续后续条目）
-    'ignoreerrors': True,
-    # 只处理播放列表中的第 1-5 条（你也可以改为 '1-5'）
-    # 让 yt-dlp 为每个条目写 .info.json
-    'writeinfojson': True,
-    # 不要用扁平提取（如果你需要完整 metadata，确保不要设置 flat-playlist）
-    'extract_flat': True,
-    # 倒序处理，先处理最早的作品
-    'playlist_reverse': True
-}
 # WBI 签名用的混淆表
 MIXIN_KEY_ENC_TAB = [
     46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
@@ -86,6 +77,70 @@ MIXIN_KEY_ENC_TAB = [
     37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4,
     22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52
 ]
+
+
+class VideoDownloader:
+    def __init__(self):
+        self.start_time = None
+        self.end_time = None
+        self.total_size = 0
+        self.final_filename = ""
+
+        # 定义 Rich 进度条样式 (现代、简洁、带渐变感)
+        self.progress = Progress(
+            "   ",
+            SpinnerColumn("dots"),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=None),
+            "[progress.percentage]{task.percentage:>3.0f}%",
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            "ETA:",
+            TimeRemainingColumn(),
+            console=console,
+            transient=True  # 下载完成后进度条自动消失
+        )
+        self.task_id = None
+
+    def progress_hook(self, d):
+        """yt-dlp 回调函数"""
+        if d['status'] == 'downloading':
+            if self.start_time is None:
+                self.start_time = time.time()
+
+            # 获取文件大小
+            self.total_size = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+            downloaded = d.get('downloaded_bytes', 0)
+
+            if self.task_id is None:
+                # 提取纯文件名用于进度条显示
+                filename = os.path.basename(d.get('filename', 'Video'))
+                short_name = (filename[:20] + '..') if len(filename) > 20 else filename
+                self.task_id = self.progress.add_task(f"[cyan]{short_name}", total=self.total_size)
+
+            self.progress.update(self.task_id, completed=downloaded)
+
+        elif d['status'] == 'finished':
+            self.end_time = time.time()
+            # 这里的 filename 可能是临时文件，yt-dlp 会在后续逻辑中更新它
+            self.final_filename = d.get('info_dict').get('_filename') or d.get('filename')
+
+    def print_final_report(self):
+        """下载完成后的单行精简输出"""
+        if not self.end_time or not self.start_time:
+            return
+
+        duration = self.end_time - self.start_time
+        speed = self.total_size / duration if duration > 0 else 0
+        abspath = os.path.abspath(self.final_filename)
+
+        # 核心输出逻辑：一行展示所有信息，不同颜色标记
+        console.print(
+            f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | INFO |\t[white][/white][cyan]{abspath}[/cyan] "
+            f"[white][/white][green]{convert_bytes_to_human_readable(self.total_size)}[/green] "
+            f"[white][/white][yellow]{convert_bytes_to_human_readable(speed)}/s[/yellow] "
+            f"[white][/white][magenta]{duration:.2f}s[/magenta]"
+        )
 
 
 class Following:
@@ -297,13 +352,43 @@ def handler_video(dynamic: Post, video_url, username, index):
     if dynamic.badge_text == '充电专属':
         scrapy_logger.info("\t充电专属内容，跳过处理")
         skip_url(video_url)
-    ydl_opts.update({'outtmpl': rf'/root/download/bilibili/{username}/%(id)s_%(title)s.%(ext)s'})
-    with YoutubeDL(ydl_opts) as ydl:
-        # 这种方式比 process_info 更可控
-        video = ydl.extract_info(video_url, download=True)
-        if not video:
-            scrapy_logger.error(f"获取 {video_url} 数据失败")
-            return 'error'
+    downloader = VideoDownloader()
+    ydl_opts = {
+        'logger': scrapy_logger,
+        # cookies 文件（Windows 示例路径）
+        'cookiefile': cookies_file,
+        # 输出模板，便于知道文件保存位置；可按需修改
+        'outtmpl': rf'/root/download/bilibili/{username}/%(id)s_%(title)s.%(ext)s',
+        # 合并视频+音频
+        'format': 'bestvideo+bestaudio',
+        'fragment_retries': 10,
+        'retries': 10,
+        # 忽略可跳过的错误（下载失败时继续后续条目）
+        'ignoreerrors': True,
+        # 只处理播放列表中的第 1-5 条（你也可以改为 '1-5'）
+        # 让 yt-dlp 为每个条目写 .info.json
+        'writeinfojson': True,
+        # 不要用扁平提取（如果你需要完整 metadata，确保不要设置 flat-playlist）
+        'extract_flat': True,
+        # 倒序处理，先处理最早的作品
+        'playlist_reverse': True,
+        'progress_hooks': [downloader.progress_hook],
+        'noprogress': True,
+        'quiet': True,
+    }
+    try:
+        with downloader.progress:
+            with YoutubeDL(ydl_opts) as ydl:
+                # 这种方式比 process_info 更可控
+                video = ydl.extract_info(video_url, download=True)
+                if not video:
+                    scrapy_logger.error(f"获取 {video_url} 数据失败")
+                    return None
+            # 进度条结束后输出统计行
+            downloader.print_final_report()
+    except Exception as e:
+        logger.error(f"下载失败: {e}")
+        return None
     title = get(video, 'fulltitle')
     post_time = get(video, 'timestamp') or get(video, 'epoch')
     if post_time is None:
