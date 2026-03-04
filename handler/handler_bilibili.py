@@ -346,27 +346,6 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
     if dynamic.badge_text == '充电专属':
         scrapy_logger.info("\t充电专属内容，跳过处理")
         skip_url(url)
-    draw = get(dynamic.node, 'modules.module_dynamic.major.draw.items')
-    opus_response = api.session.get(f'https://www.bilibili.com/opus/{dynamic.id_str}')
-    if opus_response.status_code == 200:
-        tree = etree.HTML(opus_response.text)
-        result = tree.xpath('//div[@class="opus-module-content opus-paragraph-children"]//span/text()')
-        if result:
-            desc = result[0]
-            dynamic.node['describe'] = desc
-            dynamic.save_json()
-        else:
-            desc = ''
-    else:
-        scrapy_logger.warning(f"获取 {url} 的 html 内容失败")
-        desc = ''
-    if len(desc) > 30:
-        desc = sub('[\\\\/:*?"<>|\n]', "", desc[0:30])
-    else:
-        desc = sub('[\\\\/:*?"<>|\n]', "", desc)
-    if draw is None:
-        return None
-    total = len(draw)
     post_data = {
         'username': scraping.username,
         'nickname': get(dynamic.author, 'name') or scraping.username,
@@ -375,25 +354,58 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
         'idstr': dynamic.id_str,
         'mblogid': '',
         'create_time': dynamic.pub_time.strftime('%Y-%m-%d %H:%M:%S'),
-        'text_raw': desc,
     }
-    files = []
-    for idx, item in enumerate(draw, start=1):
-        src = item.get('src')
-        response = api.session.get(src, stream=True)
-        if response.status_code != 200:
-            scrapy_logger.error(f"下载 {src} 失败" + f" {response.text}")
+    download_files = find_download_file(scraping.username, dynamic.id_str)
+    if download_files:
+        files = []
+        total = len(download_files)
+        for idx, filepath in enumerate(download_files, start=1):
+            file_data = handler_file(filepath, f'{idx}/{total}', scrapy_logger)
+            if file_data:
+                files.append(file_data)
+        desc = files[0].split('.')[0].split('_')[1]
+        post_data.update({'files': files, 'text_raw': desc})
+    else:
+        draw = get(dynamic.node, 'modules.module_dynamic.major.draw.items')
+        opus_response = api.session.get(f'https://www.bilibili.com/opus/{dynamic.id_str}')
+        if opus_response.status_code == 200:
+            tree = etree.HTML(opus_response.text)
+            result = tree.xpath('//div[@class="opus-module-content opus-paragraph-children"]//span/text()')
+            if result:
+                desc = result[0]
+                dynamic.node['describe'] = desc
+                dynamic.save_json()
+            else:
+                desc = ''
+        else:
+            scrapy_logger.warning(f"获取 {url} 的 html 内容失败")
+            desc = ''
+        post_data.update({'text_raw': desc})
+        if len(desc) > 30:
+            desc = sub('[\\\\/:*?"<>|\n]', "", desc[0:30])
+        else:
+            desc = sub('[\\\\/:*?"<>|\n]', "", desc)
+        if draw is None:
             return None
-        ext = src.split('.')[-1]
-        filename = dynamic.id_str + f"_{desc}_{idx}.{ext}"
-        filepath = os.path.join(save_dir, scraping.username, filename)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, mode='wb') as f:
-            f.write(response.content)
-        file_data = handler_file(filepath, f'{idx}/{total}', scrapy_logger)
-        if file_data:
-            files.append(file_data)
-    post_data.update({'files': files})
+        total = len(draw)
+
+        files = []
+        for idx, item in enumerate(draw, start=1):
+            src = item.get('src')
+            response = api.session.get(src, stream=True)
+            if response.status_code != 200:
+                scrapy_logger.error(f"下载 {src} 失败" + f" {response.text}")
+                return None
+            ext = src.split('.')[-1]
+            filename = dynamic.id_str + f"_{desc}_{idx}.{ext}"
+            filepath = os.path.join(save_dir, scraping.username, filename)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, mode='wb') as f:
+                f.write(response.content)
+            file_data = handler_file(filepath, f'{idx}/{total}', scrapy_logger)
+            if file_data:
+                files.append(file_data)
+        post_data.update({'files': files})
     return post_data
 
 
@@ -416,3 +428,15 @@ def from_local_json(scraping: Following):
                     if post.pub_time <= scraping.latest_time:
                         dynamics.append(post)
     return dynamics
+
+
+def find_download_file(username: str, file_id: str):
+    files = []
+    user_dir = os.path.join(save_dir, username)
+    if not os.path.exists(user_dir):
+        return files
+    else:
+        for file in os.listdir(user_dir):
+            if file_id in file:
+                files.append(os.path.join(user_dir, file))
+    return files
