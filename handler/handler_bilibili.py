@@ -354,6 +354,7 @@ def handler_video(dynamic: Post, video_url, username, index):
     if dynamic.badge_text == '充电专属':
         scrapy_logger.info("\t充电专属内容，跳过处理")
         skip_url(video_url)
+        return None
     downloader = VideoDownloader()
     ydl_opts = {
         'logger': scrapy_logger,
@@ -435,6 +436,7 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
     if dynamic.badge_text == '充电专属':
         scrapy_logger.info("\t充电专属内容，跳过处理")
         skip_url(url)
+        return None
     post_data = {
         'username': scraping.username,
         'nickname': get(dynamic.author, 'name') or scraping.username,
