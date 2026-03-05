@@ -219,7 +219,9 @@ class Post:
 
     @property
     def badge_text(self):
-        text = get(self.modules, 'module_dynamic.major.badge.text')
+        if get(self.node, 'basic.is_only_fans'):
+            return '充电专属'
+        text = get(self.modules, 'module_dynamic.major.archive.badge.text')
         return text
 
 
