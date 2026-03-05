@@ -495,7 +495,10 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
             file_data = handler_file(filepath, f'{idx}/{total}', scrapy_logger)
             if file_data:
                 files.append(file_data)
-        post_data.update({'files': files})
+        if files:
+            post_data.update({'files': files})
+        else:
+            return None
     return post_data
 
 
