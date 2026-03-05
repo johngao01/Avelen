@@ -515,8 +515,7 @@ def from_local_json(scraping: Following):
                     json_data = json.load(f)
                 if 'user_id' in json_data and json_data['user_id'] == scraping.user_id:
                     post = Post(json_data)
-                    if post.pub_time <= scraping.latest_time:
-                        dynamics.append(post)
+                    dynamics.append(post)
     return dynamics
 
 
