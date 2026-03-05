@@ -452,7 +452,8 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
             file_data = handler_file(filepath, f'{idx}/{total}', scrapy_logger)
             if file_data:
                 files.append(file_data)
-        desc = files[0].split('.')[0].split('_')[1]
+        desc = download_files[0].split('.')[0].split('_')
+        desc = '_'.join(desc[1:-1])
         post_data.update({'files': files, 'text_raw': desc})
     else:
         draw = get(dynamic.node, 'modules.module_dynamic.major.draw.items')
