@@ -12,12 +12,12 @@ def main(scraping: Following):
     total = len(dynamics)
     for idx, dynamic in enumerate(dynamics, start=1):
         if dynamic.dynamic_type == 'DYNAMIC_TYPE_AV':
-            url = f'https://www.bilibili.com/video/{dynamic.get_video_id()}/'
+            url = f'https://www.bilibili.com/video/{dynamic.get_video_id()}'
             if url in send_url:
                 continue
             post_data = handler_video(dynamic, url, scraping.username, f"{idx}/{total}")
         elif dynamic.dynamic_type == 'DYNAMIC_TYPE_DRAW':
-            url = f'https://www.bilibili.com/opus/{dynamic.get_opus_id()}/'
+            url = f'https://www.bilibili.com/opus/{dynamic.get_opus_id()}'
             if url in send_url:
                 continue
             post_data = handler_opus(dynamic, url, scraping, f"{idx}/{total}", api)
