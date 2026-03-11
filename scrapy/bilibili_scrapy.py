@@ -3,7 +3,7 @@ import traceback
 from handler.handler_bilibili import *
 from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
 from tools.settings import enable_no_send_mode
-from tools.pipeline import handle_success
+from tools.pipeline import process_dispatch_result
 
 
 def main(scraping: Following):
@@ -29,16 +29,19 @@ def main(scraping: Following):
         if post_data is None:
             continue
         r = request_webhook('/main', post_data, scrapy_logger)
-        if getattr(r, 'status_code', None) == 200:
-            handle_success(
-                r,
-                scrapy_logger,
-                on_update=lambda: update_db(scraping.user_id, scraping.username,
-                                            dynamic.pub_time.strftime("%Y-%m-%d %H:%M:%S"))
+        result = process_dispatch_result(
+            r,
+            scrapy_logger,
+            url,
+            on_success_update=lambda: update_db(
+                scraping.user_id,
+                scraping.username,
+                dynamic.pub_time.strftime("%Y-%m-%d %H:%M:%S")
             )
+        )
+        if result in ('success', 'skip'):
             continue
         else:
-            scrapy_logger.error(f"处理 {url} 失败")
             continue
 
 

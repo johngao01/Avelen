@@ -5,7 +5,7 @@ from handler.handler_weibo import *
 from func_timeout import func_set_timeout
 from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
 from tools.settings import enable_no_send_mode
-from tools.pipeline import handle_success, update_after_batch
+from tools.pipeline import process_dispatch_result, update_after_batch
 urllib3.disable_warnings()
 
 
@@ -169,15 +169,11 @@ def start(scraping: Following, has_send):
             weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
             weibo_logger.error(traceback.format_exc())
         else:
-            if getattr(r, 'status_code', None) == 200:
-                handle_success(r, weibo_logger)
-                continue
-            elif type(r) is str and 'skip' in r:
+            result = process_dispatch_result(r, weibo_logger, weibo['weibo_url'])
+            if result in ('success', 'skip'):
                 continue
             else:
                 error += 1
-                log_error(weibo['weibo_url'])
-                weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
     weibo_logger.info('\n')
     update_after_batch(lambda: update_db(
         scraping.userid,

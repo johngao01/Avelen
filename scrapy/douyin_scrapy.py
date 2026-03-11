@@ -3,7 +3,7 @@ from tools.database import *
 from handler.handler_douyin import *
 from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
 from tools.settings import enable_no_send_mode
-from tools.pipeline import handle_success, update_after_batch
+from tools.pipeline import process_dispatch_result, update_after_batch
 
 
 class Scrapy:
@@ -137,18 +137,19 @@ def start(scraping: Following, has_send):
             r = handler_video_douyin(aweme)
         else:
             r = handler_note_douyin(aweme)
-        if getattr(r, 'status_code', None) == 200:
+        result = process_dispatch_result(
+            r,
+            scrapy_logger,
+            aweme.aweme_url,
+            on_failure_update=lambda: update_db(scraping.user_sec_uid, scraping.username, previous_time)
+        )
+        if result == 'success':
             previous_time = aweme.create_time_str
-            handle_success(r, scrapy_logger)
             continue
-        elif r is not None:
+        elif result == 'failure':
             error += 1
-            update_after_batch(lambda: update_db(scraping.user_sec_uid, scraping.username, previous_time))
-            log_error(aweme.aweme_url)
-            scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
             continue
         else:
-            log_error(aweme.aweme_url)
             continue
     update_after_batch(lambda: update_db(
         scraping.user_sec_uid,

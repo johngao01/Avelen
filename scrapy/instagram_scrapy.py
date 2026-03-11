@@ -4,7 +4,7 @@ from tools.database import *
 from handler.handler_instagram import *
 from tools.scrapy_runner import build_common_cli_parser, select_followings
 from tools.settings import enable_no_send_mode
-from tools.pipeline import handle_success, update_after_batch
+from tools.pipeline import process_dispatch_result, update_after_batch
 
 following_dict = {}
 
@@ -132,12 +132,7 @@ if __name__ == '__main__':
                 instagram_logger.info(' '.join([str(i) + "/" + str(total), p.url, p.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                                                 p.text.replace('\n', ''), str(p.media_count)]))
                 result = handler_post(p)
-                if getattr(result, 'status_code', None) == 200:
-                    handle_success(result, instagram_logger)
-                elif result is not None:
-                    log_error(p.url, result.status_code)
-                else:
-                    log_error(p.url, result)
+                process_dispatch_result(result, instagram_logger, p.url)
             print(f"replace into user values ('{latest_post.owner_username}','{latest_post.nickname}',"
                   f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
             update_after_batch(lambda: update_db(
