@@ -37,6 +37,8 @@ def build_common_cli_parser(default_valid=(1,)):
                         help='筛选 scrapy_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('--scrapy-time-end', default=None,
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+    parser.add_argument('--no-send', action='store_true',
+                        help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
     return parser
 
 

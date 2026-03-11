@@ -1,5 +1,6 @@
 import traceback
 import urllib3
+import os
 from tools.database import *
 from handler.handler_weibo import *
 from func_timeout import func_set_timeout
@@ -151,6 +152,7 @@ def start(scraping: Following, has_send):
     logger.info(f"{new_weibo[0]['weibo_time']}  {new_weibo[-1]['weibo_time']}")
     error = 0
     total = len(new_weibo)
+    no_send_mode = os.getenv('SCRAPY_NO_SEND', '0') == '1'
     for i, weibo in enumerate(new_weibo, start=1):
         if weibo['weibo_url'] in has_send:
             continue
@@ -168,8 +170,9 @@ def start(scraping: Following, has_send):
             weibo_logger.error(traceback.format_exc())
         else:
             if getattr(r, 'status_code', None) == 200:
-                download_log(r)
-                rate_control(r, weibo_logger)
+                if not no_send_mode:
+                    download_log(r)
+                    rate_control(r, weibo_logger)
                 continue
             elif type(r) is str and 'skip' in r:
                 continue
@@ -178,12 +181,15 @@ def start(scraping: Following, has_send):
                 log_error(weibo['weibo_url'])
                 weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
     weibo_logger.info('\n')
-    update_db(scraping.userid, scraping.username, latest_weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S'))
+    if not no_send_mode:
+        update_db(scraping.userid, scraping.username, latest_weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S'))
 
 
 if __name__ == '__main__':
     parser = build_common_cli_parser(default_valid=(1,))
     args = parser.parse_args()
+    if args.no_send:
+        os.environ['SCRAPY_NO_SEND'] = '1'
     all_followings = select_followings('weibo', args)
     send_weibo_url = get_send_url('weibo')
     run_followings(

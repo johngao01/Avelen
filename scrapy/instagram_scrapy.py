@@ -1,4 +1,5 @@
 import random
+import os
 
 from tools.database import *
 from handler.handler_instagram import *
@@ -114,6 +115,9 @@ if __name__ == '__main__':
     parser = build_common_cli_parser(default_valid=(1,))
     parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
     args = parser.parse_args()
+    if args.no_send:
+        os.environ['SCRAPY_NO_SEND'] = '1'
+    no_send_mode = os.getenv('SCRAPY_NO_SEND', '0') == '1'
     all_followings = select_followings('instagram', args)
     following_dict.update({follow[0]: follow[1] for follow in all_followings})
     try:
@@ -129,16 +133,18 @@ if __name__ == '__main__':
                                                 p.text.replace('\n', ''), str(p.media_count)]))
                 result = handler_post(p)
                 if getattr(result, 'status_code', None) == 200:
-                    download_log(result)
-                    rate_control(result, instagram_logger)
+                    if not no_send_mode:
+                        download_log(result)
+                        rate_control(result, instagram_logger)
                 elif result is not None:
                     log_error(p.url, result.status_code)
                 else:
                     log_error(p.url, result)
             print(f"replace into user values ('{latest_post.owner_username}','{latest_post.nickname}',"
                   f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
-            update_db(latest_post.owner_username, latest_post.nickname,
-                      latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
+            if not no_send_mode:
+                update_db(latest_post.owner_username, latest_post.nickname,
+                          latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
             # if len(sys.argv) < 2:
             #     instagram_logger.info("sleep 60 seconds")
             #     sleep(60)

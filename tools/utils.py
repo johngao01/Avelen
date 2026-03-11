@@ -1,5 +1,6 @@
 import hashlib
 import os
+from types import SimpleNamespace
 from time import sleep
 from datetime import datetime
 from pathlib import Path
@@ -84,6 +85,8 @@ def save_content(save_path, response):
 
 def request_webhook(method, post_data, logger):
     # 保留旧调用接口名，内部已改为本地分发，不再走 HTTP webhook。
+    if os.getenv('SCRAPY_NO_SEND', '0') == '1':
+        return SimpleNamespace(status_code=200, json=lambda: {'messages': []})
     if method != '/main':
         logger.info(f'unsupported method: {method}')
         return None
