@@ -111,7 +111,7 @@ def start(all_followings, use_local_json=False):
 if __name__ == '__main__':
     send_url = get_send_url('instagram')
     root_dir = '/root/download/instagram/json/'
-    parser = build_common_cli_parser(default_valid=(1, 2))
+    parser = build_common_cli_parser(default_valid=(1,))
     parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
     args = parser.parse_args()
     all_followings = select_followings('instagram', args)

@@ -20,11 +20,11 @@ def run_followings(all_followings: Iterable[Any], build_following: Callable[[Any
         logger.info(traceback.format_exc())
 
 
-def build_common_cli_parser(default_valid=(1, 2)):
+def build_common_cli_parser(default_valid=(1,)):
     """构建各平台共用命令行参数。"""
     parser = argparse.ArgumentParser(description='Scrapy runner options')
     parser.add_argument('--valid', nargs='+', type=int, default=list(default_valid), choices=[0, 1, 2],
-                        help='关注类型，可多选：0取消关注 1特别关注 2普通关注，默认 1 2')
+                        help='关注类型，可多选：0取消关注 1特别关注 2普通关注，默认 1')
     parser.add_argument('--user-id', action='append', dest='user_ids', default=[],
                         help='按 user.userid 精确筛选，可重复传参')
     parser.add_argument('--username', action='append', dest='usernames', default=[],

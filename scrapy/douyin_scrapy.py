@@ -153,7 +153,7 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    parser = build_common_cli_parser(default_valid=(1, 2))
+    parser = build_common_cli_parser(default_valid=(1,))
     args = parser.parse_args()
     all_followings = select_followings('douyin', args)
     send_url = get_send_url('douyin')
