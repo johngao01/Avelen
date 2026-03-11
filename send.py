@@ -1,5 +1,4 @@
 import re
-import time
 import traceback
 import asyncio
 import os
@@ -16,6 +15,12 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 API_URL = 'http://localhost:8081/bot'
 FILE_API_URL = 'http://localhost:8081/file/bot'
 MARKDOWN_CHAR = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+
+
+def _build_bot() -> Bot:
+    if not TOKEN:
+        raise RuntimeError('TELEGRAM_BOT_TOKEN is required')
+    return Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
 
 
 def clear_name(text):
@@ -170,7 +175,7 @@ async def send_message_after(tg_bot, data, messages):
 
 
 async def send_multiple(data):
-    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
+    tg_bot = _build_bot()
     photos = []
     videos = []
     documents = []
@@ -208,7 +213,7 @@ async def send_multiple(data):
 
 
 async def send_single(data):
-    tg_bot = Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
+    tg_bot = _build_bot()
     file = data['files']
     caption = file['caption']
     path = file['media']

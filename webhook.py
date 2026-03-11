@@ -1,6 +1,4 @@
 import asyncio
-import json
-import time
 import traceback
 import sys
 import threading
@@ -16,48 +14,33 @@ app.config['DEFAULT_CHARSET'] = 'utf-8'
 BUSY_LOCK = threading.Lock()
 
 
-def catch_errors(func):
-    def wrapper(*args, **kwargs):
-        acquired = False
-        try:
-            while True:
-                acquired = BUSY_LOCK.acquire(blocking=False)
-                if acquired:
-                    r = asyncio.run(func(*args, **kwargs))
-                    return r
-                else:
-                    print("等待4秒后处理请求")
-                    time.sleep(4)
-        except Exception as e:
-            traceback.print_exc()
-            detailed_error_info = traceback.format_exc()
-            print(detailed_error_info)
-            return jsonify({'error': str(e)}), 500
-        finally:
-            if acquired and BUSY_LOCK.locked():
-                BUSY_LOCK.release()
-
-    return wrapper
-
-
 @app.route('/main', methods=['POST'], endpoint='main')
-@catch_errors
-async def main():
-    data = request.get_data(as_text=True)  # Get the request data as a string
-    data = json.loads(data)
-    print(data['username'], data['url'], data['create_time'])
-    files = data.get('files')
-    if type(files) is dict:
-        response_message = await send.send_single(data)
-    elif type(files) is list:
-        response_message = await send.send_multiple(data)
-    else:
-        return
-    if response_message:
-        result = {
-            'messages': response_message
-        }
-        return jsonify(result)
+def main():
+    acquired = BUSY_LOCK.acquire(blocking=False)
+    if not acquired:
+        return jsonify({'error': 'server busy'}), 429
+    try:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'error': 'invalid json payload'}), 400
+        print(data.get('username'), data.get('url'), data.get('create_time'))
+        files = data.get('files')
+        if isinstance(files, dict):
+            response_message = asyncio.run(send.send_single(data))
+        elif isinstance(files, list):
+            response_message = asyncio.run(send.send_multiple(data))
+        else:
+            return jsonify({'error': 'invalid files field'}), 400
+        if response_message:
+            return jsonify({'messages': response_message})
+        return jsonify({'messages': []})
+    except Exception as e:
+        traceback.print_exc()
+        detailed_error_info = traceback.format_exc()
+        print(detailed_error_info)
+        return jsonify({'error': str(e)}), 500
+    finally:
+        BUSY_LOCK.release()
 
 
 @app.route("/")

@@ -137,7 +137,7 @@ def get_message_url(message_id):
 def init_db():
     conn = get_db_conn()
     cursor = conn.cursor()
-    with open('database.ddl', mode='a', encoding='utf-8') as f:
+    with open('database.ddl', mode='r', encoding='utf-8') as f:
         sql = f.read()
     cursor.execute(sql)
     cursor.close()
