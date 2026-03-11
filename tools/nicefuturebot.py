@@ -93,8 +93,7 @@ async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = await delete(update, context)
     if url:
         if 'weibo' in url:
-            r1 = handle_weibo('1/1', url)
-            store_message_data(r1)
+            handle_weibo('1/1', url)
         elif 'douyin' in url:
             link, aweme_id = get_url_id(url)
             aweme = get_aweme_detail(aweme_id)
@@ -128,11 +127,10 @@ async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     logger.info(weibo_link)
     r1 = handle_weibo('1/1', weibo_link)
-    if type(r1) is requests.Response:
-        if r1.status_code == 200:
-            store_message_data(r1)
-        else:
-            logger.error(f"处理微博 {weibo_link} 失败")
+    if getattr(r1, 'status_code', None) == 200:
+        pass
+    elif r1 is not None:
+        logger.error(f"处理微博 {weibo_link} 失败")
     else:
         logger.error(f"处理微博 {weibo_link} 失败")
     await delete_message(context, DEVELOPER_CHAT_ID, message_id)
@@ -282,8 +280,7 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for message_id in messages_id:
                 delete_db_message(message_id)
             if 'weibo' in url:
-                r1 = handle_weibo('1/1',url)
-                store_message_data(r1)
+                handle_weibo('1/1',url)
             elif 'douyin' in url:
                 link, aweme_id = get_url_id(url)
                 aweme = get_aweme_detail(aweme_id)
@@ -303,11 +300,10 @@ async def instagram_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await delete_message(context, DEVELOPER_CHAT_ID, message_id)
         return
     r = handler_post(Post(post['data']['xdt_api__v1__media__shortcode__web_info']['items'][0]))
-    if type(r) is requests.Response:
-        if r.status_code == 200:
-            store_message_data(r)
-        else:
-            logger.error(f"处理instagram {link_message} 失败")
+    if getattr(r, 'status_code', None) == 200:
+        pass
+    elif r is not None:
+        logger.error(f"处理instagram {link_message} 失败")
     else:
         logger.error(f"处理instagram {link_message} 失败")
     await delete_message(context, DEVELOPER_CHAT_ID, message_id)

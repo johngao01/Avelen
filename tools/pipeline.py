@@ -1,0 +1,54 @@
+"""Shared scraper pipeline helpers.
+
+This module centralizes send-result handling and side effects (rate control, update_db)
+so each platform scraper focuses on crawl/parse logic.
+"""
+
+from typing import Callable
+
+from tools.settings import is_no_send_mode
+from tools.utils import download_log, rate_control, log_error
+
+
+def is_send_success(result) -> bool:
+    return getattr(result, 'status_code', None) == 200
+
+
+def handle_success(result, logger, on_update: Callable[[], None] | None = None):
+    """Handle standard success side effects for one dispatched post."""
+    if not is_no_send_mode():
+        download_log(result)
+        rate_control(result, logger)
+        if on_update:
+            on_update()
+
+
+def update_after_batch(on_update: Callable[[], None] | None = None):
+    """Run end-of-batch user latest_time update when send mode is enabled."""
+    if not is_no_send_mode() and on_update:
+        on_update()
+
+
+def handle_failure(result, logger, url: str, on_update: Callable[[], None] | None = None):
+    """Handle standard failure logging/update path."""
+    if on_update:
+        update_after_batch(on_update)
+    error_text = getattr(result, 'status_code', result)
+    log_error(url, error_text)
+    logger.error(f"处理 {url} 失败")
+
+
+def process_dispatch_result(result, logger, url: str,
+                            on_success_update: Callable[[], None] | None = None,
+                            on_failure_update: Callable[[], None] | None = None) -> str:
+    """Normalize dispatcher result handling.
+
+    Returns one of: success / skip / failure.
+    """
+    if is_send_success(result):
+        handle_success(result, logger, on_update=on_success_update)
+        return 'success'
+    if isinstance(result, str) and 'skip' in result:
+        return 'skip'
+    handle_failure(result, logger, url, on_update=on_failure_update)
+    return 'failure'

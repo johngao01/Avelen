@@ -30,8 +30,7 @@ for i, line in enumerate(lines_seen, start=1):
     else:
         continue
     send_url.append(url)
-    if type(r) is requests.Response and r.status_code == 200:
-        store_message_data(r)
+    if getattr(r, 'status_code', None) == 200:
         rate_control(r, weibo_logger)
     elif type(r) is str and 'skip' in r:
         continue

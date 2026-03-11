@@ -3,6 +3,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from tools.utils import *
+from tools.following import FollowUser
+from tools.downloader import DownloadTask, download_one
 
 with open('../cookies/johnjohn01.txt') as cookie_file:
     cookies = cookie_file.read()
@@ -47,14 +49,12 @@ logger.add(
 weibo_logger = logger.bind(name="scrapy_weibo")
 
 
-class Following:
+class Following(FollowUser):
+    """微博关注对象（复用统一 FollowUser）。"""
+
     def __init__(self, userid, username, latest_time: str):
-        self.userid = userid
-        self.username = username
-        if latest_time is None or latest_time == '':
-            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
-        else:
-            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
+        user = FollowUser.from_db_row(userid, username, latest_time)
+        super().__init__(user.userid, user.username, user.latest_time)
 
 
 def standardize_date(created_at):
@@ -126,8 +126,8 @@ def download_image(weibo_info, pic, index):
     if os.path.exists(save_path):
         pass
     else:
-        response = requests.get(photo_url, headers=weibo_info['header'], stream=True)
-        save_content(save_path, response)
+        task = DownloadTask(url=photo_url, save_path=save_path, headers=weibo_info['header'])
+        _, response = download_one(task)
         if response.status_code != 200:
             weibo_logger.info("禁止访问的内容：" + photo_url)
             return photo_video
@@ -149,8 +149,10 @@ def download_image(weibo_info, pic, index):
                 if os.path.exists(save_path):
                     size = os.path.getsize(save_path)
                 else:
-                    response = requests.get(livephoto_url, headers=weibo_info['header'])
-                    save_content(save_path, response)
+                    task = DownloadTask(url=livephoto_url, save_path=save_path, headers=weibo_info['header'])
+                    _, response = download_one(task)
+                    if response.status_code != 200:
+                        return photo_video
                     size = os.path.getsize(save_path)
                 duration = get_duration_from_cv2(save_path)
                 msg = '\t'.join([str(index), save_path, str(duration), convert_bytes_to_human_readable(size)])
@@ -174,26 +176,20 @@ def download_image(weibo_info, pic, index):
 
 
 def download_video(weibo_info, video_url, index):
-    response = requests.get(video_url, weibo_info['header'], stream=True)
     if index is None:
         media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
     else:
         media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + f"_{index}.mp4"
     save_path = os.path.join(weibo_info['save_dir'], media_name)
-    save_content(save_path, response)
+    task = DownloadTask(url=video_url, save_path=save_path, headers=weibo_info['header'])
+    _, response = download_one(task)
+    if response.status_code != 200:
+        return None
     size = os.path.getsize(save_path)
     human_readable_size = convert_bytes_to_human_readable(size)
     msg = '\t'.join([str(index), save_path, human_readable_size])
     weibo_logger.info(msg)
     return {'media': save_path, 'caption': media_name, 'type': 'video', 'size': size}
-
-
-def weibo_pic_infos(weibo_dict):
-    pic_infos = {}
-    for item in weibo_dict['mix_media_info']['items']:
-        if item['type'] == 'pic':
-            pic_infos[item['id']] = item['data']
-    return pic_infos
 
 
 def parse_weibo_data(weibo_data, username):
@@ -208,14 +204,14 @@ def parse_weibo_data(weibo_data, username):
     # save_json(weibo_edit_count(weibo_data), username, weibo_id, weibo_data)
     create_time = standardize_date(weibo_data['created_at'])
     weibo_url = f'https://www.weibo.com/{user_id}/{weibo_id}'
-    weibo_header['referer'] = weibo_url
+    request_header = {**weibo_header, 'referer': weibo_url}
     weibo_info = {
         'data': weibo_data,
         'url': weibo_url,
         'id': weibo_id,
         'create_date': create_time.strftime("%Y%m%d"),
         'save_dir': save_dir,
-        'header': weibo_header.update({'referer': f'https://weibo.com/{user_id}/{weibo_id}'})
+        'header': request_header
     }
     os.makedirs(weibo_info['save_dir'], exist_ok=True)
     post_data = {

@@ -1,13 +1,13 @@
 import hashlib
-import json
 import os
+from types import SimpleNamespace
 from time import sleep
 from datetime import datetime
 from pathlib import Path
 
 import cv2
-import requests
-import urllib.request
+from tools.sender_dispatcher import dispatch_post_data
+from tools.settings import is_no_send_mode
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 download_save_root_directory = '/root/download'
@@ -15,10 +15,9 @@ MAX_PHOTO_SIZE = 10 * 1024 * 1024
 MAX_PHOTO_TOTAL_PIXEL = 7000
 MAX_VIDEO_SIZE = 500 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 500 * 1024 * 1024
-ERROR_TOKEN = "5355419947:AAEHOGlkz7hlOO38XRRZ9vVhtAnVGjwbjKw"
+ERROR_TOKEN = os.getenv('ERROR_TELEGRAM_BOT_TOKEN', '')
 DEVELOPER_CHAT_ID = 708424141
 SCRAPY_FAVORITE_LIMIT = 100
-WEB_HOOK_URL = 'http://localhost:5000'
 count = 0  # 发送了消息数量
 times = 0  # 第几次发送
 rate = 60  # 每分钟限制发送消息数
@@ -86,12 +85,13 @@ def save_content(save_path, response):
 
 
 def request_webhook(method, post_data, logger):
-    try:
-        r = requests.post(WEB_HOOK_URL + method, data=json.dumps(post_data))
-    except requests.exceptions.RequestException as e:
-        logger.info(e)
-    else:
-        return r
+    # 保留旧调用接口名，内部已改为本地分发，不再走 HTTP webhook。
+    if is_no_send_mode():
+        return SimpleNamespace(status_code=200, json=lambda: {'messages': []})
+    if method != '/main':
+        logger.info(f'unsupported method: {method}')
+        return None
+    return dispatch_post_data(post_data)
 
 
 def rate_control(r, logger):
@@ -114,24 +114,6 @@ def find_file_by_name(root_dir, target_filename):
     for path in root_path.rglob(target_filename):
         return str(path)  # 找到第一个匹配项后返回
     return None
-
-
-def handle_error(msg, mode='HTML'):
-    try:
-        json_data = {
-            "chat_id": DEVELOPER_CHAT_ID,
-            'text': msg,
-            'parse_mode': mode
-        }
-        url = f'https://api.telegram.org/bot{ERROR_TOKEN}/sendMessage'
-        data = json.dumps(json_data).encode('utf-8')
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-        response = urllib.request.urlopen(req, timeout=15)
-        json_str = response.read().decode('utf-8')
-        _json_data = json.loads(json_str)
-        return {"success": [1], "error": []}
-    except Exception as e:
-        return {"success": [], "error": [1]}
 
 
 def handler_file(save_path, index, logger):

@@ -1,6 +1,8 @@
 import traceback
 from tools.database import *
 from handler.handler_douyin import *
+from tools.scrapy_runner import run_followings, prepare_followings
+from tools.pipeline import process_dispatch_result, update_after_batch
 
 
 class Scrapy:
@@ -120,8 +122,7 @@ def start(scraping: Following, has_send):
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     if len(new_aweme) == 0:
         scrapy_logger.info(f"{scrapy.username} 没有新作品\n")
-    error = 0
-    for i, aweme in enumerate(new_aweme, start=1):
+    for aweme in new_aweme:
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
             # print(i, aweme.aweme_url, aweme.create_time_str, aweme.describe.replace('\n', ' '))
@@ -134,36 +135,26 @@ def start(scraping: Following, has_send):
             r = handler_video_douyin(aweme)
         else:
             r = handler_note_douyin(aweme)
-        if type(r) is requests.Response:
-            if r.status_code == 200:
-                previous_time = aweme.create_time_str
-                download_log(r)
-                store_message_data(r)
-                rate_control(r, scrapy_logger)
-                continue
-            else:
-                error += 1
-                update_db(scraping.user_sec_uid, scraping.username, previous_time)
-                log_error(aweme.aweme_url)
-                scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
-                continue
-        else:
-            log_error(aweme.aweme_url)
-            continue
-    update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
+        if process_dispatch_result(
+            r,
+            scrapy_logger,
+            aweme.aweme_url,
+            on_failure_update=lambda: update_db(scraping.user_sec_uid, scraping.username, previous_time)
+        ) == 'success':
+            previous_time = aweme.create_time_str
+    update_after_batch(lambda: update_db(
+        scraping.user_sec_uid,
+        scraping.username,
+        scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S")
+    ))
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        valid = sys.argv[1]
-    else:
-        valid = 1
-    all_followings = get_all_following('douyin', valid)
+    _, all_followings = prepare_followings('douyin', default_valid=(1,))
     send_url = get_send_url('douyin')
-    try:
-        for f in all_followings:
-            start(Following(*f), send_url)
-        scrapy_logger.info("本次任务结束\n\n")
-    except Exception as e:
-        detailed_error_info = traceback.format_exc()
-        scrapy_logger.info(detailed_error_info)
+    run_followings(
+        all_followings,
+        build_following=lambda raw: Following(*raw),
+        run_one=lambda f: start(f, send_url),
+        logger=scrapy_logger,
+    )

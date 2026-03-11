@@ -11,6 +11,8 @@ from time import time
 from urllib.parse import urlencode, quote
 from tools.database import store_message_data
 from tools.utils import *
+from tools.following import FollowUser
+from tools.downloader import DownloadTask
 from gmssl import sm3, func
 import sys
 from loguru import logger
@@ -849,14 +851,13 @@ class ABogus:
         return self.generate_result(string, "s4")
 
 
-class Following:
+class Following(FollowUser):
+    """抖音关注对象（复用统一 FollowUser）。"""
+
     def __init__(self, userid, username, latest_time):
-        self.user_sec_uid = userid
-        self.username = username
-        if latest_time is None or latest_time == '':
-            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
-        else:
-            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
+        user = FollowUser.from_db_row(userid, username, latest_time)
+        super().__init__(user.userid, user.username, user.latest_time)
+        self.user_sec_uid = user.userid
 
 
 class Aweme:
@@ -1143,7 +1144,8 @@ def download_media(aweme_media):
     if aweme_media.download_referer:
         favorite_headers.update({'referer': aweme_media.download_referer})
     try:
-        resp = requests.get(aweme_media.download_url, headers=favorite_headers, stream=True)
+        task = DownloadTask(url=aweme_media.download_url, save_path='/tmp/.douyin_probe.tmp', headers=favorite_headers)
+        resp = requests.get(task.url, headers=task.headers, stream=True)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         return str(e)
@@ -1276,15 +1278,10 @@ def handler_douyin(aweme):
         r = handler_video_douyin(aweme)
     else:
         r = handler_note_douyin(aweme)
-    if type(r) is requests.Response:
-        if r.status_code == 200:
-            download_log(r)
-            store_message_data(r)
-            return True
-        else:
-            return False
-    else:
-        return False
+    if getattr(r, 'status_code', None) == 200:
+        download_log(r)
+        return True
+    return False
 
 
 def ab_model_2_endpoint(params: dict) -> str:

@@ -2,11 +2,10 @@ import random
 
 from tools.database import *
 from handler.handler_instagram import *
+from tools.scrapy_runner import prepare_followings
+from tools.pipeline import process_dispatch_result, update_after_batch
 
-all_followings = get_all_following('instagram')
 following_dict = {}
-for follow in all_followings:
-    following_dict[follow[0]] = follow[1]
 
 
 def get_posts(username, after='', before='null', first=12, last='null'):
@@ -97,8 +96,8 @@ def random_select_once(elements):
         yield element  # 依次返回元素
 
 
-def start():
-    if len(sys.argv) < 2:
+def start(all_followings, use_local_json=False):
+    if not use_local_json:
         instagram_logger.info("开始爬取用户数据")
         for following in random_select_once(all_followings):
             following = Profile(*following)
@@ -113,8 +112,18 @@ def start():
 if __name__ == '__main__':
     send_url = get_send_url('instagram')
     root_dir = '/root/download/instagram/json/'
+
+    def configure_parser(parser):
+        parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
+
+    args, all_followings = prepare_followings(
+        'instagram',
+        default_valid=(1,),
+        configure_parser=configure_parser,
+    )
+    following_dict.update({follow[0]: follow[1] for follow in all_followings})
     try:
-        for posts in start():
+        for posts in start(all_followings, use_local_json=args.local_json):
             if not posts:
                 continue
             latest_post = max(posts, key=lambda x: x.create_time)
@@ -125,19 +134,14 @@ if __name__ == '__main__':
                 instagram_logger.info(' '.join([str(i) + "/" + str(total), p.url, p.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                                                 p.text.replace('\n', ''), str(p.media_count)]))
                 result = handler_post(p)
-                if type(result) is requests.Response:
-                    if result.status_code == 200:
-                        download_log(result)
-                        store_message_data(result)
-                        rate_control(result, instagram_logger)
-                    else:
-                        log_error(p.url, result.status_code)
-                else:
-                    log_error(p.url, result)
+                process_dispatch_result(result, instagram_logger, p.url)
             print(f"replace into user values ('{latest_post.owner_username}','{latest_post.nickname}',"
                   f"'{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')}','instagram','{latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')};")
-            update_db(latest_post.owner_username, latest_post.nickname,
-                      latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S"))
+            update_after_batch(lambda: update_db(
+                latest_post.owner_username,
+                latest_post.nickname,
+                latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S")
+            ))
             # if len(sys.argv) < 2:
             #     instagram_logger.info("sleep 60 seconds")
             #     sleep(60)

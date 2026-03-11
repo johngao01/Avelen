@@ -44,15 +44,6 @@ def clear_name(text):
     return result
 
 
-def get_username(user_id):
-    username_dict = {}
-    sql = f"select userid, username from user"
-    data = exec_sql_get_data(sql)
-    for row in data:
-        username_dict[row[0]] = row[1]
-    return username_dict
-
-
 async def main():
     conn = get_db_conn()
     cursor = conn.cursor()
