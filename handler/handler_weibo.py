@@ -192,14 +192,6 @@ def download_video(weibo_info, video_url, index):
     return {'media': save_path, 'caption': media_name, 'type': 'video', 'size': size}
 
 
-def weibo_pic_infos(weibo_dict):
-    pic_infos = {}
-    for item in weibo_dict['mix_media_info']['items']:
-        if item['type'] == 'pic':
-            pic_infos[item['id']] = item['data']
-    return pic_infos
-
-
 def parse_weibo_data(weibo_data, username):
     user_id = weibo_data['user']['idstr']
     weibo_id = weibo_data['idstr']

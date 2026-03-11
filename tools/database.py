@@ -63,20 +63,6 @@ def store_message_data(response):
     conn.close()
 
 
-def get_all_following(platform, valid=1):
-    """兼容旧接口：仅按平台+单个关注类型获取。"""
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    sql = '''SELECT userid, username, latest_time 
-             FROM `user`
-             WHERE platform=%s AND valid=%s ORDER BY scrapy_time DESC;'''
-    cursor.execute(sql, (platform, valid))
-    data = [item for item in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return data
-
-
 def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=None,
                            latest_time_start=None, latest_time_end=None,
                            scrapy_time_start=None, scrapy_time_end=None):
@@ -185,17 +171,6 @@ def get_message_ids(message_id):
 
 def get_message_url(message_id):
     return exec_sql_get_data('SELECT url FROM messages WHERE message_id=%s', (message_id,))
-
-
-def init_db():
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    with open('database.ddl', mode='r', encoding='utf-8') as f:
-        sql = f.read()
-    cursor.execute(sql)
-    cursor.close()
-    conn.close()
-    conn.commit()
 
 
 def update_db(user_id, username, latest_time):
