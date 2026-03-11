@@ -2,8 +2,7 @@ import random
 
 from tools.database import *
 from handler.handler_instagram import *
-from tools.scrapy_runner import build_common_cli_parser, select_followings
-from tools.settings import enable_no_send_mode
+from tools.scrapy_runner import prepare_followings
 from tools.pipeline import process_dispatch_result, update_after_batch
 
 following_dict = {}
@@ -113,12 +112,15 @@ def start(all_followings, use_local_json=False):
 if __name__ == '__main__':
     send_url = get_send_url('instagram')
     root_dir = '/root/download/instagram/json/'
-    parser = build_common_cli_parser(default_valid=(1,))
-    parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
-    args = parser.parse_args()
-    if args.no_send:
-        enable_no_send_mode()
-    all_followings = select_followings('instagram', args)
+
+    def configure_parser(parser):
+        parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
+
+    args, all_followings = prepare_followings(
+        'instagram',
+        default_valid=(1,),
+        configure_parser=configure_parser,
+    )
     following_dict.update({follow[0]: follow[1] for follow in all_followings})
     try:
         for posts in start(all_followings, use_local_json=args.local_json):

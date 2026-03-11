@@ -3,6 +3,7 @@ import traceback
 import argparse
 
 from tools.database import get_filtered_followings
+from tools.settings import enable_no_send_mode
 
 
 def run_followings(all_followings: Iterable[Any], build_following: Callable[[Any], Any], run_one: Callable[[Any], None], logger, finished_message: str = "本次任务结束\n\n"):
@@ -54,3 +55,15 @@ def select_followings(platform: str, args):
         scrapy_time_start=args.scrapy_time_start,
         scrapy_time_end=args.scrapy_time_end,
     )
+
+
+def prepare_followings(platform: str, default_valid=(1,),
+                      configure_parser: Callable[[argparse.ArgumentParser], None] | None = None):
+    """Build parser, parse args, apply runtime flags, and select followings in one call."""
+    parser = build_common_cli_parser(default_valid=default_valid)
+    if configure_parser:
+        configure_parser(parser)
+    args = parser.parse_args()
+    if getattr(args, 'no_send', False):
+        enable_no_send_mode()
+    return args, select_followings(platform, args)

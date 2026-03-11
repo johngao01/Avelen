@@ -1,8 +1,7 @@
 import traceback
 from tools.database import *
 from handler.handler_douyin import *
-from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
-from tools.settings import enable_no_send_mode
+from tools.scrapy_runner import run_followings, prepare_followings
 from tools.pipeline import process_dispatch_result, update_after_batch
 
 
@@ -159,11 +158,7 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    parser = build_common_cli_parser(default_valid=(1,))
-    args = parser.parse_args()
-    if args.no_send:
-        enable_no_send_mode()
-    all_followings = select_followings('douyin', args)
+    _, all_followings = prepare_followings('douyin', default_valid=(1,))
     send_url = get_send_url('douyin')
     run_followings(
         all_followings,
