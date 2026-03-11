@@ -150,7 +150,6 @@ def start(scraping: Following, has_send):
     new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
     latest_weibo = max(new_weibo, key=lambda x: x['weibo_time'])
     logger.info(f"{new_weibo[0]['weibo_time']}  {new_weibo[-1]['weibo_time']}")
-    error = 0
     total = len(new_weibo)
     for i, weibo in enumerate(new_weibo, start=1):
         if weibo['weibo_url'] in has_send:
@@ -163,16 +162,11 @@ def start(scraping: Following, has_send):
                 r = handle_weibo(
                     f"{i}/{total}", weibo['weibo_url'], userid=scraping.userid, username=scraping.username)
         except Exception:
-            error += 1
             log_error(weibo['weibo_url'])
             weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
             weibo_logger.error(traceback.format_exc())
         else:
-            result = process_dispatch_result(r, weibo_logger, weibo['weibo_url'])
-            if result in ('success', 'skip'):
-                continue
-            else:
-                error += 1
+            process_dispatch_result(r, weibo_logger, weibo['weibo_url'])
     weibo_logger.info('\n')
     update_after_batch(lambda: update_db(
         scraping.userid,

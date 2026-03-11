@@ -122,8 +122,7 @@ def start(scraping: Following, has_send):
     previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
     if len(new_aweme) == 0:
         scrapy_logger.info(f"{scrapy.username} 没有新作品\n")
-    error = 0
-    for i, aweme in enumerate(new_aweme, start=1):
+    for aweme in new_aweme:
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
             # print(i, aweme.aweme_url, aweme.create_time_str, aweme.describe.replace('\n', ' '))
@@ -136,20 +135,13 @@ def start(scraping: Following, has_send):
             r = handler_video_douyin(aweme)
         else:
             r = handler_note_douyin(aweme)
-        result = process_dispatch_result(
+        if process_dispatch_result(
             r,
             scrapy_logger,
             aweme.aweme_url,
             on_failure_update=lambda: update_db(scraping.user_sec_uid, scraping.username, previous_time)
-        )
-        if result == 'success':
+        ) == 'success':
             previous_time = aweme.create_time_str
-            continue
-        elif result == 'failure':
-            error += 1
-            continue
-        else:
-            continue
     update_after_batch(lambda: update_db(
         scraping.user_sec_uid,
         scraping.username,

@@ -28,7 +28,7 @@ def main(scraping: Following):
         if post_data is None:
             continue
         r = request_webhook('/main', post_data, scrapy_logger)
-        result = process_dispatch_result(
+        process_dispatch_result(
             r,
             scrapy_logger,
             url,
@@ -38,10 +38,7 @@ def main(scraping: Following):
                 dynamic.pub_time.strftime("%Y-%m-%d %H:%M:%S")
             )
         )
-        if result in ('success', 'skip'):
-            continue
-        else:
-            continue
+        # 成功/跳过/失败的日志和副作用都在 process_dispatch_result 统一处理。
 
 
 if __name__ == '__main__':
