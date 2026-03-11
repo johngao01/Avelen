@@ -1,6 +1,8 @@
 import re
 import time
 import traceback
+import asyncio
+import os
 from datetime import datetime
 
 import emoji
@@ -10,7 +12,7 @@ from telegram.constants import ParseMode
 from telegram.constants import ChatAction
 
 DEVELOPER_CHAT_ID = 708424141
-TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 API_URL = 'http://localhost:8081/bot'
 FILE_API_URL = 'http://localhost:8081/file/bot'
 MARKDOWN_CHAR = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
@@ -48,7 +50,7 @@ async def retry_send(fun, **kwargs) -> list:
         if 'Flood control exceeded. Retry in' in e.message:
             second = int(e.message.split(' ')[-2])
             print("sleep {} seconds".format(second))
-            time.sleep(second)
+            await asyncio.sleep(second)
         print("Get RetryAfter Error：\n" + traceback.format_exc())
     return None
 

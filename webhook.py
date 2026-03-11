@@ -3,6 +3,7 @@ import json
 import time
 import traceback
 import sys
+import threading
 
 from flask import Flask, request, jsonify
 
@@ -12,28 +13,29 @@ import send
 sys.stdout.reconfigure(encoding='utf-8')
 app = Flask(__name__)
 app.config['DEFAULT_CHARSET'] = 'utf-8'
-BUSY = False
+BUSY_LOCK = threading.Lock()
 
 
 def catch_errors(func):
     def wrapper(*args, **kwargs):
+        acquired = False
         try:
-            global BUSY
             while True:
-                if not BUSY:
-                    BUSY = True
+                acquired = BUSY_LOCK.acquire(blocking=False)
+                if acquired:
                     r = asyncio.run(func(*args, **kwargs))
-                    BUSY = False
                     return r
                 else:
                     print("等待4秒后处理请求")
                     time.sleep(4)
         except Exception as e:
-            BUSY = False
             traceback.print_exc()
             detailed_error_info = traceback.format_exc()
             print(detailed_error_info)
             return jsonify({'error': str(e)}), 500
+        finally:
+            if acquired and BUSY_LOCK.locked():
+                BUSY_LOCK.release()
 
     return wrapper
 

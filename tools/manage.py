@@ -72,7 +72,7 @@ async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def query_user_info(user_id):
-    exist = exec_sql_get_data(f"select * from user where userid='{user_id}'")
+    exist = exec_sql_get_data("select * from user where userid=%s", (user_id,))
     if exist:
         user_id, username, latest_time, platform, scrapy_time, valid = exist[0]
         if platform == 'douyin':
@@ -285,7 +285,7 @@ async def ls_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id == DEVELOPER_CHAT_ID:
         await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
-        result = exec_sql_get_data(f"select username from statistic order by num desc")
+        result = exec_sql_get_data("select username from statistic order by num desc")
         text = ''
         for username in result:
             username = clear_name(username)

@@ -208,14 +208,14 @@ def parse_weibo_data(weibo_data, username):
     # save_json(weibo_edit_count(weibo_data), username, weibo_id, weibo_data)
     create_time = standardize_date(weibo_data['created_at'])
     weibo_url = f'https://www.weibo.com/{user_id}/{weibo_id}'
-    weibo_header['referer'] = weibo_url
+    request_header = {**weibo_header, 'referer': weibo_url}
     weibo_info = {
         'data': weibo_data,
         'url': weibo_url,
         'id': weibo_id,
         'create_date': create_time.strftime("%Y%m%d"),
         'save_dir': save_dir,
-        'header': weibo_header.update({'referer': f'https://weibo.com/{user_id}/{weibo_id}'})
+        'header': request_header
     }
     os.makedirs(weibo_info['save_dir'], exist_ok=True)
     post_data = {
