@@ -1276,15 +1276,10 @@ def handler_douyin(aweme):
         r = handler_video_douyin(aweme)
     else:
         r = handler_note_douyin(aweme)
-    if type(r) is requests.Response:
-        if r.status_code == 200:
-            download_log(r)
-            store_message_data(r)
-            return True
-        else:
-            return False
-    else:
-        return False
+    if getattr(r, 'status_code', None) == 200:
+        download_log(r)
+        return True
+    return False
 
 
 def ab_model_2_endpoint(params: dict) -> str:

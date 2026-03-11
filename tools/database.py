@@ -41,6 +41,10 @@ def insert_data(db_conn, table_name, columns, data_dict):
 
 
 def store_message_data(response):
+    if hasattr(response, 'json'):
+        data = response.json()
+        if isinstance(data, dict) and data.get('_persisted'):
+            return
     conn = get_db_conn()
     cursor = conn.cursor()
     response = response.json()

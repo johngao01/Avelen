@@ -8,6 +8,7 @@ from pathlib import Path
 import cv2
 import requests
 import urllib.request
+from tools.sender_dispatcher import dispatch_post_data
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 download_save_root_directory = '/root/download'
@@ -86,12 +87,10 @@ def save_content(save_path, response):
 
 
 def request_webhook(method, post_data, logger):
-    try:
-        r = requests.post(WEB_HOOK_URL + method, data=json.dumps(post_data))
-    except requests.exceptions.RequestException as e:
-        logger.info(e)
-    else:
-        return r
+    if method != '/main':
+        logger.info(f'unsupported method: {method}')
+        return None
+    return dispatch_post_data(post_data)
 
 
 def rate_control(r, logger):

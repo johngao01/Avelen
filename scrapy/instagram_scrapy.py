@@ -125,13 +125,11 @@ if __name__ == '__main__':
                 instagram_logger.info(' '.join([str(i) + "/" + str(total), p.url, p.create_time.strftime("%Y-%m-%d %H:%M:%S"),
                                                 p.text.replace('\n', ''), str(p.media_count)]))
                 result = handler_post(p)
-                if type(result) is requests.Response:
-                    if result.status_code == 200:
-                        download_log(result)
-                        store_message_data(result)
-                        rate_control(result, instagram_logger)
-                    else:
-                        log_error(p.url, result.status_code)
+                if getattr(result, 'status_code', None) == 200:
+                    download_log(result)
+                    rate_control(result, instagram_logger)
+                elif result is not None:
+                    log_error(p.url, result.status_code)
                 else:
                     log_error(p.url, result)
             print(f"replace into user values ('{latest_post.owner_username}','{latest_post.nickname}',"

@@ -3,6 +3,7 @@ import urllib3
 from tools.database import *
 from handler.handler_weibo import *
 from func_timeout import func_set_timeout, FunctionTimedOut
+from tools.scrapy_runner import run_followings
 urllib3.disable_warnings()
 
 
@@ -438,9 +439,8 @@ def start(scraping: Following, has_send):
             weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
             weibo_logger.error(traceback.format_exc())
         else:
-            if type(r) is requests.Response and r.status_code == 200:
+            if getattr(r, 'status_code', None) == 200:
                 download_log(r)
-                store_message_data(r)
                 rate_control(r, weibo_logger)
                 continue
             elif type(r) is str and 'skip' in r:
@@ -460,11 +460,9 @@ if __name__ == '__main__':
         valid = 1
     all_followings = get_all_following('weibo', valid)
     send_weibo_url = get_send_url('weibo')
-    try:
-        for following in all_followings:
-            f = Following(*following)
-            start(f, send_weibo_url)
-        weibo_logger.info("本次任务结束\n\n")
-    except Exception as e:
-        detailed_error_info = traceback.format_exc()
-        weibo_logger.info(detailed_error_info)
+    run_followings(
+        all_followings,
+        build_following=lambda raw: Following(*raw),
+        run_one=lambda f: start(f, send_weibo_url),
+        logger=weibo_logger,
+    )

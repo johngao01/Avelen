@@ -1,6 +1,7 @@
 import traceback
 from tools.database import *
 from handler.handler_douyin import *
+from tools.scrapy_runner import run_followings
 
 
 class Scrapy:
@@ -134,19 +135,17 @@ def start(scraping: Following, has_send):
             r = handler_video_douyin(aweme)
         else:
             r = handler_note_douyin(aweme)
-        if type(r) is requests.Response:
-            if r.status_code == 200:
-                previous_time = aweme.create_time_str
-                download_log(r)
-                store_message_data(r)
-                rate_control(r, scrapy_logger)
-                continue
-            else:
-                error += 1
-                update_db(scraping.user_sec_uid, scraping.username, previous_time)
-                log_error(aweme.aweme_url)
-                scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
-                continue
+        if getattr(r, 'status_code', None) == 200:
+            previous_time = aweme.create_time_str
+            download_log(r)
+            rate_control(r, scrapy_logger)
+            continue
+        elif r is not None:
+            error += 1
+            update_db(scraping.user_sec_uid, scraping.username, previous_time)
+            log_error(aweme.aweme_url)
+            scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
+            continue
         else:
             log_error(aweme.aweme_url)
             continue
@@ -160,10 +159,9 @@ if __name__ == '__main__':
         valid = 1
     all_followings = get_all_following('douyin', valid)
     send_url = get_send_url('douyin')
-    try:
-        for f in all_followings:
-            start(Following(*f), send_url)
-        scrapy_logger.info("本次任务结束\n\n")
-    except Exception as e:
-        detailed_error_info = traceback.format_exc()
-        scrapy_logger.info(detailed_error_info)
+    run_followings(
+        all_followings,
+        build_following=lambda raw: Following(*raw),
+        run_one=lambda f: start(f, send_url),
+        logger=scrapy_logger,
+    )
