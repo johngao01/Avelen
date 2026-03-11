@@ -2,11 +2,9 @@ import random
 
 from tools.database import *
 from handler.handler_instagram import *
+from tools.scrapy_runner import build_common_cli_parser, select_followings
 
-all_followings = get_all_following('instagram')
 following_dict = {}
-for follow in all_followings:
-    following_dict[follow[0]] = follow[1]
 
 
 def get_posts(username, after='', before='null', first=12, last='null'):
@@ -97,8 +95,8 @@ def random_select_once(elements):
         yield element  # 依次返回元素
 
 
-def start():
-    if len(sys.argv) < 2:
+def start(all_followings, use_local_json=False):
+    if not use_local_json:
         instagram_logger.info("开始爬取用户数据")
         for following in random_select_once(all_followings):
             following = Profile(*following)
@@ -113,8 +111,13 @@ def start():
 if __name__ == '__main__':
     send_url = get_send_url('instagram')
     root_dir = '/root/download/instagram/json/'
+    parser = build_common_cli_parser(default_valid=(1, 2))
+    parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
+    args = parser.parse_args()
+    all_followings = select_followings('instagram', args)
+    following_dict.update({follow[0]: follow[1] for follow in all_followings})
     try:
-        for posts in start():
+        for posts in start(all_followings, use_local_json=args.local_json):
             if not posts:
                 continue
             latest_post = max(posts, key=lambda x: x.create_time)

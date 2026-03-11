@@ -64,6 +64,7 @@ def store_message_data(response):
 
 
 def get_all_following(platform, valid=1):
+    """兼容旧接口：仅按平台+单个关注类型获取。"""
     conn = get_db_conn()
     cursor = conn.cursor()
     sql = '''SELECT userid, username, latest_time 
@@ -74,6 +75,54 @@ def get_all_following(platform, valid=1):
     cursor.close()
     conn.close()
     return data
+
+
+def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=None,
+                           latest_time_start=None, latest_time_end=None,
+                           scrapy_time_start=None, scrapy_time_end=None):
+    """
+    按条件筛选 user 表关注对象。
+    - valid_list: 关注类型列表，默认 [1, 2]
+    - user_ids/usernames: 可指定单个或多个 id/用户名
+    - latest_time_* / scrapy_time_*: 按时间窗口筛选
+    """
+    if valid_list is None:
+        valid_list = [1, 2]
+    if user_ids is None:
+        user_ids = []
+    if usernames is None:
+        usernames = []
+
+    sql = ["SELECT userid, username, latest_time FROM `user` WHERE platform=%s"]
+    params = [platform]
+
+    if valid_list:
+        placeholders = ','.join(['%s'] * len(valid_list))
+        sql.append(f"AND valid IN ({placeholders})")
+        params.extend(valid_list)
+    if user_ids:
+        placeholders = ','.join(['%s'] * len(user_ids))
+        sql.append(f"AND userid IN ({placeholders})")
+        params.extend(user_ids)
+    if usernames:
+        placeholders = ','.join(['%s'] * len(usernames))
+        sql.append(f"AND username IN ({placeholders})")
+        params.extend(usernames)
+    if latest_time_start:
+        sql.append("AND latest_time >= %s")
+        params.append(latest_time_start)
+    if latest_time_end:
+        sql.append("AND latest_time <= %s")
+        params.append(latest_time_end)
+    if scrapy_time_start:
+        sql.append("AND scrapy_time >= %s")
+        params.append(scrapy_time_start)
+    if scrapy_time_end:
+        sql.append("AND scrapy_time <= %s")
+        params.append(scrapy_time_end)
+
+    sql.append("ORDER BY scrapy_time DESC;")
+    return exec_sql_get_data(' '.join(sql), tuple(params))
 
 
 def exec_sql_get_data(sql, data=None):

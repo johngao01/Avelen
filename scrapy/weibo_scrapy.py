@@ -3,7 +3,7 @@ import urllib3
 from tools.database import *
 from handler.handler_weibo import *
 from func_timeout import func_set_timeout, FunctionTimedOut
-from tools.scrapy_runner import run_followings
+from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
 urllib3.disable_warnings()
 
 
@@ -454,11 +454,9 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        valid = sys.argv[1]
-    else:
-        valid = 1
-    all_followings = get_all_following('weibo', valid)
+    parser = build_common_cli_parser(default_valid=(1, 2))
+    args = parser.parse_args()
+    all_followings = select_followings('weibo', args)
     send_weibo_url = get_send_url('weibo')
     run_followings(
         all_followings,

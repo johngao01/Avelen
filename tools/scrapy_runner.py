@@ -1,5 +1,8 @@
 from typing import Callable, Iterable, Any
 import traceback
+import argparse
+
+from tools.database import get_filtered_followings
 
 
 def run_followings(all_followings: Iterable[Any], build_following: Callable[[Any], Any], run_one: Callable[[Any], None], logger, finished_message: str = "本次任务结束\n\n"):
@@ -15,3 +18,37 @@ def run_followings(all_followings: Iterable[Any], build_following: Callable[[Any
         logger.info(finished_message)
     except Exception:
         logger.info(traceback.format_exc())
+
+
+def build_common_cli_parser(default_valid=(1, 2)):
+    """构建各平台共用命令行参数。"""
+    parser = argparse.ArgumentParser(description='Scrapy runner options')
+    parser.add_argument('--valid', nargs='+', type=int, default=list(default_valid), choices=[0, 1, 2],
+                        help='关注类型，可多选：0取消关注 1特别关注 2普通关注，默认 1 2')
+    parser.add_argument('--user-id', action='append', dest='user_ids', default=[],
+                        help='按 user.userid 精确筛选，可重复传参')
+    parser.add_argument('--username', action='append', dest='usernames', default=[],
+                        help='按 user.username 精确筛选，可重复传参')
+    parser.add_argument('--latest-time-start', default=None,
+                        help='筛选 latest_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+    parser.add_argument('--latest-time-end', default=None,
+                        help='筛选 latest_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+    parser.add_argument('--scrapy-time-start', default=None,
+                        help='筛选 scrapy_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+    parser.add_argument('--scrapy-time-end', default=None,
+                        help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+    return parser
+
+
+def select_followings(platform: str, args):
+    """根据命令行参数统一从 user 表筛选关注列表。"""
+    return get_filtered_followings(
+        platform=platform,
+        valid_list=args.valid,
+        user_ids=args.user_ids,
+        usernames=args.usernames,
+        latest_time_start=args.latest_time_start,
+        latest_time_end=args.latest_time_end,
+        scrapy_time_start=args.scrapy_time_start,
+        scrapy_time_end=args.scrapy_time_end,
+    )

@@ -1,7 +1,7 @@
 import traceback
 from tools.database import *
 from handler.handler_douyin import *
-from tools.scrapy_runner import run_followings
+from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
 
 
 class Scrapy:
@@ -153,11 +153,9 @@ def start(scraping: Following, has_send):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        valid = sys.argv[1]
-    else:
-        valid = 1
-    all_followings = get_all_following('douyin', valid)
+    parser = build_common_cli_parser(default_valid=(1, 2))
+    args = parser.parse_args()
+    all_followings = select_followings('douyin', args)
     send_url = get_send_url('douyin')
     run_followings(
         all_followings,

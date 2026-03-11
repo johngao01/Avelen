@@ -1,7 +1,7 @@
 from tools.database import *
 import traceback
 from handler.handler_bilibili import *
-from tools.scrapy_runner import run_followings
+from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
 
 
 def main(scraping: Following):
@@ -38,9 +38,11 @@ def main(scraping: Following):
 
 
 if __name__ == '__main__':
+    parser = build_common_cli_parser(default_valid=(1, 2))
+    args = parser.parse_args()
     # 创建 API 客户端
     api = BilibiliAPI(all_cookies=cookies_dict)
-    all_followings = get_all_following('bilibili', 1)
+    all_followings = select_followings('bilibili', args)
     send_url = get_send_url('bilibili')
     run_followings(
         all_followings,
