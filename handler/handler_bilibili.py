@@ -20,6 +20,7 @@ from rich.progress import (
     TimeRemainingColumn,
     SpinnerColumn
 )
+from tools.following import FollowUser
 
 # 初始化 Rich 控制台
 console = Console()
@@ -143,14 +144,13 @@ class VideoDownloader:
         )
 
 
-class Following:
+class Following(FollowUser):
+    """B站关注对象（复用统一 FollowUser）。"""
+
     def __init__(self, userid, username, latest_time: str):
-        self.user_id = userid
-        self.username = username
-        if latest_time is None or latest_time == '':
-            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
-        else:
-            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
+        user = FollowUser.from_db_row(userid, username, latest_time)
+        super().__init__(user.userid, user.username, user.latest_time)
+        self.user_id = user.userid
 
 
 class Post:

@@ -3,6 +3,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from tools.utils import *
+from tools.following import FollowUser
+from tools.downloader import DownloadTask, download_one
 
 with open('../cookies/johnjohn01.txt') as cookie_file:
     cookies = cookie_file.read()
@@ -47,14 +49,12 @@ logger.add(
 weibo_logger = logger.bind(name="scrapy_weibo")
 
 
-class Following:
+class Following(FollowUser):
+    """微博关注对象（复用统一 FollowUser）。"""
+
     def __init__(self, userid, username, latest_time: str):
-        self.userid = userid
-        self.username = username
-        if latest_time is None or latest_time == '':
-            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
-        else:
-            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
+        user = FollowUser.from_db_row(userid, username, latest_time)
+        super().__init__(user.userid, user.username, user.latest_time)
 
 
 def standardize_date(created_at):
@@ -126,8 +126,8 @@ def download_image(weibo_info, pic, index):
     if os.path.exists(save_path):
         pass
     else:
-        response = requests.get(photo_url, headers=weibo_info['header'], stream=True)
-        save_content(save_path, response)
+        task = DownloadTask(url=photo_url, save_path=save_path, headers=weibo_info['header'])
+        _, response = download_one(task)
         if response.status_code != 200:
             weibo_logger.info("禁止访问的内容：" + photo_url)
             return photo_video
@@ -149,8 +149,10 @@ def download_image(weibo_info, pic, index):
                 if os.path.exists(save_path):
                     size = os.path.getsize(save_path)
                 else:
-                    response = requests.get(livephoto_url, headers=weibo_info['header'])
-                    save_content(save_path, response)
+                    task = DownloadTask(url=livephoto_url, save_path=save_path, headers=weibo_info['header'])
+                    _, response = download_one(task)
+                    if response.status_code != 200:
+                        return photo_video
                     size = os.path.getsize(save_path)
                 duration = get_duration_from_cv2(save_path)
                 msg = '\t'.join([str(index), save_path, str(duration), convert_bytes_to_human_readable(size)])
@@ -174,13 +176,15 @@ def download_image(weibo_info, pic, index):
 
 
 def download_video(weibo_info, video_url, index):
-    response = requests.get(video_url, weibo_info['header'], stream=True)
     if index is None:
         media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + ".mp4"
     else:
         media_name = weibo_info['create_date'] + "_" + weibo_info['id'] + f"_{index}.mp4"
     save_path = os.path.join(weibo_info['save_dir'], media_name)
-    save_content(save_path, response)
+    task = DownloadTask(url=video_url, save_path=save_path, headers=weibo_info['header'])
+    _, response = download_one(task)
+    if response.status_code != 200:
+        return None
     size = os.path.getsize(save_path)
     human_readable_size = convert_bytes_to_human_readable(size)
     msg = '\t'.join([str(index), save_path, human_readable_size])

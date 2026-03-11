@@ -1,6 +1,8 @@
 from os.path import splitext, basename, getsize
 from urllib.parse import urlparse
 from tools.utils import *
+from tools.following import FollowUser
+from tools.downloader import DownloadTask, download_one
 import sys
 from loguru import logger
 import re
@@ -112,14 +114,13 @@ else:
     fb_dtsg = ''
 
 
-class Profile:
+class Profile(FollowUser):
+    """Instagram 关注对象（复用统一 FollowUser）。"""
+
     def __init__(self, pk, username, latest_time):
-        self.pk = pk
-        self.username = username
-        if latest_time is None or latest_time == '':
-            self.latest_time = datetime(2000, 12, 12, 12, 12, 12)
-        else:
-            self.latest_time = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
+        user = FollowUser.from_db_row(pk, username, latest_time)
+        super().__init__(user.userid, user.username, user.latest_time)
+        self.pk = user.userid
         self.url = 'https://www.instagram.com/' + self.pk
 
 
@@ -253,10 +254,9 @@ def download_file(media: Media):
         size = getsize(save_path)
         instagram_logger.info('  ' + save_path + "\t" + convert_bytes_to_human_readable(size))
         return size, save_path
-    r = requests.get(media.url, headers=download_header, stream=True, timeout=30)
+    task = DownloadTask(url=media.url, save_path=save_path, headers=download_header)
+    _, r = download_one(task)
     if r.status_code == 200:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        save_content(save_path, r)
         size = getsize(save_path)
         instagram_logger.info('  ' + save_path + "\t" + convert_bytes_to_human_readable(size))
         return size, save_path
