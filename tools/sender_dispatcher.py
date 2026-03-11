@@ -1,3 +1,10 @@
+"""
+统一发送分发器：
+1) 直接在本地进程内发送 Telegram（不依赖 webhook Flask）
+2) 串行化发送，避免多爬虫并发发送导致消息交错
+3) 发送媒体后立即入库，再发送文本再入库
+"""
+
 import asyncio
 import os
 import re
@@ -136,6 +143,7 @@ def process_message(message: telegram.Message, data):
 
 
 def persist_messages(messages):
+    """将 telegram 返回消息结构落库（messages/video/photo/document）。"""
     if not messages:
         return
     conn = get_db_conn()
@@ -154,6 +162,12 @@ def persist_messages(messages):
 
 
 async def _send_media_and_text(data):
+    """
+    新发送顺序：
+    - 逐个发送媒体并立即持久化
+    - 媒体发送完成后发送文本并持久化
+    - 无媒体时直接返回空列表（按需求不处理）
+    """
     bot = _build_bot()
     files = data.get('files')
     if isinstance(files, dict):
@@ -202,6 +216,7 @@ async def _send_media_and_text(data):
 
 
 def dispatch_post_data(data):
+    """统一分发入口：进程锁 + 文件锁，保证跨爬虫串行发送。"""
     with SEND_LOCK:
         lock_fd = None
         try:

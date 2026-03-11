@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 import cv2
-import requests
 import urllib.request
 from tools.sender_dispatcher import dispatch_post_data
 
@@ -19,7 +18,6 @@ MAX_DOCUMENT_SIZE = 500 * 1024 * 1024
 ERROR_TOKEN = os.getenv('ERROR_TELEGRAM_BOT_TOKEN', '')
 DEVELOPER_CHAT_ID = 708424141
 SCRAPY_FAVORITE_LIMIT = 100
-WEB_HOOK_URL = 'http://localhost:5000'
 count = 0  # 发送了消息数量
 times = 0  # 第几次发送
 rate = 60  # 每分钟限制发送消息数
@@ -87,6 +85,7 @@ def save_content(save_path, response):
 
 
 def request_webhook(method, post_data, logger):
+    # 保留旧调用接口名，内部已改为本地分发，不再走 HTTP webhook。
     if method != '/main':
         logger.info(f'unsupported method: {method}')
         return None

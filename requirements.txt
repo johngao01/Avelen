@@ -1,5 +1,4 @@
 emoji
-Flask
 gmssl
 opencv_python
 Pillow
