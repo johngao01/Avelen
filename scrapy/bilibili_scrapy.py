@@ -1,12 +1,12 @@
 from tools.database import *
 import traceback
-import os
 from handler.handler_bilibili import *
 from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
+from tools.settings import enable_no_send_mode
+from tools.pipeline import handle_success
 
 
 def main(scraping: Following):
-    no_send_mode = os.getenv('SCRAPY_NO_SEND', '0') == '1'
     if len(sys.argv) < 2:
         dynamics = api.get_update_dynamics(scraping)
     else:
@@ -30,10 +30,12 @@ def main(scraping: Following):
             continue
         r = request_webhook('/main', post_data, scrapy_logger)
         if getattr(r, 'status_code', None) == 200:
-            if not no_send_mode:
-                download_log(r)
-                rate_control(r, scrapy_logger)
-                update_db(scraping.user_id, scraping.username, dynamic.pub_time.strftime("%Y-%m-%d %H:%M:%S"))
+            handle_success(
+                r,
+                scrapy_logger,
+                on_update=lambda: update_db(scraping.user_id, scraping.username,
+                                            dynamic.pub_time.strftime("%Y-%m-%d %H:%M:%S"))
+            )
             continue
         else:
             scrapy_logger.error(f"处理 {url} 失败")
@@ -44,7 +46,7 @@ if __name__ == '__main__':
     parser = build_common_cli_parser(default_valid=(1,))
     args = parser.parse_args()
     if args.no_send:
-        os.environ['SCRAPY_NO_SEND'] = '1'
+        enable_no_send_mode()
     # 创建 API 客户端
     api = BilibiliAPI(all_cookies=cookies_dict)
     all_followings = select_followings('bilibili', args)

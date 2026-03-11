@@ -1,8 +1,9 @@
 import traceback
-import os
 from tools.database import *
 from handler.handler_douyin import *
 from tools.scrapy_runner import run_followings, build_common_cli_parser, select_followings
+from tools.settings import enable_no_send_mode
+from tools.pipeline import handle_success, update_after_batch
 
 
 class Scrapy:
@@ -123,7 +124,6 @@ def start(scraping: Following, has_send):
     if len(new_aweme) == 0:
         scrapy_logger.info(f"{scrapy.username} 没有新作品\n")
     error = 0
-    no_send_mode = os.getenv('SCRAPY_NO_SEND', '0') == '1'
     for i, aweme in enumerate(new_aweme, start=1):
         aweme = Aweme(scraping, aweme)
         if aweme.aweme_url in has_send:
@@ -139,29 +139,29 @@ def start(scraping: Following, has_send):
             r = handler_note_douyin(aweme)
         if getattr(r, 'status_code', None) == 200:
             previous_time = aweme.create_time_str
-            if not no_send_mode:
-                download_log(r)
-                rate_control(r, scrapy_logger)
+            handle_success(r, scrapy_logger)
             continue
         elif r is not None:
             error += 1
-            if not no_send_mode:
-                update_db(scraping.user_sec_uid, scraping.username, previous_time)
+            update_after_batch(lambda: update_db(scraping.user_sec_uid, scraping.username, previous_time))
             log_error(aweme.aweme_url)
             scrapy_logger.error(f"处理 {aweme.aweme_url} 失败")
             continue
         else:
             log_error(aweme.aweme_url)
             continue
-    if not no_send_mode:
-        update_db(scraping.user_sec_uid, scraping.username, scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S"))
+    update_after_batch(lambda: update_db(
+        scraping.user_sec_uid,
+        scraping.username,
+        scrapy.max_time.strftime("%Y-%m-%d %H:%M:%S")
+    ))
 
 
 if __name__ == '__main__':
     parser = build_common_cli_parser(default_valid=(1,))
     args = parser.parse_args()
     if args.no_send:
-        os.environ['SCRAPY_NO_SEND'] = '1'
+        enable_no_send_mode()
     all_followings = select_followings('douyin', args)
     send_url = get_send_url('douyin')
     run_followings(

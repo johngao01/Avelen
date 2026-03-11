@@ -7,6 +7,7 @@ from pathlib import Path
 
 import cv2
 from tools.sender_dispatcher import dispatch_post_data
+from tools.settings import is_no_send_mode
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 download_save_root_directory = '/root/download'
@@ -85,7 +86,7 @@ def save_content(save_path, response):
 
 def request_webhook(method, post_data, logger):
     # 保留旧调用接口名，内部已改为本地分发，不再走 HTTP webhook。
-    if os.getenv('SCRAPY_NO_SEND', '0') == '1':
+    if is_no_send_mode():
         return SimpleNamespace(status_code=200, json=lambda: {'messages': []})
     if method != '/main':
         logger.info(f'unsupported method: {method}')
