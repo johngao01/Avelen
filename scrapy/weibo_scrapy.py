@@ -1,11 +1,9 @@
 import traceback
-import urllib3
 from tools.database import *
 from handler.handler_weibo import *
-from func_timeout import func_set_timeout
 from tools.scrapy_runner import run_followings, prepare_followings
 from tools.pipeline import process_dispatch_result, update_after_batch
-urllib3.disable_warnings()
+import requests
 
 
 def get_latest_edit_time(weibo_info):
@@ -52,9 +50,8 @@ def scrapy_latest_via_com(user: Following, scrapy_log):
     """
         从 https://weibo.com/ 的用户主页通过api获取用户微博
     """
-    @func_set_timeout(60)
+
     def one_page_latest(user_id: str, page, since_id=''):
-        from curl_cffi import requests
         params = {'uid': user_id, 'page': page, 'feature': 0}
         if page > 1 and since_id != '':
             params.update({'since_id': since_id})
@@ -65,8 +62,6 @@ def scrapy_latest_via_com(user: Following, scrapy_log):
                 params=params,
                 headers=headers,
                 timeout=20,
-                verify=False,  # 必须关闭，否则 H2 会出奇怪问题
-                impersonate="chrome120"  # 让它看起来像真浏览器
             )
             # r = requests.get(url, params=params, headers=headers, timeout=30)
             r.raise_for_status()

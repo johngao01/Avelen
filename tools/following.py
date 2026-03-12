@@ -12,7 +12,7 @@ class FollowUser:
     latest_time: datetime
 
     @classmethod
-    def from_db_row(cls, userid, username, latest_time):
+    def from_db_row(cls, userid, username, latest_time: str):
         if latest_time is None or latest_time == '':
             parsed = DEFAULT_LATEST_TIME
         elif isinstance(latest_time, datetime):

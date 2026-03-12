@@ -2,8 +2,7 @@ import datetime
 import os
 import pymysql
 
-# mysql_host = '38.49.57.25'
-mysql_host = os.getenv('MYSQL_HOST', 'localhost')
+mysql_host = os.getenv('MYSQL_HOST', 'rn')
 mysql_user = os.getenv('MYSQL_USER', 'root')
 mysql_password = os.getenv('MYSQL_PASSWORD', '')
 mysql_port = int(os.getenv('MYSQL_PORT', 3306))
@@ -40,35 +39,12 @@ def insert_data(db_conn, table_name, columns, data_dict):
     db_conn.commit()
 
 
-def store_message_data(response):
-    if hasattr(response, 'json'):
-        data = response.json()
-        if isinstance(data, dict) and data.get('_persisted'):
-            return
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    response = response.json()
-    messages = response['messages']
-    for message in messages:
-        insert_data(conn, 'messages', MESSAGES, message)
-        if message['VIDEO']:
-            insert_data(conn, 'video', VIDEO, message['VIDEO'])
-        if message['PHOTO']:
-            for k, v in message['PHOTO'].items():
-                insert_data(conn, 'photo', PHOTO, v)
-        if message['DOCUMENT']:
-            insert_data(conn, 'document', DOCUMENT, message['DOCUMENT'])
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
 def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=None,
-                           latest_time_start=None, latest_time_end=None,
-                           scrapy_time_start=None, scrapy_time_end=None):
+                            latest_time_start=None, latest_time_end=None,
+                            scrapy_time_start=None, scrapy_time_end=None):
     """
     按条件筛选 user 表关注对象。
-    - valid_list: 关注类型列表，默认 [1, 2]
+    - valid_list: 关注类型列表，默认 [1]
     - user_ids/usernames: 可指定单个或多个 id/用户名
     - latest_time_* / scrapy_time_*: 按时间窗口筛选
     """
@@ -151,11 +127,12 @@ def delete_db_message(message_id):
 def get_duplicate_messages():
     hours_ago = datetime.datetime.now() - datetime.timedelta(hours=48)
     hours_ago = hours_ago.strftime('%Y-%m-%d %H:%M:%S')
-    sql = '''SELECT DISTINCT b.url, b.caption FROM (
-                SELECT CAPTION, url FROM messages
-                WHERE DATE_TIME > %s
-                GROUP BY CAPTION, url HAVING COUNT(*) > 1
-             ) b'''
+    sql = '''SELECT DISTINCT b.url, b.caption
+             FROM (SELECT CAPTION, url
+                   FROM messages
+                   WHERE DATE_TIME > %s
+                   GROUP BY CAPTION, url
+                   HAVING COUNT(*) > 1) b'''
     return exec_sql_get_data(sql, (hours_ago,))
 
 

@@ -105,16 +105,17 @@ def start(all_followings, use_local_json=False):
             yield profile_posts
     else:
         for profile_posts in from_local_json():
-                yield profile_posts
-        
+            yield profile_posts
 
 
 if __name__ == '__main__':
     send_url = get_send_url('instagram')
     root_dir = '/root/download/instagram/json/'
 
+
     def configure_parser(parser):
         parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
+
 
     args, all_followings = prepare_followings(
         'instagram',
@@ -131,8 +132,9 @@ if __name__ == '__main__':
             for i, p in enumerate(posts, start=1):
                 if p.url in send_url:
                     continue
-                instagram_logger.info(' '.join([str(i) + "/" + str(total), p.url, p.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-                                                p.text.replace('\n', ''), str(p.media_count)]))
+                instagram_logger.info(
+                    ' '.join([str(i) + "/" + str(total), p.url, p.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+                              p.text.replace('\n', ''), str(p.media_count)]))
                 result = handler_post(p)
                 process_dispatch_result(result, instagram_logger, p.url)
             print(f"replace into user values ('{latest_post.owner_username}','{latest_post.nickname}',"

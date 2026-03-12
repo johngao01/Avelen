@@ -1,15 +1,17 @@
+import json
 import os.path
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from re import sub
-from types import SimpleNamespace
 from typing import Any, Dict, Optional
 from hashlib import md5
 from random import randint, random, choice
 from re import compile
 from time import time
 from urllib.parse import urlencode, quote
-from tools.database import store_message_data
+
+import requests
+
 from tools.utils import *
 from tools.following import FollowUser
 from tools.downloader import DownloadTask

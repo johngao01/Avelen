@@ -1,5 +1,9 @@
+import json
 from os.path import splitext, basename, getsize
 from urllib.parse import urlparse
+
+import requests
+
 from tools.utils import *
 from tools.following import FollowUser
 from tools.downloader import DownloadTask, download_one

@@ -1,4 +1,3 @@
-import traceback
 from tools.database import *
 from handler.handler_douyin import *
 from tools.scrapy_runner import run_followings, prepare_followings

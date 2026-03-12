@@ -1,10 +1,12 @@
 import datetime
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
+import json
+import requests
 from tools.utils import *
 from tools.following import FollowUser
 from tools.downloader import DownloadTask, download_one
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 with open('../cookies/johnjohn01.txt') as cookie_file:
     cookies = cookie_file.read()

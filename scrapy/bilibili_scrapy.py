@@ -1,5 +1,4 @@
 from tools.database import *
-import traceback
 from handler.handler_bilibili import *
 from tools.scrapy_runner import run_followings, prepare_followings
 from tools.pipeline import process_dispatch_result
