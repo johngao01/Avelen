@@ -1,7 +1,5 @@
 import html
 import traceback
-from urllib.parse import parse_qs
-
 import telegram.error
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -14,7 +12,6 @@ from telegram.ext import (
 from tools.database import *
 from handler.handler_weibo import *
 from handler.handler_douyin import *
-from handler.handler_instagram import *
 
 DEVELOPER_CHAT_ID = 708424141
 
@@ -122,20 +119,6 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await delete_message(context, DEVELOPER_CHAT_ID, message_id)
 
 
-async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    weibo_link = update.message.text
-    message_id = update.message.message_id
-    logger.info(weibo_link)
-    r1 = handle_weibo('1/1', weibo_link)
-    if getattr(r1, 'status_code', None) == 200:
-        pass
-    elif r1 is not None:
-        logger.error(f"处理微博 {weibo_link} 失败")
-    else:
-        logger.error(f"处理微博 {weibo_link} 失败")
-    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-
-
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Exception while handling an update:", exc_info=context.error)
 
@@ -165,97 +148,6 @@ async def edit_commands(application):
     # await application.bot.send_message(text="bot begin start", chat_id=DEVELOPER_CHAT_ID)
 
 
-async def live_douyin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    async def get_live_data(params, api):
-        new_xb = NewXBogus()
-        params['X-Bogus'] = new_xb.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
-        if not share:
-            live_headers.update({'Cookie': cookies})
-        response = requests.get(api, params=params, headers=live_headers)
-        if response.text == '':
-            return
-        data = response.json()
-        data = data["data"]["room"] if share else data["data"]["data"][0]
-        if data["status"] == 4:
-            await context.bot.send_message(text="当前直播已结束", chat_id=update.effective_chat.id)
-            return
-        nickname = data["owner"]["nickname"]
-        title = data["title"]
-        stream_urls = data["stream_url"]["flv_pull_url"]
-        viewer = data['user_count'] if 'user_count' in data else data['room_view_stats']['display_value']
-        for clarity in ['FULL_HD1', 'HD1', 'SD1', 'SD2']:
-            if clarity in stream_urls:
-                await context.bot.send_message(text=stream_urls[clarity], chat_id=update.effective_chat.id)
-                break
-        await context.bot.send_message(update.effective_chat.id, '\t'.join([nickname, title, str(viewer)]))
-
-    async def get_share_live_data():
-        response = requests.get(link, headers=live_headers, allow_redirects=False)
-        params = urlparse(response.headers['Location'])
-        url_list = params.path.rstrip("/").split("/")
-        query_params = parse_qs(params.query)
-        room_id = url_list[-1]
-        user_sec_id = query_params.get('sec_user_id', '')
-        params = {
-            "type_id": "0",
-            "live_id": "1",
-            "room_id": room_id,
-            "sec_user_id": user_sec_id[0],
-            "app_id": "1128",
-        }
-        await get_live_data(params, live_share_api)
-
-    async def get_live_url_data(room_id):
-        params = {
-            "aid": "6383",
-            "app_name": "douyin_web",
-            "device_platform": "web",
-            "cookie_enabled": "true",
-            "web_rid": room_id,
-        }
-        await get_live_data(params, live_api)
-
-    share = True
-    share_text = update.message.text
-    share_link = compile(r".*?(https://v\.douyin\.com/[A-Za-z0-9]+?/).*?")
-    live_link = compile(r".*?https://live\.douyin\.com/([0-9]+).*?")  # 直播链接
-    live_api = "https://live.douyin.com/webcast/room/web/enter/"  # 直播API
-    live_share_api = "https://webcast.amemv.com/webcast/room/reflow/info/"  # 直播分享短链接API
-    live_headers = {
-        "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183',
-    }
-    link = share_link.findall(share_text)
-    if link:
-        link = link[0]
-        await get_share_live_data()
-    else:
-        live_room_id = live_link.findall(share_text)
-        if live_room_id:
-            share = False
-            live_room_id = live_room_id[0]
-            await get_live_url_data(live_room_id)
-
-
-async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    link_message = update.message.text
-    message_id = update.message.message_id
-    link, aweme_id = get_url_id(link_message)
-    if aweme_id == '':
-        await live_douyin(update, context)
-        return
-    logger.info(link)
-    aweme = get_aweme_detail(aweme_id)
-    if aweme is None:
-        logger.error(f"处理抖音 {link} 失败")
-        await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-        return
-    if handler_douyin(aweme):
-        pass
-    else:
-        logger.error(f"处理抖音 {link} 失败")
-    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-
-
 async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messages_id = []
     reaction = update.message_reaction
@@ -280,7 +172,7 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for message_id in messages_id:
                 delete_db_message(message_id)
             if 'weibo' in url:
-                handle_weibo('1/1',url)
+                handle_weibo('1/1', url)
             elif 'douyin' in url:
                 link, aweme_id = get_url_id(url)
                 aweme = get_aweme_detail(aweme_id)
@@ -289,32 +181,7 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 
-async def instagram_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    link_message = update.message.text
-    message_id = update.message.message_id
-    shortcode = link_message.split('/')[4]
-    logger.info(shortcode)
-    post = get_post_detail(shortcode)
-    if post is None:
-        logger.error(f"处理instagram {link_message} 失败")
-        await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-        return
-    r = handler_post(Post(post['data']['xdt_api__v1__media__shortcode__web_info']['items'][0]))
-    if getattr(r, 'status_code', None) == 200:
-        pass
-    elif r is not None:
-        logger.error(f"处理instagram {link_message} 失败")
-    else:
-        logger.error(f"处理instagram {link_message} 失败")
-    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-
-
 def main() -> None:
-    weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
-    douyin_filter = filters.Regex('https://(v.|www.|live.)?(ies)?douyin.*')
-    instagram_filter = filters.Regex('https://www.instagram.com/*')
-    # application = Application.builder().token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU').post_init(
-    #     edit_commands).build()
     builder = Application.builder()
     builder.token('6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU')
     builder.post_init(edit_commands)
@@ -328,11 +195,7 @@ def main() -> None:
     application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
-    application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
-    application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
-    application.add_handler(MessageHandler(instagram_filter, instagram_scrapy))
-    application.add_handler(
-        MessageHandler(filters.Text() & (~douyin_filter or ~weibo_filter or ~instagram_filter), echo))
+    application.add_handler(MessageHandler(filters.Text(), echo))
     application.add_error_handler(error_handler)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
