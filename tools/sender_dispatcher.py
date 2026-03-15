@@ -18,7 +18,7 @@ import telegram
 from telegram import Bot, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 from telegram.constants import ChatAction, ParseMode
 
-from tools.database import insert_data, get_db_conn, MESSAGES, PHOTO, VIDEO, DOCUMENT
+from tools.database import insert_data, get_db_conn, MESSAGES
 
 try:
     import fcntl
@@ -101,44 +101,6 @@ def process_message(message: telegram.Message, data):
         'VIDEO': {},
         'DOCUMENT': {}
     }
-    if message.video:
-        item['VIDEO'] = {
-            'file_id': message.video.file_id,
-            'file_unique_id': message.video.file_unique_id,
-            'height': message.video.height,
-            'width': message.video.width,
-            'duration': message.video.duration or 0,
-            'file_name': message.video.file_name,
-            'file_size': message.video.file_size or 0,
-            'file_type': message.video.mime_type or 'mp4',
-            'message_id': message.message_id,
-            'media_group_id': message.media_group_id,
-            'url': data['url'],
-        }
-    if message.photo:
-        for p in message.photo:
-            item['PHOTO'][p.file_id] = {
-                'file_id': p.file_id,
-                'file_unique_id': p.file_unique_id,
-                'width': p.width,
-                'height': p.height,
-                'file_size': p.file_size or 0,
-                'file_name': item['CAPTION'],
-                'message_id': message.message_id,
-                'media_group_id': message.media_group_id,
-                'url': data['url'],
-            }
-    if message.document:
-        item['DOCUMENT'] = {
-            'file_id': message.document.file_id,
-            'file_unique_id': message.document.file_unique_id,
-            'file_name': message.document.file_name,
-            'file_type': message.document.mime_type or '',
-            'file_size': message.document.file_size or 0,
-            'message_id': message.message_id,
-            'media_group_id': message.media_group_id,
-            'url': data['url'],
-        }
     return item
 
 
@@ -150,13 +112,6 @@ def persist_messages(messages):
     try:
         for m in messages:
             insert_data(conn, 'messages', MESSAGES, m)
-            if m['VIDEO']:
-                insert_data(conn, 'video', VIDEO, m['VIDEO'])
-            if m['PHOTO']:
-                for _, v in m['PHOTO'].items():
-                    insert_data(conn, 'photo', PHOTO, v)
-            if m['DOCUMENT']:
-                insert_data(conn, 'document', DOCUMENT, m['DOCUMENT'])
     finally:
         conn.close()
 
