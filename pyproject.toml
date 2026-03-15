@@ -24,4 +24,5 @@ dependencies = [
     "func-timeout>=4.3.5",
     "pydash>=8.0.6",
     "yt-dlp>=2026.2.4",
+    "filelock>=3.25.2",
 ]

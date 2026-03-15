@@ -8,7 +8,6 @@
 import asyncio
 import os
 import re
-import threading
 import traceback
 from dataclasses import dataclass
 from datetime import datetime
