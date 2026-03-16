@@ -2,8 +2,8 @@ from typing import Callable, Iterable, Any
 import traceback
 import argparse
 
-from tools.database import get_filtered_followings
-from tools.settings import enable_no_send_mode
+from core.database import get_filtered_followings
+from core.settings import enable_no_send_mode
 
 
 def run_followings(all_followings: Iterable[Any], build_following: Callable[[Any], Any], run_one: Callable[[Any], None], logger, finished_message: str = "本次任务结束\n\n"):
@@ -67,3 +67,5 @@ def prepare_followings(platform: str, default_valid=(1,),
     if getattr(args, 'no_send', False):
         enable_no_send_mode()
     return args, select_followings(platform, args)
+
+

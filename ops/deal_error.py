@@ -1,6 +1,6 @@
-from handler.handler_douyin import *
-from handler.handler_weibo import *
-from database import get_send_url
+from platforms.douyin import *
+from platforms.weibo import *
+from core.database import get_send_url
 
 # 使用set存储行，避免重复
 with open('../error.txt', 'r', encoding='utf-8') as file:
@@ -46,3 +46,5 @@ with open('../error.txt', 'w', encoding='utf-8') as file:
     for line in error_line:
         line = line.strip()  # 去掉行末尾的空白字符
         file.write(line + '\n')
+
+

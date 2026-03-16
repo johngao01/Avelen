@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 import json
 import sys
 import time
 import urllib.parse
-import shutil
+from datetime import datetime as dt
 from re import sub
+
+import requests
 from lxml import etree
 from functools import reduce
 from typing import Any
 from loguru import logger
-from tools.utils import *
-from yt_dlp import YoutubeDL
+from core.utils import *
 from pydash import get
 from rich.console import Console
 from rich.progress import (
@@ -21,7 +24,17 @@ from rich.progress import (
     TimeRemainingColumn,
     SpinnerColumn
 )
-from tools.following import FollowUser
+from core.following import FollowUser
+from core.post import BasePost, MediaItem
+from core.downloader import Downloader
+from core.database import *
+from core.scrapy_runner import run_followings, prepare_followings
+from core.settings import is_no_send_mode
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+COOKIE_DIR = BASE_DIR / 'cookies'
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
 
 # 初始化 Rich 控制台
 console = Console()
@@ -32,18 +45,18 @@ logger.add(
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
 )
 logger.add(
-    f"../logs/scrapy_bilibili.log",
+    str(LOG_DIR / 'scrapy_bilibili.log'),
     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
     level="DEBUG",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
     encoding="utf-8",
     filter=lambda record: record["extra"].get("name") == "scrapy_bilibili"
 )
-Day = datetime(2000, 1, 1)
+Day = dt(2000, 1, 1)
 scrapy_logger = logger.bind(name="scrapy_bilibili")
 save_dir = '/root/download/bilibili'
 json_dir = '/root/download/bilibili/json/'
 os.makedirs(json_dir, exist_ok=True)
-cookies_file = '../cookies/bl.txt'
+cookies_file = str(COOKIE_DIR / 'bl.txt')
 with open(cookies_file, mode='r', encoding='utf8') as cookie_file:
     cookies_netscape = cookie_file.read()
     cookies_list = []
@@ -138,7 +151,7 @@ class VideoDownloader:
 
         # 核心输出逻辑：一行展示所有信息，不同颜色标记
         console.print(
-            f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} | INFO |\t[white][/white][cyan]{abspath}[/cyan] "
+            f"{dt.now().strftime("%Y-%m-%d %H:%M:%S")} | INFO |\t[white][/white][cyan]{abspath}[/cyan] "
             f"[white][/white][green]{convert_bytes_to_human_readable(self.total_size)}[/green] "
             f"[white][/white][yellow]{convert_bytes_to_human_readable(speed)}/s[/yellow] "
             f"[white][/white][magenta]{duration:.2f}s[/magenta]"
@@ -154,7 +167,7 @@ class Following(FollowUser):
         self.user_id = user.userid
 
 
-class Post:
+class Post(BasePost):
     def __init__(self, node):
         self.node = node
         self.dynamic_type = node.get("type", "")
@@ -163,6 +176,17 @@ class Post:
         self.modules = node.get("modules", {})
         self.author = self.modules.get("module_author", {})
         self.author_name = self.author.get("name", "")
+        self._bound_url = None
+        super().__init__(
+            platform='bilibili',
+            post_id=self.id_str,
+            user_id=str(node.get('user_id', '')),
+            username=node.get('username', self.author_name),
+            nickname=self.author_name or node.get('username', ''),
+            url=self.url or '',
+            text_raw='',
+            create_time=self.pub_time,
+        )
 
     def save_json(self):
         """
@@ -177,7 +201,7 @@ class Post:
     @property
     def pub_time(self):
         pub_time = self.author.get("pub_ts", "")
-        return datetime.fromtimestamp(int(pub_time))
+        return dt.fromtimestamp(int(pub_time))
 
     def is_top(self):
         module_tag = self.modules.get("module_tag", {})
@@ -205,6 +229,8 @@ class Post:
 
     @property
     def url(self):
+        if self._bound_url:
+            return self._bound_url
         jump_url = self.basic.get("jump_url")
         if jump_url:
             return jump_url
@@ -215,6 +241,10 @@ class Post:
         else:
             return None
 
+    @url.setter
+    def url(self, value):
+        self._bound_url = value
+
     def info(self):
         return f"{self.dynamic_type} {self.pub_time} {self.url}"
 
@@ -224,6 +254,83 @@ class Post:
             return '充电专属'
         text = get(self.modules, 'module_dynamic.major.archive.badge.text')
         return text
+
+    def bind_context(self, scraping: Following | None = None, api: 'BilibiliAPI' | None = None):
+        if scraping is not None:
+            self.username = scraping.username
+            self.user_id = str(scraping.user_id)
+        self.nickname = get(self.author, 'name') or self.username
+        self.url = self.url or ''
+        if self.dynamic_type == "DYNAMIC_TYPE_DRAW":
+            self.text_raw = self._resolve_draw_desc(api)
+        else:
+            self.text_raw = self._resolve_video_title()
+        return self
+
+    def build_media_items(self) -> list[MediaItem]:
+        if self.dynamic_type == "DYNAMIC_TYPE_AV":
+            title = self._safe_fragment(self._resolve_video_title(), limit=80) or self.get_video_id() or self.id_str
+            return [MediaItem(
+                url=f'https://www.bilibili.com/video/{self.get_video_id()}',
+                media_type='video',
+                filename_hint=os.path.join(self.username, f"{self.get_video_id()}_{title}.mp4"),
+                referer=self.url,
+                ext='mp4',
+                index=1,
+            )]
+        if self.dynamic_type == "DYNAMIC_TYPE_DRAW":
+            items = []
+            for index, item in enumerate(get(self.node, 'modules.module_dynamic.major.draw.items') or [], start=1):
+                src = item.get('src')
+                if not src:
+                    continue
+                ext = src.split('?')[0].split('.')[-1]
+                filename = f"{self.id_str}_{self._safe_fragment(self.text_raw, limit=30)}_{index}.{ext}"
+                items.append(MediaItem(
+                    url=src,
+                    media_type='photo',
+                    filename_hint=os.path.join(self.username, filename),
+                    referer=self.url,
+                    ext=ext,
+                    index=index,
+                ))
+            return items
+        return []
+
+    def to_dispatch_data(self, downloaded_files) -> dict | None:
+        files = [result.to_dispatch_file() for result in downloaded_files if result.to_dispatch_file()]
+        if not files:
+            return None
+        post_data = self.base_dispatch_data()
+        post_data['files'] = files[0] if len(files) == 1 else files
+        return post_data
+
+    def _resolve_video_title(self):
+        return get(self.modules, 'module_dynamic.major.archive.title') or get(self.node, 'describe') or ''
+
+    def _resolve_draw_desc(self, api: BilibiliAPI | None = None):
+        desc = get(self.node, 'describe') or ''
+        if desc or api is None:
+            return desc
+        opus_response = api.session.get(f'https://www.bilibili.com/opus/{self.id_str}')
+        if opus_response.status_code == 200:
+            tree = etree.HTML(opus_response.text)
+            result = tree.xpath('//div[@class="opus-module-content opus-paragraph-children"]//span/text()')
+            if result:
+                desc = result[0]
+                self.node['describe'] = desc
+                self.save_json()
+        else:
+            scrapy_logger.warning(f"获取 {self.url} 的 html 内容失败")
+        return desc
+
+    @staticmethod
+    def _safe_fragment(text: str, limit=30):
+        text = text or ''
+        if len(text) > limit:
+            text = text[:limit]
+        text = sub('[\\\\/:*?"<>|\n]', "", text)
+        return text or 'post'
 
 
 class BilibiliAPI:
@@ -356,80 +463,11 @@ def handler_video(dynamic: Post, video_url, username, index):
         scrapy_logger.info("\t充电专属内容，跳过处理")
         skip_url(video_url)
         return None
-    downloader = VideoDownloader()
-    ydl_opts = {
-        'logger': scrapy_logger,
-        # cookies 文件（Windows 示例路径）
-        'cookiefile': cookies_file,
-        # 输出模板，便于知道文件保存位置；可按需修改
-        'outtmpl': rf'/root/download/bilibili/{username}/%(id)s_%(title)s.%(ext)s',
-        # 合并视频+音频
-        'format': 'bestvideo+bestaudio',
-        'fragment_retries': 10,
-        'retries': 10,
-        # 忽略可跳过的错误（下载失败时继续后续条目）
-        'ignoreerrors': True,
-        # 只处理播放列表中的第 1-5 条（你也可以改为 '1-5'）
-        # 让 yt-dlp 为每个条目写 .info.json
-        'writeinfojson': True,
-        # 不要用扁平提取（如果你需要完整 metadata，确保不要设置 flat-playlist）
-        'extract_flat': True,
-        # 倒序处理，先处理最早的作品
-        'playlist_reverse': True,
-        'progress_hooks': [downloader.progress_hook],
-        'noprogress': True,
-        'quiet': True,
-    }
-    try:
-        with downloader.progress:
-            with YoutubeDL(ydl_opts) as ydl:
-                # 这种方式比 process_info 更可控
-                video = ydl.extract_info(video_url, download=True)
-                if not video:
-                    scrapy_logger.error(f"获取 {video_url} 数据失败")
-                    return None
-            # 进度条结束后输出统计行
-            downloader.print_final_report()
-    except Exception as e:
-        logger.error(f"下载失败: {e}")
-        return None
-    title = get(video, 'fulltitle')
-    post_time = get(video, 'timestamp') or get(video, 'epoch')
-    if post_time is None:
-        scrapy_logger.error(f"获取 {video_url} 数据失败")
-    post_time = datetime.fromtimestamp(post_time)
-    post_data = {
-        'username': username,
-        'nickname': get(video, 'uploader'),
-        'url': video_url,
-        'userid': get(video, 'uploader_id'),
-        'idstr': get(video, 'id'),
-        'mblogid': '',
-        'create_time': post_time.strftime('%Y-%m-%d %H:%M:%S'),
-        'text_raw': title,
-    }
-    try:
-        expected_path = ydl.prepare_filename(video)
-    except Exception:
-        expected_path = None
-    if os.path.exists(expected_path):
-        size = os.path.getsize(expected_path)
-        human_readable_size = convert_bytes_to_human_readable(size)
-        if size > MAX_VIDEO_SIZE:
-            scrapy_logger.info(f"{expected_path} 太大，无法发送。")
-            skip_url(video_url)
-            return None
-        scrapy_logger.info(f"\t{expected_path} {human_readable_size}")
-        base = os.path.splitext(expected_path)[0]
-        infojson_path = base + '.info.json'
-        try:
-            shutil.move(infojson_path, '/root/download/bilibili/json/')
-        except Exception as e:
-            pass
-        post_data.update({'files': {'media': expected_path, 'caption': os.path.basename(expected_path),
-                                    'type': 'video'}})
-        return post_data
-    return None
+    dynamic.username = username
+    dynamic.url = video_url
+    dynamic.bind_context()
+    downloader = Downloader(logger=scrapy_logger)
+    return dynamic.to_dispatch_data(downloader.download_post(dynamic))
 
 
 def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
@@ -438,71 +476,10 @@ def handler_opus(dynamic: Post, url, scraping, index, api: BilibiliAPI):
         scrapy_logger.info("\t充电专属内容，跳过处理")
         skip_url(url)
         return None
-    post_data = {
-        'username': scraping.username,
-        'nickname': get(dynamic.author, 'name') or scraping.username,
-        'url': url,
-        'userid': str(scraping.user_id),
-        'idstr': dynamic.id_str,
-        'mblogid': '',
-        'create_time': dynamic.pub_time.strftime('%Y-%m-%d %H:%M:%S'),
-    }
-    download_files = find_download_file(scraping.username, dynamic.id_str)
-    if download_files:
-        files = []
-        total = len(download_files)
-        for idx, filepath in enumerate(download_files, start=1):
-            file_data = handler_file(filepath, f'{idx}/{total}', scrapy_logger)
-            if file_data:
-                files.append(file_data)
-        desc = download_files[0].split('.')[0].split('_')
-        desc = '_'.join(desc[1:-1])
-        post_data.update({'files': files, 'text_raw': desc})
-    else:
-        draw = get(dynamic.node, 'modules.module_dynamic.major.draw.items')
-        opus_response = api.session.get(f'https://www.bilibili.com/opus/{dynamic.id_str}')
-        if opus_response.status_code == 200:
-            tree = etree.HTML(opus_response.text)
-            result = tree.xpath('//div[@class="opus-module-content opus-paragraph-children"]//span/text()')
-            if result:
-                desc = result[0]
-                dynamic.node['describe'] = desc
-                dynamic.save_json()
-            else:
-                desc = ''
-        else:
-            scrapy_logger.warning(f"获取 {url} 的 html 内容失败")
-            desc = ''
-        post_data.update({'text_raw': desc})
-        if len(desc) > 30:
-            desc = sub('[\\\\/:*?"<>|\n]', "", desc[0:30])
-        else:
-            desc = sub('[\\\\/:*?"<>|\n]', "", desc)
-        if draw is None:
-            return None
-        total = len(draw)
-
-        files = []
-        for idx, item in enumerate(draw, start=1):
-            src = item.get('src')
-            response = api.session.get(src, stream=True)
-            if response.status_code != 200:
-                scrapy_logger.error(f"下载 {src} 失败" + f" {response.text}")
-                return None
-            ext = src.split('.')[-1]
-            filename = dynamic.id_str + f"_{desc}_{idx}.{ext}"
-            filepath = os.path.join(save_dir, scraping.username, filename)
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            with open(filepath, mode='wb') as f:
-                f.write(response.content)
-            file_data = handler_file(filepath, f'{idx}/{total}', scrapy_logger)
-            if file_data:
-                files.append(file_data)
-        if files:
-            post_data.update({'files': files})
-        else:
-            return None
-    return post_data
+    dynamic.url = url
+    dynamic.bind_context(scraping, api)
+    downloader = Downloader(logger=scrapy_logger)
+    return dynamic.to_dispatch_data(downloader.download_post(dynamic))
 
 
 def skip_url(url):
@@ -535,3 +512,72 @@ def find_download_file(username: str, file_id: str):
             if file_id in file:
                 files.append(os.path.join(user_dir, file))
     return files
+
+
+def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
+    if getattr(result, 'status_code', None) == 200:
+        if not is_no_send_mode():
+            download_log(result)
+            rate_control(result, logger)
+            if on_success_update:
+                on_success_update()
+        return 'success'
+    if isinstance(result, str) and 'skip' in result:
+        return 'skip'
+    if on_failure_update:
+        on_failure_update()
+    error_text = getattr(result, 'status_code', result)
+    log_error(url, error_text)
+    logger.error(f"处理 {url} 失败")
+    return 'failure'
+
+
+def start(scraping: Following, api: BilibiliAPI, send_url):
+    if len(sys.argv) < 2:
+        dynamics = api.get_update_dynamics(scraping)
+    else:
+        dynamics = from_local_json(scraping)
+    dynamics = sorted(dynamics, key=lambda x: x.pub_time)
+    total = len(dynamics)
+    for idx, dynamic in enumerate(dynamics, start=1):
+        if dynamic.dynamic_type == 'DYNAMIC_TYPE_AV':
+            url = f'https://www.bilibili.com/video/{dynamic.get_video_id()}'
+            if url in send_url:
+                continue
+            post_data = handler_video(dynamic, url, scraping.username, f"{idx}/{total}")
+        elif dynamic.dynamic_type == 'DYNAMIC_TYPE_DRAW':
+            url = f'https://www.bilibili.com/opus/{dynamic.get_opus_id()}'
+            if url in send_url:
+                continue
+            post_data = handler_opus(dynamic, url, scraping, f"{idx}/{total}", api)
+        else:
+            continue
+        if post_data is None:
+            continue
+        r = request_webhook('/main', post_data, scrapy_logger)
+        handle_dispatch_result(
+            r,
+            scrapy_logger,
+            url,
+            on_success_update=lambda: update_db(
+                scraping.user_id,
+                scraping.username,
+                dynamic.pub_time.strftime("%Y-%m-%d %H:%M:%S")
+            )
+        )
+
+
+def main():
+    _, all_followings = prepare_followings('bilibili', default_valid=(1,))
+    api = BilibiliAPI(all_cookies=cookies_dict)
+    send_url = get_send_url('bilibili')
+    run_followings(
+        all_followings,
+        build_following=lambda raw: Following(*raw),
+        run_one=lambda following: start(following, api, send_url),
+        logger=scrapy_logger,
+    )
+
+
+if __name__ == '__main__':
+    main()

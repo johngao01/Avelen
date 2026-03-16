@@ -9,9 +9,9 @@ from telegram.ext import (
     ContextTypes, MessageHandler, filters
 )
 
-from tools.database import *
-from handler.handler_weibo import *
-from handler.handler_douyin import *
+from core.database import *
+from platforms.weibo import *
+from platforms.douyin import *
 
 DEVELOPER_CHAT_ID = 708424141
 
@@ -23,13 +23,13 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(text)
     if 'scrapy' in text:
         if 'weibo' in text:
-            os.system('python3 weibo_scrapy.py')
+            os.system('python main.py weibo')
         elif 'douyin' in text:
-            os.system('python3 douyin_scrapy.py')
+            os.system('python main.py douyin')
     elif text == 'sw':
-        os.system('python3 weibo_scrapy.py')
+        os.system('python main.py weibo')
     elif text == 'sd':
-        os.system('python3 douyin_scrapy.py')
+        os.system('python main.py douyin')
     await delete_message(context, DEVELOPER_CHAT_ID, message_id)
     logger.info("scrapy end")
 
@@ -202,3 +202,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

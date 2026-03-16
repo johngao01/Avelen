@@ -14,3 +14,5 @@ def is_no_send_mode() -> bool:
 def enable_no_send_mode() -> None:
     """Enable no-send mode for current process and child imports."""
     os.environ['SCRAPY_NO_SEND'] = '1'
+
+

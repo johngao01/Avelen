@@ -16,7 +16,7 @@ import telegram
 from telegram import Bot, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 from telegram.constants import ChatAction, ParseMode
 
-from tools.database import insert_data, get_db_conn, MESSAGES
+from core.database import insert_data, get_db_conn, MESSAGES
 from filelock import FileLock
 
 DEVELOPER_CHAT_ID = 708424141
@@ -210,9 +210,9 @@ async def execute_task(data):
     photos, videos, documents = [], [], []
 
     for file in raw_files:
-        path = file.get('path', '')
-        caption = os.path.basename(path)
-        size = os.path.getsize(path)
+        path = file.get('path') or file.get('media', '')
+        caption = file.get('caption') or os.path.basename(path)
+        size = file.get('size') or os.path.getsize(path)
         filetype = file.get('type')
 
         if filetype == 'video':
@@ -279,3 +279,5 @@ def dispatch_post_data(data: dict):
         except Exception as e:
             traceback.print_exc()
             return LocalResponse(500, {'error': str(e), '_persisted': False})
+
+

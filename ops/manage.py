@@ -15,11 +15,11 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode, ChatAction
 from typing import cast
-from database import exec_sql_get_data, add_user, update_user
+from core.database import exec_sql_get_data, add_user, update_user
 from urllib.parse import urlparse
-from handler.handler_douyin import get_url_id, get_aweme_detail, handler_douyin
-from handler.handler_weibo import handle_weibo
-from tools.nicefuturebot import delete_message
+from platforms.douyin import get_url_id, get_aweme_detail, handler_douyin
+from platforms.weibo import handle_weibo
+from ops.nicefuturebot import delete_message
 
 headers = {
     'referer': 'https://www.baidu.com/',
@@ -492,3 +492,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

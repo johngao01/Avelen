@@ -2,13 +2,25 @@ import datetime
 import time
 import sys
 import json
+import traceback
+from datetime import datetime
+from pathlib import Path
 import requests
-from tools.utils import *
-from tools.following import FollowUser
-from tools.downloader import DownloadTask, download_one
+from core.post import BasePost, MediaItem
+from core.utils import *
+from core.following import FollowUser
+from core.downloader import DownloadTask, download_one, Downloader
+from core.database import *
+from core.scrapy_runner import run_followings, prepare_followings
+from core.settings import is_no_send_mode
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-with open('../cookies/johnjohn01.txt') as cookie_file:
+BASE_DIR = Path(__file__).resolve().parent.parent
+COOKIE_DIR = BASE_DIR / 'cookies'
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+
+with open(COOKIE_DIR / 'johnjohn01.txt') as cookie_file:
     cookies = cookie_file.read()
 
 headers = {
@@ -42,7 +54,7 @@ logger.add(
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
 )
 logger.add(
-    f"../logs/scrapy_weibo.log",
+    str(LOG_DIR / 'scrapy_weibo.log'),
     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
     encoding="utf-8",
@@ -229,6 +241,125 @@ def parse_weibo_data(weibo_data, username):
     return weibo_info, post_data
 
 
+class WeiboPost(BasePost):
+    def __init__(self, weibo_data, username=None):
+        self.data = weibo_data
+        self.storage_username = username or 'favorite'
+        self.dispatch_username = weibo_data['user']['screen_name'] if self.storage_username == 'favorite' else self.storage_username
+        self.mblogid = weibo_data['mblogid']
+        self.create_time = standardize_date(weibo_data['created_at'])
+        self.create_date = self.create_time.strftime("%Y%m%d")
+        self.request_headers = {
+            **weibo_header,
+            'referer': f"https://www.weibo.com/{weibo_data['user']['idstr']}/{weibo_data['idstr']}",
+        }
+        super().__init__(
+            platform='weibo',
+            post_id=weibo_data['idstr'],
+            user_id=weibo_data['user']['idstr'],
+            username=self.dispatch_username,
+            nickname=weibo_data['user']['screen_name'],
+            url=f"https://www.weibo.com/{weibo_data['user']['idstr']}/{weibo_data['idstr']}",
+            text_raw=weibo_data.get('text_raw', ''),
+            create_time=self.create_time,
+        )
+
+    def build_media_items(self) -> list[MediaItem]:
+        if self.data.get('mix_media_info', {}).get('items'):
+            return self._build_mix_media_items()
+        pic_ids = self.data.get('pic_ids') or []
+        pic_infos = self.data.get('pic_infos') or {}
+        if pic_ids and pic_infos:
+            items = []
+            for index, pic_id in enumerate(pic_ids, start=1):
+                pic = pic_infos.get(pic_id)
+                if pic:
+                    items.extend(self._build_pic_items(pic, index))
+            return items
+        video_url = get_video_url(self.data.get('page_info') or {})
+        if video_url:
+            return [self._build_video_item(video_url, 1)]
+        return []
+
+    def to_dispatch_data(self, downloaded_files) -> dict | None:
+        files = []
+        for result in downloaded_files:
+            file_data = result.to_dispatch_file()
+            if not file_data:
+                continue
+            if file_data.get('type') in {'photo', 'document'} and self._is_deleted_media(result.path):
+                weibo_logger.info("和谐的内容：" + result.path)
+                continue
+            files.append(file_data)
+        if not files:
+            return None
+        post_data = self.base_dispatch_data()
+        post_data['mblogid'] = self.mblogid
+        post_data['files'] = files[0] if len(files) == 1 else files
+        return post_data
+
+    def _build_mix_media_items(self) -> list[MediaItem]:
+        items = []
+        mix_media_items = self.data['mix_media_info']['items']
+        pic_index = 1
+        video_index = 1
+        for item in mix_media_items:
+            if item['type'] == 'pic':
+                items.extend(self._build_pic_items(item['data'], pic_index))
+                pic_index += 1
+            elif item['type'] == 'video':
+                video_url = get_video_url(item['data'])
+                if video_url:
+                    items.append(self._build_video_item(video_url, video_index))
+                    video_index += 1
+        return items
+
+    def _build_pic_items(self, pic, index):
+        largest_url = pic['largest']['url']
+        file_type = largest_url.split('/')[-1].split('?')[0].split('.')[-1]
+        filename = f"{self.create_date}_{self.post_id}_{index}.{file_type}"
+        items = [MediaItem(
+            url=largest_url,
+            media_type='photo',
+            filename_hint=os.path.join(self.storage_username, filename),
+            headers=self.request_headers,
+            referer=self.url,
+            ext=file_type,
+            index=index,
+        )]
+        if pic.get('type') == 'livephoto' and pic.get('video'):
+            items.append(MediaItem(
+                url=pic['video'],
+                media_type='video',
+                filename_hint=os.path.join(self.storage_username, f"{self.create_date}_{self.post_id}_{index}.mov"),
+                headers=self.request_headers,
+                referer=self.url,
+                ext='mov',
+                index=index,
+            ))
+        return items
+
+    def _build_video_item(self, video_url, index):
+        suffix = "" if index is None else f"_{index}"
+        return MediaItem(
+            url=video_url,
+            media_type='video',
+            filename_hint=os.path.join(self.storage_username, f"{self.create_date}_{self.post_id}{suffix}.mp4"),
+            headers=self.request_headers,
+            referer=self.url,
+            ext='mp4',
+            index=index or 1,
+        )
+
+    @staticmethod
+    def _is_deleted_media(path: str) -> bool:
+        try:
+            with open(path, mode='rb') as file_obj:
+                return bytes2md5(file_obj.read()) in del_file
+        except OSError:
+            return False
+
+
 def get_weibo_data(weibo_link):
     weibo_id = weibo_link.split('/')[-1]
     try:
@@ -314,7 +445,7 @@ def handler_video_weibo(weibo_info, post_data, video_url):
 
 def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=None):
     if weibo_data:
-        weibo_info, post_data = parse_weibo_data(weibo_data, username)
+        post = WeiboPost(weibo_data, username=username)
     else:
         weibo_data = get_weibo_data(weibo_url)
         if weibo_data is False:
@@ -328,10 +459,10 @@ def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=
                     weibo_data = json.load(f)
             else:
                 return False
-        weibo_info, post_data = parse_weibo_data(weibo_data, username)
-    weibo_dict = weibo_info['data']
-    info = weibo_index + '\t' + weibo_url + '\t' + post_data['create_time'] + \
-           '\t' + post_data['text_raw'].replace('\n', '\t') + '\t'
+        post = WeiboPost(weibo_data, username=username)
+    weibo_dict = post.data
+    info = weibo_index + '\t' + weibo_url + '\t' + post.create_time.strftime("%Y-%m-%d %H:%M:%S") + \
+           '\t' + post.text_raw.replace('\n', '\t') + '\t'
     if weibo_dict['mblog_vip_type'] == 1:
         weibo_logger.info(info + 'V+微博')
         return 'skip'
@@ -346,30 +477,18 @@ def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=
             return 'skip'
     if 'mix_media_info' in weibo_dict and weibo_dict['mix_media_info']['items']:
         weibo_logger.info(info + '图片视频微博')
-        r = handler_mix_media_weibo(weibo_info, post_data, weibo_dict['mix_media_info'])
-        return r
     elif type(weibo_dict.get('pic_ids')) is list and len(weibo_dict.get('pic_ids')) > 0:
-        if 'pic_infos' in weibo_dict:
-            weibo_logger.info(info + '图片微博')
-            r = handler_photo_weibo(weibo_info, weibo_dict['pic_infos'], post_data)
-            return r
-        else:
-            weibo_logger.info(info + '图片微博===\t')
+        weibo_logger.info(info + '图片微博')
+    elif get_video_url(weibo_dict.get('page_info') or {}):
+        weibo_logger.info(info + '视频微博')
     else:
-        data = weibo_dict
-        page_info = data.get('page_info')
-        if page_info:
-            video_url = get_video_url(page_info)
-            if video_url:
-                weibo_logger.info(info + '视频微博')
-                r = handler_video_weibo(weibo_info, post_data, video_url)
-                return r
-            else:
-                weibo_logger.info(info + '文字微博')
-                return 'skip'
-        else:
-            weibo_logger.info(info + '文字微博')
-            return 'skip'
+        weibo_logger.info(info + '文字微博')
+        return 'skip'
+    downloader = Downloader(logger=weibo_logger)
+    post_data = post.to_dispatch_data(downloader.download_post(post))
+    if not post_data:
+        return 'skip'
+    return request_webhook('/main', post_data, weibo_logger)
 
 
 def handler_mix_media_weibo(weibo_info, post_data, mix_media_data):
@@ -398,3 +517,157 @@ def handler_mix_media_weibo(weibo_info, post_data, mix_media_data):
     post_data.update({'files': photo_video})
     r = request_webhook('/main', post_data, weibo_logger)
     return r
+
+
+def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
+    if getattr(result, 'status_code', None) == 200:
+        if not is_no_send_mode():
+            download_log(result)
+            rate_control(result, logger)
+            if on_success_update:
+                on_success_update()
+        return 'success'
+    if isinstance(result, str) and 'skip' in result:
+        return 'skip'
+    if on_failure_update:
+        on_failure_update()
+    error_text = getattr(result, 'status_code', result)
+    log_error(url, error_text)
+    logger.error(f"处理 {url} 失败")
+    return 'failure'
+
+
+def update_after_batch(on_update=None):
+    if not is_no_send_mode() and on_update:
+        on_update()
+
+
+def scrapy_like(uid, scrapy_log):
+    weibo_list = []
+    page = 1
+    since_id = ''
+    while True:
+        response = requests.get("https://weibo.com/ajax/statuses/likelist", params={
+            'uid': uid,
+            'page': page,
+            'count': 50,
+            'since_id': since_id,
+        }, headers=cookie_headers)
+        info = response.json()
+        if info.get('ok') != 1:
+            break
+        mblogs = info.get('data', {}).get('list') or []
+        if not mblogs:
+            break
+        for weibo_info in mblogs:
+            if 'user' not in weibo_info:
+                continue
+            weibo_info['weibo_time'] = standardize_date(weibo_info['created_at'])
+            weibo_info['weibo_url'] = f"https://www.weibo.com/{weibo_info['user']['idstr']}/{weibo_info['idstr']}"
+            weibo_list.append(weibo_info)
+        since_id = info.get('data', {}).get('since_id', '')
+        scrapy_log.info(f'favorite 获取第{page}页完成，一共有{len(mblogs)}个微博')
+        if not since_id:
+            break
+        page += 1
+    return weibo_list
+
+
+def scrapy_latest_via_com(user: Following, scrapy_log):
+    weibo_list = []
+    page = 1
+    while True:
+        params = {"uid": user.userid, "page": page, "feature": 0}
+        response = requests.get("https://weibo.com/ajax/statuses/mymblog", params=params, headers=headers)
+        info = response.json()
+        page_add = 0
+        since_id = info.get('data', {}).get('since_id', '')
+        if not ('data' in info and 'list' in info['data']):
+            return weibo_list
+        page_weibo_min_time = datetime(2099, 12, 31, 12, 12, 12)
+        if info['ok'] == 0 and info.get('msg') == '请求过于频繁':
+            scrapy_log.info(f'{info.get("msg")}')
+            time.sleep(60)
+        elif info['ok'] == 0 and info.get('msg') == "这里还没有内容":
+            break
+        elif info['ok'] == -100:
+            scrapy_log.info('需要验证')
+        mblogs = info['data']['list']
+        for weibo_info in mblogs:
+            weibo_id = weibo_info['idstr'] if 'idstr' in weibo_info else weibo_info['id']
+            if 'edit_at' in weibo_info:
+                latest_edit_time = standardize_date(weibo_info['edit_at'])
+            else:
+                latest_edit_time = standardize_date(weibo_info['created_at'])
+            save_json(weibo_edit_count(weibo_info), user.username, weibo_id, weibo_info)
+            weibo_info['weibo_time'] = latest_edit_time
+            weibo_url = "https://www.weibo.com" + "/" + user.userid + "/" + weibo_id
+            if latest_edit_time < page_weibo_min_time:
+                page_weibo_min_time = latest_edit_time
+            if latest_edit_time > user.latest_time and weibo_info.get('mblog_vip_type', 0) != 1:
+                page_add += 1
+                weibo_info['weibo_url'] = weibo_url
+                weibo_list.append(weibo_info)
+        scrapy_info = f'{user.username} 获取第{page}页完成，一共有{len(mblogs)}个微博'
+        if page_add > 0:
+            scrapy_info += f"，本页获得{page_add}个新微博,共有{len(weibo_list)}个新微博"
+        else:
+            scrapy_info += f"，本页没有新微博,共有{len(weibo_list)}个新微博"
+        if page_weibo_min_time <= user.latest_time or since_id == '':
+            scrapy_info += "，获取新微博完成。"
+            scrapy_log.info(scrapy_info)
+            break
+        scrapy_log.info(scrapy_info)
+        page += 1
+    return weibo_list
+
+
+def start(scraping: Following, has_send):
+    if scraping.username == 'favorite':
+        new_weibo = scrapy_like(scraping.userid, weibo_logger)
+    else:
+        new_weibo = scrapy_latest_via_com(scraping, weibo_logger)
+    if len(new_weibo) == 0:
+        weibo_logger.info(f'{scraping.username} 没有新微博\n')
+        return
+    new_weibo = sorted(new_weibo, key=lambda item: item['weibo_time'])
+    latest_weibo = max(new_weibo, key=lambda x: x['weibo_time'])
+    logger.info(f"{new_weibo[0]['weibo_time']}  {new_weibo[-1]['weibo_time']}")
+    total = len(new_weibo)
+    for i, weibo in enumerate(new_weibo, start=1):
+        if weibo['weibo_url'] in has_send:
+            continue
+        try:
+            if scraping.username == 'favorite':
+                r = handle_weibo(f"{i}/{total}", weibo['weibo_url'], weibo_data=weibo, username=scraping.username)
+            else:
+                r = handle_weibo(f"{i}/{total}", weibo['weibo_url'], userid=scraping.userid, username=scraping.username)
+        except Exception:
+            log_error(weibo['weibo_url'])
+            weibo_logger.error(f"处理 {weibo['weibo_url']} 失败")
+            weibo_logger.error(traceback.format_exc())
+        else:
+            handle_dispatch_result(r, weibo_logger, weibo['weibo_url'])
+    weibo_logger.info('\n')
+    update_after_batch(lambda: update_db(
+        scraping.userid,
+        scraping.username,
+        latest_weibo['weibo_time'].strftime('%Y-%m-%d %H:%M:%S')
+    ))
+
+
+def main():
+    _, all_followings = prepare_followings('weibo', default_valid=(1,))
+    send_weibo_url = get_send_url('weibo')
+    run_followings(
+        all_followings,
+        build_following=lambda raw: Following(*raw),
+        run_one=lambda following: start(following, send_weibo_url),
+        logger=weibo_logger,
+    )
+
+
+if __name__ == '__main__':
+    main()
+
+

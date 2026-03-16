@@ -6,10 +6,13 @@ from datetime import datetime
 from pathlib import Path
 
 import cv2
-from tools.sender_dispatcher import dispatch_post_data
-from tools.settings import is_no_send_mode
+from core.sender_dispatcher import dispatch_post_data
+from core.settings import is_no_send_mode
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
+project_root = Path(__file__).resolve().parent.parent
+logs_directory = project_root / 'logs'
+logs_directory.mkdir(exist_ok=True)
 download_save_root_directory = '/root/download'
 MAX_PHOTO_SIZE = 10 * 1024 * 1024
 MAX_PHOTO_TOTAL_PIXEL = 7000
@@ -51,7 +54,7 @@ def download_log(response):
     message = messages[-1]
     log = (message['USERNAME'] + " " + message['CREATE_TIME'] + " " + message['DATE_TIME'] +
            " " + message['URL'] + " " + message['TEXT_RAW'].replace('\n', ' '))
-    with open('../logs/send.log', 'a') as f:
+    with open(logs_directory / 'send.log', 'a', encoding='utf-8') as f:
         f.write(log + "\n")
 
 
@@ -105,7 +108,7 @@ def rate_control(r, logger):
 
 
 def log_error(url, text=''):
-    with open('../error.txt', 'a') as f:
+    with open(project_root / 'error.txt', 'a', encoding='utf-8') as f:
         f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 处理 {url} 失败  {text}\n")
 
 

@@ -5,7 +5,7 @@ import random
 import emoji
 from telegram.constants import ParseMode
 
-from tools.database import exec_sql_get_data, get_db_conn
+from core.database import exec_sql_get_data, get_db_conn
 from telegram import Bot
 from loguru import logger
 logger.add("ggg.log")
@@ -92,3 +92,5 @@ async def main():
 
 
 asyncio.run(main())
+
+

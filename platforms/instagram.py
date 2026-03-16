@@ -1,15 +1,28 @@
 import json
+import os
+import random
+from datetime import datetime
 from os.path import splitext, basename, getsize
+from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
 
-from tools.utils import *
-from tools.following import FollowUser
-from tools.downloader import DownloadTask, download_one
+from core.post import BasePost, MediaItem
+from core.utils import *
+from core.database import *
+from core.following import FollowUser
+from core.downloader import DownloadTask, download_one, Downloader
+from core.scrapy_runner import prepare_followings
+from core.settings import is_no_send_mode
 import sys
 from loguru import logger
 import re
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+COOKIE_DIR = BASE_DIR / 'cookies'
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
 
 logger.remove()
 logger.add(
@@ -18,14 +31,14 @@ logger.add(
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
 )
 logger.add(
-    f"../logs/scrapy_instagram.log",
+    str(LOG_DIR / 'scrapy_instagram.log'),
     format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
     level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
     encoding="utf-8",
     filter=lambda record: record["extra"].get("name") == "scrapy_instagram"
 )
 instagram_logger = logger.bind(name="scrapy_instagram")
-with open('../cookies/neverblock11.txt', 'r', encoding='utf-8') as f:
+with open(COOKIE_DIR / 'neverblock11.txt', 'r', encoding='utf-8') as f:
     cookies = f.read()
 
 
@@ -44,7 +57,6 @@ def parse_cookie_header(header):
 
 parsed = parse_cookie_header(cookies)
 csrftoken = parsed.get('csrftoken', '')
-logger.info(f"csrftoken: {csrftoken}")
 instagram_headers = {
     'accept': '*/*',
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5',
@@ -104,18 +116,20 @@ data = {
 }
 
 graphql_url = 'https://www.instagram.com/graphql/query'
-if 'instagram_scrapy.py' in sys.argv[0]:
-    r = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)
-    # 正则表达式查找并捕获token的值
-    match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"}', r.text)
+fb_dtsg = ''
+
+
+def ensure_fb_dtsg():
+    global fb_dtsg
+    if fb_dtsg:
+        return fb_dtsg
+    response = requests.get('https://www.instagram.com', headers=instagram_headers, data=data)
+    match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"}', response.text)
     if match:
-        fb_dtsg = match.group(1)  # 捕获的token值
+        fb_dtsg = match.group(1)
         instagram_logger.info(f"fb_dtsg value: {fb_dtsg}")
-    else:
-        instagram_logger.error("fb_dtsg not found")
-        exit(1)
-else:
-    fb_dtsg = ''
+        return fb_dtsg
+    raise RuntimeError("fb_dtsg not found")
 
 
 class Profile(FollowUser):
@@ -128,7 +142,7 @@ class Profile(FollowUser):
         self.url = 'https://www.instagram.com/' + self.pk
 
 
-class Post:
+class Post(BasePost):
     def __init__(self, node):
         self.node = node
         self.shortcode = self.node['shortcode'] if 'shortcode' in self.node else self.node['code']
@@ -146,6 +160,16 @@ class Post:
         self.video = node.get('video_versions')
         self.preview = node['image_versions2']
         self.pin_info = node.get('timeline_pinned_user_ids')
+        super().__init__(
+            platform='instagram',
+            post_id=self.shortcode,
+            user_id=self.owner_username,
+            username=self.nickname,
+            nickname=self.owner_username,
+            url=self.url,
+            text_raw=self.text,
+            create_time=self.create_time,
+        )
 
     @property
     def text(self):
@@ -175,6 +199,39 @@ class Post:
             if self.owner_pk in self.pin_info:
                 return True
         return False
+
+    def build_media_items(self) -> list[MediaItem]:
+        items = []
+        download_header = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 '
+                          'Safari/537.36 Edg/120.0.0.0',
+            'referer': self.url
+        }
+        for index, media in enumerate(self.get_medias(), start=1):
+            ext = splitext(media.filename)[1].lstrip('.')
+            items.append(MediaItem(
+                url=media.url,
+                media_type=media.media_type,
+                filename_hint=os.path.join(self.owner_username, media.filename),
+                headers=download_header,
+                referer=self.url,
+                ext=ext,
+                index=index,
+            ))
+        return items
+
+    def to_dispatch_data(self, downloaded_files) -> dict | None:
+        files = [result.to_dispatch_file() for result in downloaded_files if result.to_dispatch_file()]
+        if len(files) != self.media_count:
+            instagram_logger.error(self.url + " 所有内容未全部下载")
+            return None
+        post_data = self.base_dispatch_data()
+        post_data['mblogid'] = self.media_id
+        if len(files) >= 2:
+            post_data.update({'files': files})
+        elif len(files) == 1:
+            post_data.update({'files': files[0]})
+        return post_data
 
 
 class Media:
@@ -223,6 +280,7 @@ def largest_media(medias):
 
 def graphql_request(payload_data):
     try:
+        ensure_fb_dtsg()
         rs = requests.post(graphql_url, headers=instagram_headers, data=payload_data)
         rs.raise_for_status()
         return rs.json()
@@ -269,37 +327,12 @@ def download_file(media: Media):
         return size, save_path
 
 
-def handler_post(post):
-    wait_send = []
-    post_data = {
-        'username': post.nickname,
-        'nickname': post.owner_username,
-        'url': post.url,
-        'userid': post.owner_username,
-        'idstr': post.shortcode,
-        'mblogid': post.media_id,
-        'create_time': post.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-        'text_raw': post.text,
-    }
-    for media in post.get_medias():
-        size, save_path = download_file(media)
-        if size:
-            file_data = {
-                'media': save_path,
-                'caption': media.filename,
-                'size': size,
-                'type': media.media_type
-            }
-            wait_send.append(file_data)
-    if post.media_count != len(wait_send):
-        instagram_logger.error(post.url + "所有内容未全部下载")
+def handler_post(post: Post):
+    downloader = Downloader(logger=instagram_logger)
+    post_data = post.to_dispatch_data(downloader.download_post(post))
+    if not post_data:
         return "所有内容未全部下载"
-    if len(wait_send) >= 2:
-        post_data.update({'files': wait_send})
-    elif len(wait_send) == 1:
-        post_data.update({'files': wait_send[0]})
-    result = request_webhook('/main', post_data, instagram_logger)
-    return result
+    return request_webhook('/main', post_data, instagram_logger)
 
 
 def save_json(post: Post):
@@ -312,3 +345,164 @@ def save_json(post: Post):
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, mode='w', encoding='utf8') as json_write:
         json.dump(post.node, json_write, ensure_ascii=False, indent=4)
+
+
+def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
+    if getattr(result, 'status_code', None) == 200:
+        if not is_no_send_mode():
+            download_log(result)
+            rate_control(result, logger)
+            if on_success_update:
+                on_success_update()
+        return 'success'
+    if isinstance(result, str) and 'skip' in result:
+        return 'skip'
+    if on_failure_update:
+        on_failure_update()
+    error_text = getattr(result, 'status_code', result)
+    log_error(url, error_text)
+    logger.error(f"处理 {url} 失败")
+    return 'failure'
+
+
+def update_after_batch(on_update=None):
+    if not is_no_send_mode() and on_update:
+        on_update()
+
+
+following_dict = {}
+root_dir = '/root/download/instagram/json/'
+
+
+def get_posts(username, after='', before='null', first=12, last='null'):
+    variables = {"data": {"count": 12, "include_reel_media_seen_timestamp": True, "include_relationship_info": True,
+                          "latest_besties_reel_media": True, "latest_reel_media": True}, "username": username,
+                 "__relay_internal__pv__PolarisIsLoggedInrelayprovider": True,
+                 "__relay_internal__pv__PolarisShareSheetV3relayprovider": True}
+    if after != '':
+        variables.update({"after": after, "before": before, "first": first, "last": last})
+    response = graphql_request({
+        'fb_dtsg': fb_dtsg,
+        'fb_api_caller_class': 'RelayModern',
+        'fb_api_req_friendly_name': 'PolarisProfilePostsQuery',
+        'variables': json.dumps(variables),
+        'server_timestamps': 'true',
+        'doc_id': '9830436980396988',
+    })
+    return response
+
+
+def scrapy_profile_post(profile: Profile):
+    end_cursor = ''
+    results = []
+    page = 0
+    keep = True
+    instagram_logger.info(
+        f'开始获取 {profile.username} 截至 {str(profile.latest_time)} 的instagram，她的主页是 {profile.url}')
+    while keep:
+        page += 1
+        instagram_logger.info(f'开始获取第 {page} 页数据')
+        page_data = get_posts(profile.pk, after=end_cursor)
+        if page_data:
+            page_posts = page_data['data']['xdt_api__v1__feed__user_timeline_graphql_connection']['edges']
+            page_posts_count = len(page_posts)
+            page_info = page_data['data']['xdt_api__v1__feed__user_timeline_graphql_connection']['page_info']
+            end_cursor = page_info['end_cursor']
+            keep = page_info['has_next_page']
+            for post in page_posts:
+                post = post['node']
+                post['nickname'] = profile.username
+                post = Post(post)
+                if post.create_time > profile.latest_time:
+                    page_posts_count -= 1
+                    save_json(post)
+                    results.append(post)
+                    instagram_logger.info(f'{post.url}  {post.create_time}')
+                if post.is_pined:
+                    page_posts_count -= 1
+                else:
+                    if post.create_time < profile.latest_time:
+                        keep = False
+            if page_posts_count == 0:
+                continue
+    instagram_logger.info(f'获取 {profile.username} 完成，获取到{len(results)}个内容')
+    return results
+
+
+def from_local_json():
+    for star in os.listdir(root_dir):
+        following_posts = []
+        star_dir = os.path.join(root_dir, star)
+        nickname = star
+        for k, v in following_dict.items():
+            if k == star:
+                nickname = v
+        for file in os.listdir(star_dir):
+            path = os.path.join(star_dir, file)
+            with open(path, mode='r', encoding='utf8') as json_read:
+                item = json.load(json_read)
+                item['nickname'] = nickname
+                item['owner']['username'] = nickname
+                item['owner']['pk'] = item['pk']
+            try:
+                following_posts.append(Post(item))
+            except Exception:
+                pass
+        following_posts = sorted(following_posts, key=lambda x: x.create_time)
+        yield following_posts
+
+
+def random_select_once(elements):
+    random.shuffle(elements)
+    for element in elements:
+        yield element
+
+
+def start(all_followings, use_local_json=False):
+    if not use_local_json:
+        instagram_logger.info("开始爬取用户数据")
+        for following in random_select_once(all_followings):
+            following = Profile(*following)
+            profile_posts = scrapy_profile_post(following)
+            yield profile_posts
+    else:
+        for profile_posts in from_local_json():
+            yield profile_posts
+
+
+def configure_parser(parser):
+    parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
+
+
+def main():
+    args, all_followings = prepare_followings(
+        'instagram',
+        default_valid=(1,),
+        configure_parser=configure_parser,
+    )
+    send_url = get_send_url('instagram')
+    following_dict.update({follow[0]: follow[1] for follow in all_followings})
+    for posts in start(all_followings, use_local_json=args.local_json):
+        if not posts:
+            continue
+        latest_post = max(posts, key=lambda x: x.create_time)
+        total = len(posts)
+        for i, post in enumerate(posts, start=1):
+            if post.url in send_url:
+                continue
+            instagram_logger.info(
+                ' '.join([str(i) + "/" + str(total), post.url, post.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+                          post.text.replace('\n', ''), str(post.media_count)]))
+            result = handler_post(post)
+            handle_dispatch_result(result, instagram_logger, post.url)
+        update_after_batch(lambda: update_db(
+            latest_post.owner_username,
+            latest_post.nickname,
+            latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S")
+        ))
+
+
+if __name__ == '__main__':
+    main()
+
+

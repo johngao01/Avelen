@@ -182,3 +182,5 @@ def update_user(valid, user_id):
     finally:
         cursor.close()
         conn.close()
+
+

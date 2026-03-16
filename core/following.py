@@ -20,3 +20,5 @@ class FollowUser:
         else:
             parsed = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
         return cls(userid=userid, username=username, latest_time=parsed)
+
+
