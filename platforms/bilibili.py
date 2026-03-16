@@ -24,6 +24,7 @@ from rich.progress import (
     TimeRemainingColumn,
     SpinnerColumn
 )
+from core.platform import BasePlatform
 from core.following import FollowUser
 from core.post import BasePost, MediaItem
 from core.downloader import Downloader
@@ -532,8 +533,8 @@ def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_
     return 'failure'
 
 
-def start(scraping: Following, api: BilibiliAPI, send_url):
-    if len(sys.argv) < 2:
+def start(scraping: Following, api: BilibiliAPI, send_url, use_local_json=False):
+    if not use_local_json:
         dynamics = api.get_update_dynamics(scraping)
     else:
         dynamics = from_local_json(scraping)
@@ -567,16 +568,34 @@ def start(scraping: Following, api: BilibiliAPI, send_url):
         )
 
 
-def main():
-    _, all_followings = prepare_followings('bilibili', default_valid=(1,))
+def configure_parser(parser):
+    parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
+
+
+def main(argv=None):
+    args, all_followings = prepare_followings(
+        'bilibili',
+        default_valid=(1,),
+        configure_parser=configure_parser,
+        argv=argv,
+    )
     api = BilibiliAPI(all_cookies=cookies_dict)
     send_url = get_send_url('bilibili')
     run_followings(
         all_followings,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following: start(following, api, send_url),
+        run_one=lambda following: start(following, api, send_url, use_local_json=args.local_json),
         logger=scrapy_logger,
     )
+
+
+class BilibiliPlatform(BasePlatform):
+    name = 'bilibili'
+    aliases = ('bili',)
+
+    @classmethod
+    def run(cls, argv=None):
+        return main(argv)
 
 
 if __name__ == '__main__':

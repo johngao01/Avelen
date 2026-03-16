@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
 from core.utils import *
 from core.database import *
@@ -474,11 +475,12 @@ def configure_parser(parser):
     parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
 
 
-def main():
+def main(argv=None):
     args, all_followings = prepare_followings(
         'instagram',
         default_valid=(1,),
         configure_parser=configure_parser,
+        argv=argv,
     )
     send_url = get_send_url('instagram')
     following_dict.update({follow[0]: follow[1] for follow in all_followings})
@@ -499,7 +501,15 @@ def main():
             latest_post.owner_username,
             latest_post.nickname,
             latest_post.create_time.strftime("%Y-%m-%d %H:%M:%S")
-        ))
+        ))        
+
+
+class InstagramPlatform(BasePlatform):
+    name = 'instagram'
+
+    @classmethod
+    def run(cls, argv=None):
+        return main(argv)
 
 
 if __name__ == '__main__':

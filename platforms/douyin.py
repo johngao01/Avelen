@@ -14,6 +14,7 @@ from pathlib import Path
 
 import requests
 
+from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
 from core.utils import *
 from core.following import FollowUser
@@ -1484,8 +1485,8 @@ def start(scraping: Following, has_send):
     ))
 
 
-def main():
-    _, all_followings = prepare_followings('douyin', default_valid=(1,))
+def main(argv=None):
+    _, all_followings = prepare_followings('douyin', default_valid=(1,), argv=argv)
     send_url = get_send_url('douyin')
     run_followings(
         all_followings,
@@ -1493,6 +1494,14 @@ def main():
         run_one=lambda following: start(following, send_url),
         logger=scrapy_logger,
     )
+
+
+class DouyinPlatform(BasePlatform):
+    name = 'douyin'
+
+    @classmethod
+    def run(cls, argv=None):
+        return main(argv)
 
 
 if __name__ == '__main__':

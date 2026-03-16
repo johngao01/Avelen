@@ -58,12 +58,13 @@ def select_followings(platform: str, args):
 
 
 def prepare_followings(platform: str, default_valid=(1,),
-                      configure_parser: Callable[[argparse.ArgumentParser], None] | None = None):
+                      configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
+                      argv=None):
     """Build parser, parse args, apply runtime flags, and select followings in one call."""
     parser = build_common_cli_parser(default_valid=default_valid)
     if configure_parser:
         configure_parser(parser)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if getattr(args, 'no_send', False):
         enable_no_send_mode()
     return args, select_followings(platform, args)

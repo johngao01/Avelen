@@ -1,35 +1,34 @@
 from __future__ import annotations
 
 import argparse
-import runpy
 import sys
 
-
-PLATFORM_MODULES = {
-    "weibo": "platforms.weibo",
-    "douyin": "platforms.douyin",
-    "instagram": "platforms.instagram",
-    "bilibili": "platforms.bilibili",
-    "bili": "platforms.bilibili",
-}
+from platforms import PLATFORM_REGISTRY, get_platform
 
 
-def parse_args(argv=None):
+def build_parser():
     parser = argparse.ArgumentParser(description="Unified scraper entrypoint")
-    parser.add_argument("platform", choices=PLATFORM_MODULES.keys(), help="Platform to run")
-    return parser.parse_known_args(argv)
+    parser.add_argument(
+        "platform",
+        type=str.lower,
+        choices=sorted(PLATFORM_REGISTRY.keys()),
+        help="Platform to run",
+    )
+    return parser
 
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    if not argv or argv[0] in {"-h", "--help"}:
-        parse_args(argv)
+    parser = build_parser()
+    if not argv:
+        parser.print_help()
         return
-    args, rest = parse_args([argv[0]])
-    rest = argv[1:]
-    module_name = PLATFORM_MODULES[args.platform]
-    sys.argv = [f"{args.platform}.py", *rest]
-    runpy.run_module(module_name, run_name="__main__")
+    if argv[0] in {"-h", "--help"}:
+        parser.print_help()
+        return
+    args = parser.parse_args([argv[0]])
+    platform_cls = get_platform(args.platform)
+    return platform_cls.run(argv[1:])
 
 
 if __name__ == "__main__":
