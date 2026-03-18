@@ -9,7 +9,7 @@ class BasePlatform(ABC):
 
     @classmethod
     def all_names(cls) -> tuple[str, ...]:
-        return (cls.name, *cls.aliases)
+        return cls.name, *cls.aliases
 
     @classmethod
     @abstractmethod

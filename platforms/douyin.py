@@ -1,29 +1,29 @@
 import json
 import os.path
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import sys
+import requests
 from re import sub
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from hashlib import md5
 from random import randint, random, choice
 from re import compile
 from time import time
 from urllib.parse import urlencode, quote
-from datetime import datetime
-from pathlib import Path
-
-import requests
-
 from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
 from core.utils import *
 from core.following import FollowUser
-from core.downloader import DownloadTask, Downloader
 from core.database import *
-from core.scrapy_runner import run_followings, prepare_followings
-from core.settings import is_no_send_mode
+from core.scrapy_runner import (
+    dispatch_post,
+    handle_dispatch_result,
+    prepare_followings,
+    run_followings,
+    run_posts,
+    update_after_batch,
+)
 from gmssl import sm3, func
-import sys
 from loguru import logger
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -864,6 +864,15 @@ class ABogus:
         #     string, "s4") + self.generate_result_end(string, "s4")
         return self.generate_result(string, "s4")
 
+    def ab_model_2_endpoint(self, params: dict) -> str:
+        if not isinstance(params, dict):
+            raise TypeError("参数必须是字典类型")
+        try:
+            ab_value = self.get_value(params)
+        except Exception as e:
+            raise RuntimeError("生成A-Bogus失败: {0})".format(e))
+        return quote(ab_value, safe='')
+
 
 class Following(FollowUser):
     """抖音关注对象（复用统一 FollowUser）。"""
@@ -872,26 +881,23 @@ class Following(FollowUser):
         user = FollowUser.from_db_row(userid, username, latest_time)
         super().__init__(user.userid, user.username, user.latest_time)
         self.user_sec_uid = user.userid
+        self.url = f'{user_url}{self.user_sec_uid}'
+        self.start_msg = f'开始获取 {self.username} 截至 {str(self.latest_time)} 抖音，她的主页是 {self.url}'
+        self.end_msg = ''
 
 
 class Aweme(BasePost):
-    def __init__(self, following, node: Dict[str, Any]):
+    def __init__(self, following: Following, node: Dict[str, Any]):
         self._node = node
         self.username = following.username
         self.user_sec_uid = following.user_sec_uid
         self.aweme_id = node['aweme_id']
+        self.id = self.aweme_id
         self.aweme_type = node['aweme_type']
-        self.describe = node['desc']
-        self.create_time = node['create_time']
+        self.describe = node.get('desc') or ''
+        self.duration = node.get('duration', 0)
+        self.create_time = datetime.fromtimestamp(node['create_time'])
         self.is_video = self.judge_is_video()
-        self.aweme_info = {
-            'data': node,
-            'url': self.aweme_url,
-            'id': self.aweme_id,
-            'create_date': self.create_time.strftime("%Y%m%d"),
-            'save_dir': os.path.join(download_save_root_directory, 'douyin'),
-            'header': {**favorite_headers, 'referer': self.aweme_url}
-        }
         self.post_data = {
             'username': self.username,
             'nickname': self._node['author']['nickname'],
@@ -921,8 +927,6 @@ class Aweme(BasePost):
         :return:
         """
         json_path = os.path.join(download_save_root_directory, 'douyin', 'json', self.username, self.aweme_id + '.json')
-        if os.path.exists(json_path):
-            return
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, mode='w', encoding='utf8') as json_write:
             data = self._node.copy()
@@ -957,49 +961,110 @@ class Aweme(BasePost):
         else:
             return 'images'
 
+    def __str__(self):
+        return f"{self.create_time_str} {self.aweme_url} {self.describe}"
+
     def media_info(self):
         if self.is_video:
             return self._node['video']
-        else:
-            return self._node.get('image_infos') or self._node.get('images') or self._node.get('image_post_info')
-
-    def aweme_video(self) -> 'AwemeMedia':
-        return AwemeMedia(self, 1, self._node['video'])
-
-    def aweme_photos(self) -> ['AwemeMedia']:
-        medias = []
-        for i, image in enumerate(self.media_info(), start=1):
-            medias.append(AwemeMedia(self, i, image, 'image'))
-            if 'video' in image:
-                medias.append(AwemeMedia(self, i, image['video'], 'video'))
-        return medias
+        if image_infos := self._node.get('image_infos'):
+            return image_infos
+        if images := self._node.get('images'):
+            return images
+        image_post_info = self._node.get('image_post_info') or {}
+        if isinstance(image_post_info, dict):
+            return image_post_info.get('images', [])
+        return image_post_info
 
     def build_media_items(self) -> list[MediaItem]:
-        items = []
+        # 下载请求需要带当前作品页 referer。
         headers = {**favorite_headers, 'referer': self.aweme_url}
-        if self.is_video:
-            media = self.aweme_video()
-            items.append(MediaItem(
-                url=media.download_url,
-                media_type='video',
-                filename_hint=media.relative_path(),
-                headers=headers,
-                referer=self.aweme_url,
-                ext='mp4',
-                index=1,
-            ))
-            return items
-        for media in self.aweme_photos():
-            ext = 'mp4' if media.content_type == 'video' else 'jpg'
-            items.append(MediaItem(
-                url=media.download_url,
-                media_type='video' if media.content_type == 'video' else 'photo',
-                filename_hint=media.relative_path(),
+
+        # 文件名规则沿用原 AwemeMedia：描述最多 50 个字符，并去掉非法字符。
+        desc = self.describe[:50] if len(self.describe) > 50 else self.describe
+        desc = sub('[\\\\/:*?"<>|\n]', "", desc)
+
+        def pick_url(url_list):
+            if not url_list:
+                return ''
+            return url_list[VIDEO_INDEX] if len(url_list) > VIDEO_INDEX else url_list[0]
+
+        # 优先从根视频节点里挑最高质量的地址，保持原 AwemeMedia 的排序逻辑。
+        def get_best_video_url():
+            root_video = self._node.get('video') or {}
+            root_bit_rate = root_video.get('bit_rate') or []
+            candidates = []
+            for item in root_bit_rate:
+                if not isinstance(item, dict):
+                    continue
+                play_addr = item.get('play_addr') or {}
+                url_list = play_addr.get('url_list') or []
+                if not url_list:
+                    continue
+                candidates.append((
+                    max(play_addr.get('height', 0), play_addr.get('width', 0)),
+                    item.get('FPS', 0),
+                    item.get('bit_rate', 0),
+                    play_addr.get('data_size', 0),
+                    url_list,
+                ))
+            if candidates:
+                candidates.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+                return pick_url(candidates[-1][-1])
+            if root_bit_rate and isinstance(root_bit_rate[0], dict):
+                return pick_url((root_bit_rate[0].get('play_addr') or {}).get('url_list') or [])
+            return ''
+
+        # 视频地址优先用最高码率结果；如果没有，就退回 play_addr 或 uri 拼接的兜底地址。
+        def resolve_video_url(video):
+            if best_video_url:
+                return best_video_url
+            play_addr = (video or {}).get('play_addr') or {}
+            content_id = play_addr.get('uri') or ''
+            if content_id:
+                return f'https://aweme.snssdk.com/aweme/v1/play/?video_id={content_id}&radio=1080p&line=0'
+            return pick_url(play_addr.get('url_list') or [])
+
+        # 统一构造 MediaItem，避免图片和视频分支重复拼字段。
+        def make_item(url, media_type, filename_hint, ext, index):
+            return MediaItem(
+                url=url,
+                media_type=media_type,
+                filename_hint=filename_hint,
                 headers=headers,
                 referer=self.aweme_url,
                 ext=ext,
-                index=media.content_index,
+                index=index,
+            )
+
+        best_video_url = get_best_video_url()
+
+        if self.is_video:
+            return [make_item(
+                url=resolve_video_url(self._node['video']),
+                media_type='video',
+                filename_hint=os.path.join(self.username, f'{self.aweme_id}_{desc}.mp4'),
+                ext='mp4',
+                index=1,
+            )]
+
+        items = []
+        for index, image in enumerate(self.media_info(), start=1):
+            items.append(make_item(
+                url=pick_url(image.get('url_list') or []),
+                media_type='photo',
+                filename_hint=os.path.join('images', self.username, f'{self.aweme_id}_{desc}_{index}.jpg'),
+                ext='jpg',
+                index=index,
             ))
+            if 'video' in image:
+                items.append(make_item(
+                    url=resolve_video_url(image['video']),
+                    media_type='video',
+                    filename_hint=os.path.join(self.username, f'{self.aweme_id}_{desc}_{index}.mp4'),
+                    ext='mp4',
+                    index=index,
+                ))
         return items
 
     def to_dispatch_data(self, downloaded_files) -> dict | None:
@@ -1009,146 +1074,6 @@ class Aweme(BasePost):
         post_data = self.base_dispatch_data()
         post_data['files'] = files[0] if len(files) == 1 else files
         return post_data
-
-
-class AwemeMedia:
-    def __init__(self, media_aweme: Aweme, content_index, node: Optional[Dict[str, Any]] = None, content_type=None):
-        self._aweme = media_aweme
-        self._node = node
-        self.aweme_id = self._aweme.aweme_id
-        self.content_index = content_index
-        self.username = self._aweme.username
-        self.user_sec_uid = self._aweme.user_sec_uid
-        self.aweme_url = self._aweme.aweme_url
-        self.download_referer = self._aweme.aweme_url
-        if content_type:
-            self.content_type = content_type
-        else:
-            self.content_type = 'video' if self._aweme.is_video else 'image'
-
-    @property
-    def content_id(self):
-        if self.content_type == 'video':
-            return self._node['play_addr']['uri']
-        else:
-            if 'uri' in self._node:
-                return self._node['uri']
-            return self._node['label_large']['uri']
-
-    @staticmethod
-    def generate_data_object(
-            data: dict | list,
-    ) -> SimpleNamespace | list[SimpleNamespace]:
-        def depth_conversion(element):
-            if isinstance(element, dict):
-                return SimpleNamespace(
-                    **{k: depth_conversion(v) for k, v in element.items()}
-                )
-            elif isinstance(element, list):
-                return [depth_conversion(item) for item in element]
-            else:
-                return element
-
-        return depth_conversion(data)
-
-    @staticmethod
-    def safe_extract(
-            data: SimpleNamespace | list[SimpleNamespace],
-            attribute_chain: str,
-            default: str | int | list | dict | SimpleNamespace = "",
-    ):
-        attributes = attribute_chain.split(".")
-        for attribute in attributes:
-            if "[" in attribute:
-                parts = attribute.split("[", 1)
-                attribute = parts[0]
-                index = parts[1].split("]", 1)[0]
-                try:
-                    index = int(index)
-                    data = getattr(data, attribute, None)[index]
-                except (IndexError, TypeError, ValueError):
-                    return default
-            else:
-                data = getattr(data, attribute, None)
-                if not data:
-                    return default
-        return data or default
-
-    def __extract_video_download(self, data):
-        bit_rate: list[SimpleNamespace] = self.safe_extract(
-            data,
-            "video.bit_rate",
-            [],
-        )
-        try:
-            bit_rate: list[tuple[int, int, int, int, int, list[str]]] = [
-                (
-                    i.FPS,
-                    i.bit_rate,
-                    i.play_addr.data_size,
-                    i.play_addr.height,
-                    i.play_addr.width,
-                    i.play_addr.url_list,
-                )
-                for i in bit_rate
-            ]
-            bit_rate.sort(
-                key=lambda x: (
-                    max(
-                        x[3],
-                        x[4],
-                    ),
-                    x[0],
-                    x[1],
-                    x[2],
-                ),
-            )
-            return bit_rate[-1][-1][VIDEO_INDEX] if bit_rate else ""
-        except AttributeError:
-            url = self.safe_extract(
-                bit_rate[0],
-                f"play_addr.url_list[{VIDEO_INDEX}]",
-            )
-            return url
-
-    @property
-    def download_url(self):
-        if self.content_type == 'video':
-            download_addr = self.__extract_video_download(self.generate_data_object(self._aweme._node))
-            if download_addr:
-                return download_addr
-            return f'https://aweme.snssdk.com/aweme/v1/play/?video_id={self.content_id}&radio=1080p&line=0'
-        else:
-            if 'url_list' in self._node:
-                return self._node['url_list'][0]
-            return self._node['url_list'][0]
-
-    @property
-    def save_name(self):
-        if len(self._aweme.describe) > 50:
-            desc = sub('[\\\\/:*?"<>|\n]', "", self._aweme.describe[0:50])
-        else:
-            desc = sub('[\\\\/:*?"<>|\n]', "", self._aweme.describe)
-        if self.content_type == 'video':
-            if self._aweme.is_video:
-                return self._aweme.aweme_id + "_" + desc + ".mp4"
-            else:
-                return self._aweme.aweme_id + "_" + desc + "_" + str(self.content_index) + ".mp4"
-        else:
-            return self._aweme.aweme_id + "_" + desc + "_" + str(self.content_index) + ".jpg"
-
-    def save_path(self):
-        if self.content_type == 'video':
-            filepath = os.path.join(self._aweme.aweme_info['save_dir'], self.username, self.save_name)
-        else:
-            filepath = os.path.join(self._aweme.aweme_info['save_dir'], 'images', self._aweme.username,
-                                    self.save_name)
-        return filepath
-
-    def relative_path(self):
-        if self.content_type == 'video':
-            return os.path.join(self.username, self.save_name)
-        return os.path.join('images', self._aweme.username, self.save_name)
 
 
 def get_url_id(share_info: str):
@@ -1180,7 +1105,7 @@ def get_aweme_detail(aweme_id):
               'browser_name': 'Firefox', 'browser_version': '124.0', 'browser_online': 'true', 'engine_name': 'Gecko',
               'engine_version': '122.0.0.0', 'os_name': 'Windows', 'os_version': '10', 'cpu_core_num': 12,
               'device_memory': 8, 'platform': 'PC', 'msToken': '', 'aweme_id': aweme_id}
-    a_bogus = ab_model_2_endpoint(params)
+    a_bogus = ABogus().ab_model_2_endpoint(params)
     api_post_url = f'https://www.douyin.com/aweme/v1/web/aweme/detail/?{urlencode(params)}&a_bogus={a_bogus}'
     headers = favorite_headers.copy()
     headers[
@@ -1205,143 +1130,30 @@ def get_aweme_detail(aweme_id):
     return aweme
 
 
-def download_media(aweme_media):
-    if aweme_media.download_referer:
-        favorite_headers.update({'referer': aweme_media.download_referer})
-    try:
-        task = DownloadTask(url=aweme_media.download_url, save_path='/tmp/.douyin_probe.tmp', headers=favorite_headers)
-        resp = requests.get(task.url, headers=task.headers, stream=True)
-        resp.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        return str(e)
-    else:
-        if aweme_media.content_type == 'image' and resp.headers['Content-Type'].startswith(aweme_media.content_type):
-            return resp
-        elif aweme_media.content_type == 'video' and resp.headers['Content-Type'].startswith(aweme_media.content_type):
-            return resp
-        else:
-            return None
-
-
-def download(media: AwemeMedia, aweme_post_data, logger):
-    media_name = media.save_name
-    save_path = media.save_path()
-    if os.path.exists(save_path):
-        media_size = os.path.getsize(save_path)
-    else:
-        error = 0
-        while True:
-            try:
-                download_response = download_media(media)
-                break
-            except Exception:
-                error += 1
-                logger.warning('  '.join([aweme_post_data['url'], media.download_url, '下载失败，重试']))
-                if error > 3:
-                    return None
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        if isinstance(download_response, requests.Response) and save_content(save_path, download_response):
-            media_size = os.path.getsize(save_path)
-        else:
-            logger.info(
-                '  '.join([aweme_post_data['url'], media.content_id, media_name, media.download_url, '下载失败']))
-            return None
-    human_readable_size = convert_bytes_to_human_readable(media_size)
-    if media.content_type == 'video':
-        logger.info('  '.join([aweme_post_data['username'], aweme_post_data['url'], aweme_post_data['create_time'],
-                               os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
-    else:
-        logger.info('  '.join(['', os.path.relpath(save_path, '/root/download/douyin/'), human_readable_size]))
-    photo_data = {
-        'media': save_path,
-        'caption': media_name,
-        'size': media_size
-    }
-    if media_size > MAX_VIDEO_SIZE:
-        log_error(aweme_post_data['url'], f'文件太大，{save_path} {human_readable_size}')
-        return False
-    elif media_size:
-        photo_data.update({'type': 'video'}) if media.content_type == 'video' else photo_data.update({'type': 'photo'})
-        return photo_data
-    return False
-
-
-def dispatch_aweme(aweme: Aweme):
-    downloader = Downloader(logger=scrapy_logger)
-    post_data = aweme.to_dispatch_data(downloader.download_post(aweme))
-    if not post_data:
-        log_error(aweme.aweme_url, '获取失败')
-        return False
-    return request_webhook('/main', post_data, scrapy_logger)
-
-
-def handler_video_douyin(aweme: Aweme):
-    return dispatch_aweme(aweme)
-
-
-def handler_note_douyin(aweme: Aweme):
-    return dispatch_aweme(aweme)
-
-
 def handler_douyin(aweme):
     if aweme is None:
         return False
-    if 'create_time' in aweme:
+    if isinstance(aweme.get('create_time'), datetime):
+        pass
+    elif 'create_time' in aweme:
         aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
     else:
         aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
     user = Following(aweme['author']['sec_uid'], 'favorite', '')
-    aweme = Aweme(user, aweme)
-    if aweme.is_video:
-        r = handler_video_douyin(aweme)
-    else:
-        r = handler_note_douyin(aweme)
-    if getattr(r, 'status_code', None) == 200:
-        download_log(r)
-        return True
-    return False
+    post = Aweme(user, aweme)
+    return handle_dispatch_result(dispatch_post(post, scrapy_logger), scrapy_logger, post.aweme_url) == 'success'
 
 
-def ab_model_2_endpoint(params: dict) -> str:
-    if not isinstance(params, dict):
-        raise TypeError("参数必须是字典类型")
-    try:
-        ab_value = ABogus().get_value(params)
-    except Exception as e:
-        raise RuntimeError("生成A-Bogus失败: {0})".format(e))
-    return quote(ab_value, safe='')
+class DouyinScrapy(BasePlatform):
+    name = 'douyin'
 
-
-def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
-    if getattr(result, 'status_code', None) == 200:
-        if not is_no_send_mode():
-            download_log(result)
-            rate_control(result, logger)
-            if on_success_update:
-                on_success_update()
-        return 'success'
-    if isinstance(result, str) and 'skip' in result:
-        return 'skip'
-    if on_failure_update:
-        on_failure_update()
-    error_text = getattr(result, 'status_code', result)
-    log_error(url, error_text)
-    logger.error(f"处理 {url} 失败")
-    return 'failure'
-
-
-def update_after_batch(on_update=None):
-    if not is_no_send_mode() and on_update:
-        on_update()
-
-
-class Scrapy:
-    def __init__(self, user: Following):
-        self.username = user.username
-        self.user_sec_uid = user.user_sec_uid
-        self.last_one_time = user.latest_time or datetime(2000, 12, 12, 12, 12, 12)
+    def __init__(self, following: Following):
+        self.scraping = following
+        self.username = following.username
+        self.user_sec_uid = following.user_sec_uid
+        self.last_one_time = following.latest_time or datetime(2000, 12, 12, 12, 12, 12)
         self.max_cursor = 0
-        self.max_time = datetime(2000, 12, 31, 12, 12, 12)
+        self.max_time = self.last_one_time
         self.page = 1
         self.new_xbogus = NewXBogus()
         self.header = {
@@ -1349,12 +1161,11 @@ class Scrapy:
             'cookie': cookies,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
         }
-        self.awemes = []
+        self.post = []
 
-    def scrapy_aweme(self):
-        scrapy_logger.info(
-            f'开始获取 {self.username} 截至 {str(self.last_one_time)} 抖音，她的主页是 {user_url}{self.user_sec_uid}')
-        while True:
+    def get_post_from_api(self):
+        KEEP = True
+        while KEEP:
             params = {
                 "device_platform": "webapp",
                 "aid": "6383",
@@ -1414,31 +1225,26 @@ class Scrapy:
             if 'max_cursor' not in data_json:
                 continue
             self.max_cursor = data_json['max_cursor']
-            page_awemes = data_json['aweme_list']
-            page_latest_time = datetime(2099, 12, 31, 12, 12, 12)
-            for aweme in page_awemes:
+            for aweme in data_json['aweme_list']:
                 aweme_create_time = datetime.fromtimestamp(aweme['create_time'])
                 if self.username == 'favorite' or aweme_create_time > self.last_one_time:
                     page_add += 1
                     aweme['username'] = self.username
-                    aweme['user_sec_uid'] = self.user_sec_uid
-                    aweme['create_time'] = aweme_create_time
+                    aweme['user_sec_uid'] = aweme['author']['sec_uid']
                     aweme['create_time_str'] = aweme_create_time.strftime("%Y-%m-%d %H:%M:%S")
-                    self.awemes.append(aweme)
-                if aweme_create_time > self.max_time:
-                    self.max_time = aweme_create_time
-                if aweme_create_time < page_latest_time:
-                    page_latest_time = aweme_create_time
-            scrapy_info = f'{self.username} 获取第{self.page}页完成，一共有{len(page_awemes)}个抖音'
-            if page_add > 0:
-                scrapy_info += f"，本页获得{page_add}个新抖音,共有{len(self.awemes)}个新抖音"
-            else:
-                scrapy_info += f"，本页没有新抖音,共有{len(self.awemes)}个新抖音"
-            if self.username == 'favorite' and len(self.awemes) >= SCRAPY_FAVORITE_LIMIT:
+                    aweme = Aweme(self.scraping, aweme)
+                    aweme.save_json()
+                    self.post.append(aweme)
+                    if aweme.create_time > self.max_time:
+                        self.max_time = aweme.create_time
+                    if aweme.create_time < self.scraping.latest_time:
+                        KEEP = False
+            scrapy_info = f'{self.username} 获取第{self.page}页完成，一共有{len(data_json['aweme_list'])}个抖音'
+            if self.username == 'favorite' and len(self.post) >= SCRAPY_FAVORITE_LIMIT:
                 scrapy_info += "，获取新喜欢完成。"
                 scrapy_logger.info(scrapy_info)
                 break
-            if self.username != 'favorite' and page_latest_time <= self.last_one_time:
+            if self.username != 'favorite' and not KEEP:
                 scrapy_info += "，获取新抖音完成。"
                 scrapy_logger.info(scrapy_info)
                 break
@@ -1449,62 +1255,110 @@ class Scrapy:
                 scrapy_logger.info(scrapy_info)
                 break
 
+    def get_post_from_local(self):
+        json_dir = os.path.join(download_save_root_directory, 'douyin', 'json', self.username)
+        if not os.path.isdir(json_dir):
+            scrapy_logger.warning(f'{self.username} 本地 JSON 目录不存在: {json_dir}')
+            return
 
-def start(scraping: Following, has_send):
-    scraping_worker = Scrapy(scraping)
-    scraping_worker.scrapy_aweme()
-    if scraping_worker.username != 'favorite':
-        new_aweme = sorted(scraping_worker.awemes, key=lambda item: item['create_time'])
-    else:
-        new_aweme = scraping_worker.awemes
-    previous_time = scraping.latest_time.strftime("%Y-%m-%d %H:%M:%S")
-    if len(new_aweme) == 0:
-        scrapy_logger.info(f"{scraping_worker.username} 没有新作品\n")
-    for aweme in new_aweme:
-        aweme = Aweme(scraping, aweme)
-        if aweme.aweme_url in has_send:
-            continue
-        aweme.save_json()
-        if aweme.is_video:
-            if aweme.aweme_info['data']['duration'] > 1800000:
+        loaded_post = []
+        for filename in os.listdir(json_dir):
+            if not filename.endswith('.json'):
                 continue
-            r = handler_video_douyin(aweme)
-        else:
-            r = handler_note_douyin(aweme)
-        if handle_dispatch_result(
-            r,
-            scrapy_logger,
-            aweme.aweme_url,
-            on_failure_update=lambda: update_db(scraping.user_sec_uid, scraping.username, previous_time)
-        ) == 'success':
-            previous_time = aweme.create_time_str
-    update_after_batch(lambda: update_db(
-        scraping.user_sec_uid,
-        scraping.username,
-        scraping_worker.max_time.strftime("%Y-%m-%d %H:%M:%S")
-    ))
+            json_path = os.path.join(json_dir, filename)
+            try:
+                with open(json_path, encoding='utf-8') as json_file:
+                    aweme = json.load(json_file)
+            except (OSError, json.JSONDecodeError) as exc:
+                scrapy_logger.warning(f'读取本地抖音 JSON 失败: {json_path} {exc}')
+                continue
 
+            if aweme.get('create_time_str'):
+                aweme_create_time = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
+            else:
+                scrapy_logger.warning(f'本地抖音 JSON 缺少时间字段: {json_path}')
+                continue
 
-def main(argv=None):
-    _, all_followings = prepare_followings('douyin', default_valid=(1,), argv=argv)
-    send_url = get_send_url('douyin')
-    run_followings(
-        all_followings,
-        build_following=lambda raw: Following(*raw),
-        run_one=lambda following: start(following, send_url),
-        logger=scrapy_logger,
-    )
+            aweme['username'] = self.username
+            aweme['user_sec_uid'] = self.user_sec_uid
+            aweme['create_time'] = aweme_create_time
+            aweme['create_time_str'] = aweme_create_time.strftime("%Y-%m-%d %H:%M:%S")
+            loaded_post.append(Aweme(self.scraping, aweme))
 
+            if aweme_create_time > self.max_time:
+                self.max_time = aweme_create_time
 
-class DouyinPlatform(BasePlatform):
-    name = 'douyin'
+        self.post.extend(loaded_post)
+        scrapy_logger.info(f'{self.username} 从本地 JSON 获取到 {len(loaded_post)} 个抖音')
+
+    def filter_new_post(self, sent_urls: set[str]):
+        new_post = []
+        for post in self.post:
+            if post.duration > 1800000:
+                continue
+            if post.aweme_url in sent_urls:
+                continue
+            new_post.append(post)
+        if self.scraping.username != 'favorite':
+            new_post.sort(key=lambda x: x.create_time)
+        return new_post
 
     @classmethod
     def run(cls, argv=None):
         return main(argv)
 
 
+def start(scraping: Following, sent_urls: set[str], use_local_json=False):
+    scraping_worker = DouyinScrapy(scraping)
+    if use_local_json:
+        scraping_worker.get_post_from_local()
+    else:
+        scraping_worker.get_post_from_api()
+    new_post = scraping_worker.filter_new_post(sent_urls)
+    if len(new_post) == 0:
+        scrapy_logger.info(f"{scraping_worker.username} 没有新作品\n")
+        scraping.end_msg = f'{scraping.username} 处理结束，没有新作品\n'
+        return
+
+    latest_post = new_post[-1]
+
+    scrapy_logger.info(
+        f"{scraping_worker.username} 有 {len(new_post)} 个新作品\n"
+    )
+
+    summary = run_posts(
+        new_post,
+        dispatch_one=lambda post: dispatch_post(post, scrapy_logger),
+        logger=scrapy_logger,
+        describe_post=str,
+        url_of=lambda post: post.aweme_url,
+    )
+    update_after_batch(lambda: update_db(
+        scraping.userid,
+        scraping.username,
+        latest_post.create_time_str,
+    ))
+    scraping.end_msg = (
+        f'{scraping.username} 处理结束，'
+        f'新作品 {summary.total} 个，'
+        f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
+    )
+
+
+def main(argv=None):
+    args, all_followings = prepare_followings(
+        'douyin',
+        default_valid=(1,),
+        argv=argv,
+    )
+    sent_urls = set(get_send_url('douyin'))
+    run_followings(
+        all_followings,
+        build_following=lambda raw: Following(*raw),
+        run_one=lambda following: start(following, sent_urls, use_local_json=args.local_json),
+        logger=scrapy_logger,
+    )
+
+
 if __name__ == '__main__':
     main()
-
-

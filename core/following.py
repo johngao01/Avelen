@@ -10,6 +10,9 @@ class FollowUser:
     userid: str
     username: str
     latest_time: datetime
+    url = ''
+    start_msg = ''
+    end_msg = ''
 
     @classmethod
     def from_db_row(cls, userid, username, latest_time: str):
@@ -20,5 +23,3 @@ class FollowUser:
         else:
             parsed = datetime.strptime(latest_time, "%Y-%m-%d %H:%M:%S")
         return cls(userid=userid, username=username, latest_time=parsed)
-
-

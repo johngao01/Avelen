@@ -5,14 +5,14 @@ from __future__ import annotations
 from core.platform import BasePlatform
 
 from platforms.bilibili import BilibiliPlatform
-from platforms.douyin import DouyinPlatform
+from platforms.douyin import DouyinScrapy
 from platforms.instagram import InstagramPlatform
 from platforms.weibo import WeiboPlatform
 
 
 PLATFORM_CLASSES: tuple[type[BasePlatform], ...] = (
     WeiboPlatform,
-    DouyinPlatform,
+    DouyinScrapy,
     InstagramPlatform,
     BilibiliPlatform,
 )

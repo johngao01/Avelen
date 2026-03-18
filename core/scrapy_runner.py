@@ -1,24 +1,104 @@
-from typing import Callable, Iterable, Any
+from dataclasses import dataclass
+from typing import Callable, Any
 import traceback
 import argparse
 
+from core.downloader import Downloader
 from core.database import get_filtered_followings
-from core.settings import enable_no_send_mode
+from core.post import BasePost
+from core.settings import enable_no_send_mode, is_no_send_mode
+from core.utils import download_log, log_error, rate_control, request_webhook
 
 
-def run_followings(all_followings: Iterable[Any], build_following: Callable[[Any], Any], run_one: Callable[[Any], None], logger, finished_message: str = "本次任务结束\n\n"):
+@dataclass(slots=True)
+class PostProcessSummary:
+    total: int = 0
+    success: int = 0
+    failure: int = 0
+    skipped: int = 0
+    latest_post: Any | None = None
+
+
+def dispatch_post(post: BasePost, logger):
+    downloader = Downloader(logger=logger)
+    post_data = post.to_dispatch_data(downloader.download_post(post))
+    if not post_data:
+        return '获取失败'
+    return request_webhook('/main', post_data, logger)
+
+
+def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
+    if getattr(result, 'status_code', None) == 200:
+        if not is_no_send_mode():
+            download_log(result)
+            rate_control(result, logger)
+            if on_success_update:
+                on_success_update()
+        return 'success'
+    if isinstance(result, str) and 'skip' in result:
+        return 'skip'
+    if on_failure_update:
+        on_failure_update()
+    error_text = getattr(result, 'status_code', result)
+    log_error(url, error_text)
+    logger.error(f"处理 {url} 失败")
+    return 'failure'
+
+
+def update_after_batch(on_update=None):
+    if not is_no_send_mode() and on_update:
+        on_update()
+
+
+def run_posts(posts: list[Any],
+              dispatch_one: Callable[[Any], Any],
+              logger,
+              *,
+              describe_post: Callable[[Any], str] | None = None,
+              url_of: Callable[[Any], str] | None = None) -> PostProcessSummary:
+    ordered_posts = list(posts)
+    summary = PostProcessSummary(
+        total=len(ordered_posts),
+        latest_post=ordered_posts[-1] if ordered_posts else None,
+    )
+    for index, post in enumerate(ordered_posts, start=1):
+        post_text = describe_post(post) if describe_post else str(post)
+        logger.info(f"{index}/{summary.total}\t{post_text}")
+        post_url = url_of(post) if url_of else getattr(post, 'url', post_text)
+        status = handle_dispatch_result(dispatch_one(post), logger, post_url)
+        if status == 'success':
+            summary.success += 1
+        elif status == 'skip':
+            summary.skipped += 1
+        else:
+            summary.failure += 1
+    return summary
+
+
+def run_followings(all_followings: list[Any],
+                   build_following: Callable[[Any], Any],
+                   run_one: Callable[[Any], None],
+                   logger,
+                   finished_message: str = "本次任务结束\n"):
     """
     统一抓取入口：
     - build_following: 将数据库行转换为 Following/Profile 对象
     - run_one: 执行单账号抓取和处理
     - logger: 统一异常与结束日志输出
     """
-    try:
-        for raw in all_followings:
-            run_one(build_following(raw))
+    following_count = len(all_followings)
+    for i, raw_data in enumerate(all_followings, start=1):
+        following = build_following(raw_data)
+        try:
+            logger.info(f"{i}/{following_count}\t{following.start_msg}")
+            run_one(following)
+        except Exception:
+            logger.info(traceback.format_exc())
+        finally:
+            if following.end_msg:
+                logger.info(following.end_msg)
+    if finished_message:
         logger.info(finished_message)
-    except Exception:
-        logger.info(traceback.format_exc())
 
 
 def build_common_cli_parser(default_valid=(1,)):
@@ -40,6 +120,7 @@ def build_common_cli_parser(default_valid=(1,)):
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
+    parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
     return parser
 
 
@@ -58,8 +139,8 @@ def select_followings(platform: str, args):
 
 
 def prepare_followings(platform: str, default_valid=(1,),
-                      configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
-                      argv=None):
+                       configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
+                       argv=None):
     """Build parser, parse args, apply runtime flags, and select followings in one call."""
     parser = build_common_cli_parser(default_valid=default_valid)
     if configure_parser:
@@ -68,5 +149,3 @@ def prepare_followings(platform: str, default_valid=(1,),
     if getattr(args, 'no_send', False):
         enable_no_send_mode()
     return args, select_followings(platform, args)
-
-
