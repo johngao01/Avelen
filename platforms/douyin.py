@@ -887,6 +887,12 @@ class Following(FollowUser):
 
 
 class Aweme(BasePost):
+    """抖音作品对象。
+
+    负责把抖音 aweme 原始节点转换成统一的 BasePost 结构，
+    供下载层和发送层复用。
+    """
+
     def __init__(self, following: Following, node: Dict[str, Any]):
         self._node = node
         self.username = following.username
@@ -977,6 +983,7 @@ class Aweme(BasePost):
         return image_post_info
 
     def build_media_items(self) -> list[MediaItem]:
+        """把抖音作品里的视频/图文节点转换成统一媒体列表。"""
         # 下载请求需要带当前作品页 referer。
         headers = {**favorite_headers, 'referer': self.aweme_url}
 
@@ -1068,6 +1075,7 @@ class Aweme(BasePost):
         return items
 
     def to_dispatch_data(self, downloaded_files) -> dict | None:
+        """把下载结果转换成发送层需要的 payload。"""
         files = [result.to_dispatch_file() for result in downloaded_files if result.to_dispatch_file()]
         if not files:
             return None
@@ -1145,6 +1153,12 @@ def handler_douyin(aweme):
 
 
 class DouyinScrapy(BasePlatform):
+    """抖音平台抓取器。
+
+    既作为平台注册入口，也作为“单个关注账号”的执行器。
+    一个实例只处理一个 following 的内容抓取与过滤。
+    """
+
     name = 'douyin'
 
     def __init__(self, following: Following):
@@ -1164,6 +1178,7 @@ class DouyinScrapy(BasePlatform):
         self.post = []
 
     def get_post_from_api(self):
+        """实时请求抖音接口，抓取当前账号的作品列表。"""
         KEEP = True
         while KEEP:
             params = {
@@ -1256,6 +1271,7 @@ class DouyinScrapy(BasePlatform):
                 break
 
     def get_post_from_local(self):
+        """从本地 JSON 缓存恢复当前账号的作品列表。"""
         json_dir = os.path.join(download_save_root_directory, 'douyin', 'json', self.username)
         if not os.path.isdir(json_dir):
             scrapy_logger.warning(f'{self.username} 本地 JSON 目录不存在: {json_dir}')
@@ -1292,6 +1308,7 @@ class DouyinScrapy(BasePlatform):
         scrapy_logger.info(f'{self.username} 从本地 JSON 获取到 {len(loaded_post)} 个抖音')
 
     def filter_new_post(self, sent_urls: set[str]):
+        """按抖音平台规则过滤出真正要处理的作品。"""
         new_post = []
         for post in self.post:
             if post.duration > 1800000:
@@ -1303,46 +1320,46 @@ class DouyinScrapy(BasePlatform):
             new_post.sort(key=lambda x: x.create_time)
         return new_post
 
+    def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
+        """执行当前 following 的完整抖音抓取、过滤和发送流程。"""
+        if use_local_json:
+            self.get_post_from_local()
+        else:
+            self.get_post_from_api()
+        new_post = self.filter_new_post(sent_urls)
+        if len(new_post) == 0:
+            scrapy_logger.info(f"{self.username} 没有新作品\n")
+            self.scraping.end_msg = f'{self.username} 处理结束，没有新作品\n'
+            return
+
+        latest_post = new_post[-1]
+
+        scrapy_logger.info(
+            f"{self.username} 有 {len(new_post)} 个新作品\n"
+        )
+
+        summary = run_posts(
+            new_post,
+            dispatch_one=lambda post: dispatch_post(post, scrapy_logger),
+            logger=scrapy_logger,
+            describe_post=str,
+            url_of=lambda post: post.aweme_url,
+        )
+        update_after_batch(lambda: update_db(
+            self.scraping.userid,
+            self.scraping.username,
+            latest_post.create_time_str,
+        ))
+        self.scraping.end_msg = (
+            f'{self.scraping.username} 处理结束，'
+            f'新作品 {summary.total} 个，'
+            f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
+        )
+
     @classmethod
     def run(cls, argv=None):
+        """抖音平台命令行入口。"""
         return main(argv)
-
-
-def start(scraping: Following, sent_urls: set[str], use_local_json=False):
-    scraping_worker = DouyinScrapy(scraping)
-    if use_local_json:
-        scraping_worker.get_post_from_local()
-    else:
-        scraping_worker.get_post_from_api()
-    new_post = scraping_worker.filter_new_post(sent_urls)
-    if len(new_post) == 0:
-        scrapy_logger.info(f"{scraping_worker.username} 没有新作品\n")
-        scraping.end_msg = f'{scraping.username} 处理结束，没有新作品\n'
-        return
-
-    latest_post = new_post[-1]
-
-    scrapy_logger.info(
-        f"{scraping_worker.username} 有 {len(new_post)} 个新作品\n"
-    )
-
-    summary = run_posts(
-        new_post,
-        dispatch_one=lambda post: dispatch_post(post, scrapy_logger),
-        logger=scrapy_logger,
-        describe_post=str,
-        url_of=lambda post: post.aweme_url,
-    )
-    update_after_batch(lambda: update_db(
-        scraping.userid,
-        scraping.username,
-        latest_post.create_time_str,
-    ))
-    scraping.end_msg = (
-        f'{scraping.username} 处理结束，'
-        f'新作品 {summary.total} 个，'
-        f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
-    )
 
 
 def main(argv=None):
@@ -1355,7 +1372,7 @@ def main(argv=None):
     run_followings(
         all_followings,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following: start(following, sent_urls, use_local_json=args.local_json),
+        run_one=lambda following: DouyinScrapy(following).start(sent_urls, use_local_json=args.local_json),
         logger=scrapy_logger,
     )
 
