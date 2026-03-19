@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -30,38 +30,15 @@ class BasePost(ABC):
     让下载层和发送层都只依赖统一字段，而不依赖平台私有 JSON 结构。
     """
 
-    def __init__(
-        self,
-        *,
-        platform: str,
-        post_id: str,
-        user_id: str,
-        username: str,
-        nickname: str,
-        url: str,
-        text_raw: str,
-        create_time: datetime,
-    ):
-        self.platform = platform
-        self.post_id = str(post_id)
-        self.user_id = str(user_id)
-        self.username = username
-        self.nickname = nickname
-        self.url = url
-        self.text_raw = text_raw or ""
-        self.create_time = create_time
-        self._media_items_cache: list[MediaItem] | None = None
-
-    @property
-    def media_items(self) -> list[MediaItem]:
-        """延迟构建媒体下载列表。
-
-        `build_media_items()` 只会在第一次访问时执行一次，
-        后续复用缓存，避免重复解析平台原始数据。
-        """
-        if self._media_items_cache is None:
-            self._media_items_cache = list(self.build_media_items())
-        return self._media_items_cache
+    platform: str
+    username: str
+    nickname: str
+    url: str
+    userid: str
+    idstr: str
+    mblogid: str
+    create_time: datetime
+    text_raw: str
 
     @abstractmethod
     def build_media_items(self) -> list[MediaItem]:
@@ -91,14 +68,12 @@ class BasePost(ABC):
         平台实现类可以在 `to_dispatch_data()` 里以此为基础继续补充平台特有字段。
         """
         return {
-            "username": self.username,
-            "nickname": self.nickname,
-            "url": self.url,
-            "userid": self.user_id,
-            "idstr": self.post_id,
-            "mblogid": "",
-            "create_time": self.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-            "text_raw": self.text_raw,
+            'username': self.username,
+            'nickname': self.nickname,
+            'url': self.url,
+            'userid': self.userid,
+            'idstr': self.idstr,
+            'mblogid': self.mblogid,
+            'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'text_raw': self.text_raw,
         }
-
-
