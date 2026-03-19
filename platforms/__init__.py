@@ -7,11 +7,11 @@ from core.platform import BasePlatform
 from platforms.bilibili import BilibiliPlatform
 from platforms.douyin import DouyinScrapy
 from platforms.instagram import InstagramPlatform
-from platforms.weibo import WeiboPlatform
+from platforms.weibo import WeiboScrapy
 
 
 PLATFORM_CLASSES: tuple[type[BasePlatform], ...] = (
-    WeiboPlatform,
+    WeiboScrapy,
     DouyinScrapy,
     InstagramPlatform,
     BilibiliPlatform,
