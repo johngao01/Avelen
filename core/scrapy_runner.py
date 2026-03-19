@@ -21,7 +21,8 @@ class PostProcessSummary:
 
 def dispatch_post(post: BasePost, logger):
     downloader = Downloader(logger=logger)
-    post_data = post.to_dispatch_data(downloader.download_post(post))
+    files = downloader.download_post(post)
+    post_data = post.to_dispatch_data(files)
     if not post_data:
         return '获取失败'
     return request_webhook('/main', post_data, logger)
