@@ -894,6 +894,7 @@ class Aweme(BasePost):
     """
 
     def __init__(self, following: Following, node: Dict[str, Any]):
+        super().__init__()
         self._node = node
         self.username = following.username
         self.user_sec_uid = following.user_sec_uid
@@ -904,28 +905,7 @@ class Aweme(BasePost):
         self.duration = node.get('duration', 0)
         self.create_time = datetime.fromtimestamp(node['create_time'])
         self.is_video = self.judge_is_video()
-        self.post_data = {
-            'username': self.username,
-            'nickname': self._node['author']['nickname'],
-            'url': self.aweme_url,
-            'userid': self.user_sec_uid,
-            'idstr': self.aweme_id,
-            'mblogid': '',
-            'create_time': self.create_time_str,
-            'text_raw': self.describe,
-        }
-        if self.username == 'favorite':
-            self.post_data.update({'userid': self._node['author']['sec_uid']})
-        super().__init__(
-            platform='douyin',
-            post_id=self.aweme_id,
-            user_id=self.post_data['userid'],
-            username=self.post_data['username'],
-            nickname=self.post_data['nickname'],
-            url=self.aweme_url,
-            text_raw=self.describe,
-            create_time=self.create_time,
-        )
+
 
     def save_json(self):
         """
@@ -1080,6 +1060,8 @@ class Aweme(BasePost):
         if not files:
             return None
         post_data = self.base_dispatch_data()
+        if self.username == 'favorite':
+            post_data.update({'userid': self._node['author']['sec_uid']})
         post_data['files'] = files[0] if len(files) == 1 else files
         return post_data
 
