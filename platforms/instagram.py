@@ -7,16 +7,13 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 import requests
-from core.following import FollowUser
-from core.logger import get_platform_logger
-from core.platform import BasePlatform
 from core.settings import (
     INSTAGRAM_CONFIG,
     INSTAGRAM_COOKIE_PATH,
     INSTAGRAM_JSON_ROOT,
     LOGS_DIR,
 )
-from core.post import BasePost, MediaItem
+from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
 from core.scrapy_runner import (
     run_platform_main,
 )

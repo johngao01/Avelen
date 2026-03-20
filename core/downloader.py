@@ -16,7 +16,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from yt_dlp import YoutubeDL
 from datetime import datetime
-from core.post import BasePost, MediaItem
+from core.models import BasePost, MediaItem
 from core.settings import BILIBILI_COOKIE_PATH, DOWNLOAD_ROOT, is_download_progress_enabled
 from core.utils import (
     convert_bytes_to_human_readable,

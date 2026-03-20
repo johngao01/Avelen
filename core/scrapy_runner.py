@@ -5,7 +5,7 @@ import argparse
 
 from core.downloader import Downloader
 from core.database import get_filtered_followings, get_send_url, update_db
-from core.post import BasePost
+from core.models import BasePost
 from core.sender_dispatcher import dispatch_post_data
 from core.settings import (
     disable_download_progress,

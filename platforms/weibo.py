@@ -4,9 +4,7 @@ import os
 import requests
 from typing import Any, Dict
 
-from core.platform import BasePlatform
-from core.post import BasePost, MediaItem
-from core.following import FollowUser
+from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
 from datetime import datetime
 from core.settings import (
     COMMON_HEADERS,
@@ -29,7 +27,6 @@ from core.scrapy_runner import (
     dispatch_post,
     run_platform_main,
 )
-from core.logger import get_platform_logger
 
 WEIBO_API_BASE_URL = WEIBO_CONFIG['base_url']
 WEIBO_WEB_BASE_URL = WEIBO_CONFIG['web_base_url']

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.platform import BasePlatform
+from core.models import BasePlatform
 
 from platforms.bilibili import BilibiliScrapy
 from platforms.douyin import DouyinScrapy

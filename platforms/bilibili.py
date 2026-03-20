@@ -8,16 +8,13 @@ from re import sub
 from lxml import etree
 from pydash import get
 
-from core.following import FollowUser
-from core.logger import get_platform_logger
-from core.platform import BasePlatform
 from core.settings import (
     BILIBILI_CONFIG,
     BILIBILI_COOKIE_PATH,
     BILIBILI_JSON_ROOT,
     LOGS_DIR,
 )
-from core.post import BasePost, MediaItem
+from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
 from core.scrapy_runner import (
     run_platform_main,
 )

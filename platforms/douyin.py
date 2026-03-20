@@ -9,9 +9,7 @@ from random import randint, random, choice
 from re import compile
 from time import time
 from urllib.parse import urlencode, quote
-from core.platform import BasePlatform
-from core.post import BasePost, MediaItem
-from core.following import FollowUser
+from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
 from core.settings import (
     DOUYIN_CONFIG,
     DOUYIN_COOKIE_PATH,
@@ -25,7 +23,6 @@ from core.scrapy_runner import (
     handle_dispatch_result,
     run_platform_main,
 )
-from core.logger import get_platform_logger
 from core.utils import (
     build_browser_headers,
     build_platform_json_path,
