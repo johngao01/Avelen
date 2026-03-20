@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from core.scrapy_runner import filter_new_posts, start_platform_scraping
+
 
 class BasePlatform(ABC):
     """统一平台爬虫接口。
@@ -14,6 +16,9 @@ class BasePlatform(ABC):
 
     name: str = ""
     aliases: tuple[str, ...] = ()
+    content_name: str = '内容'
+    show_time_range: bool = True
+    exclude_equal_latest_time: bool = True
 
     @classmethod
     def all_names(cls) -> tuple[str, ...]:
@@ -59,7 +64,6 @@ class BasePlatform(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def filter_new_post(self, sent_urls: set[str]) -> list[Any]:
         """基于抓取结果筛出真正需要处理的内容。
 
@@ -70,9 +74,15 @@ class BasePlatform(ABC):
 
         返回值应是可直接交给 `run_posts()` 的 Post 对象列表。
         """
-        raise NotImplementedError
+        return filter_new_posts(
+            self.post,
+            sent_urls,
+            self.scraping.latest_time,
+            exclude_equal=self.exclude_equal_latest_time,
+            should_sort=self.should_sort_filtered_posts(),
+            skip_post=self.should_skip_post_in_filter,
+        )
 
-    @abstractmethod
     def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
         """执行单个 following 的完整处理流程。
 
@@ -84,4 +94,19 @@ class BasePlatform(ABC):
 
         `start()` 是平台实例级别的主入口；`run()` 则是整个平台批量任务的入口。
         """
-        raise NotImplementedError
+        start_platform_scraping(
+            self,
+            sent_urls,
+            use_local_json=use_local_json,
+            logger=self.logger,
+            content_name=self.content_name,
+            show_time_range=self.show_time_range,
+        )
+
+    def should_skip_post_in_filter(self, post: Any) -> bool:
+        """给平台在公共过滤流程里补充自定义跳过规则。"""
+        return False
+
+    def should_sort_filtered_posts(self) -> bool:
+        """决定过滤后的结果是否按发布时间排序。"""
+        return True

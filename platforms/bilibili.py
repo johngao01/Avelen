@@ -2,25 +2,20 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 import requests
 from pathlib import Path
 from re import sub
-from loguru import logger
 from lxml import etree
 from pydash import get
-from core.database import get_send_url, update_db
+
 from core.following import FollowUser
 from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
 from core.scrapy_runner import (
-    dispatch_post,
-    prepare_followings,
-    run_followings,
-    run_posts,
-    update_after_batch,
+    run_platform_main,
 )
+from core.logger import get_platform_logger
 from core.utils import download_save_root_directory
 from datetime import datetime
 
@@ -36,21 +31,7 @@ BILIBILI_HEADERS = {
                   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Referer': 'https://www.bilibili.com',
 }
-
-logger.remove()
-logger.add(
-    sys.stderr,
-    format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
-    level='INFO',
-)
-logger.add(
-    str(LOG_DIR / 'scrapy_bilibili.log'),
-    format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
-    level='DEBUG',
-    encoding='utf-8',
-    filter=lambda record: record['extra'].get('name') == 'scrapy_bilibili',
-)
-scrapy_logger = logger.bind(name='scrapy_bilibili')
+bilibili_logger = get_platform_logger('bilibili', LOG_DIR, file_level='DEBUG')
 os.makedirs(JSON_DIR, exist_ok=True)
 
 
@@ -222,6 +203,7 @@ class BilibiliScrapy(BasePlatform):
 
     name = 'bilibili'
     aliases = ('bili',)
+    content_name = '动态'
 
     def __init__(self, following: Following, cookies: dict[str, str]):
         self.scraping = following
@@ -229,6 +211,7 @@ class BilibiliScrapy(BasePlatform):
         self.session.headers.update(BILIBILI_HEADERS)
         for key, value in cookies.items():
             self.session.cookies.set(key, value, domain='.bilibili.com')
+        self.logger = bilibili_logger
         self.post: list[BilibiliPost] = []
 
     def get_post_from_api(self) -> None:
@@ -236,8 +219,9 @@ class BilibiliScrapy(BasePlatform):
         dynamics: list[BilibiliPost] = []
         offset = ''
         page = 1
-        KEEP = True
-        while KEEP:
+        keep = True
+        while keep:
+            reached_latest = False
             try:
                 response = self.session.get(
                     DYNAMIC_API_URL,
@@ -246,11 +230,11 @@ class BilibiliScrapy(BasePlatform):
                 )
                 payload = response.json()
             except Exception as exc:
-                scrapy_logger.error(f'{self.scraping.username} 获取动态失败: {exc}')
+                bilibili_logger.error(f'{self.scraping.username} 获取动态失败: {exc}')
                 break
 
             if payload.get('code') != 0:
-                scrapy_logger.error(f'获取UP主动态失败: {payload.get("message")}')
+                bilibili_logger.error(f'获取UP主动态失败: {payload.get("message")}')
                 break
 
             data = payload.get('data') or {}
@@ -266,14 +250,14 @@ class BilibiliScrapy(BasePlatform):
                 post.save_json()
                 dynamics.append(post)
                 if post.create_time <= self.scraping.latest_time and not post.is_top:
-                    KEEP = True
+                    reached_latest = True
 
-            scrapy_logger.info(
+            bilibili_logger.info(
                 f'第 {page} 页获取到 {len(items)} 个动态, '
                 f'一共获取到 {len(dynamics)} 个动态'
             )
 
-            if KEEP or not data.get('has_more'):
+            if reached_latest or not data.get('has_more'):
                 break
 
             page += 1
@@ -292,66 +276,22 @@ class BilibiliScrapy(BasePlatform):
                     with open(json_path, encoding='utf-8') as file_obj:
                         data = json.load(file_obj)
                 except (OSError, json.JSONDecodeError) as exc:
-                    scrapy_logger.warning(f'读取本地 B站 JSON 失败: {json_path} {exc}')
+                    bilibili_logger.warning(f'读取本地 B站 JSON 失败: {json_path} {exc}')
                     continue
                 if str(data.get('user_id')) != self.scraping.userid:
                     continue
                 self.post.append(BilibiliPost(self.scraping, data))
-        scrapy_logger.info(f'{self.scraping.username} 从本地 JSON 获取到 {len(self.post)} 个动态')
-
-    def filter_new_post(self, sent_urls: set[str]) -> list[BilibiliPost]:
-        new_post = []
-        for post in self.post:
-            if post.url in sent_urls:
-                continue
-            if post.create_time <= self.scraping.latest_time:
-                continue
-            new_post.append(post)
-        new_post.sort(key=lambda x: x.create_time)
-        return new_post
-
-    def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
-        if use_local_json:
-            self.get_post_from_local()
-        else:
-            self.get_post_from_api()
-
-        new_post = self.filter_new_post(sent_urls)
-        if not new_post:
-            self.scraping.end_msg = f'{self.scraping.username} 处理结束，没有新动态\n'
-            return
-
-        scrapy_logger.info(
-            f'{self.scraping.username} 有 {len(new_post)} 个新动态。 '
-            f'{new_post[0].create_time}  {new_post[-1].create_time}'
-        )
-
-        summary = run_posts(
-            new_post,
-            dispatch_one=lambda post: dispatch_post(post, scrapy_logger),
-            logger=scrapy_logger,
-        )
-        update_after_batch(lambda: update_db(
-            self.scraping.userid,
-            self.scraping.username,
-            new_post[-1].create_time.strftime('%Y-%m-%d %H:%M:%S'),
-        ))
-        self.scraping.end_msg = (
-            f'{self.scraping.username} 处理结束，'
-            f'新动态 {summary.total} 个，'
-            f'跳过 {summary.skipped} 个，'
-            f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
-        )
+        bilibili_logger.info(f'{self.scraping.username} 从本地 JSON 获取到 {len(self.post)} 个动态')
 
     def get_opus_desc(self, opus_id: str) -> str:
         """读取图文动态页面，补齐正文描述。"""
         try:
             response = self.session.get(f'https://www.bilibili.com/opus/{opus_id}', timeout=30)
         except Exception as exc:
-            scrapy_logger.warning(f'获取 opus {opus_id} 页面失败: {exc}')
+            bilibili_logger.warning(f'获取 opus {opus_id} 页面失败: {exc}')
             return ''
         if response.status_code != 200:
-            scrapy_logger.warning(f'获取 opus {opus_id} 页面失败: http {response.status_code}')
+            bilibili_logger.warning(f'获取 opus {opus_id} 页面失败: http {response.status_code}')
             return ''
         tree = etree.HTML(response.text)
         desc_list = tree.xpath('//div[@class="opus-module-content opus-paragraph-children"]//span/text()')
@@ -363,17 +303,16 @@ class BilibiliScrapy(BasePlatform):
 
 
 def main(argv=None):
-    args, all_followings = prepare_followings('bilibili', default_valid=(1,), argv=argv)
     cookies = load_bilibili_cookies(COOKIE_FILE)
-    sent_urls = set(get_send_url('bilibili'))
-    run_followings(
-        all_followings,
+    return run_platform_main(
+        'bilibili',
+        bilibili_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following: BilibiliScrapy(following, cookies).start(
+        run_one=lambda following, sent_urls, args: BilibiliScrapy(following, cookies).start(
             sent_urls,
             use_local_json=args.local_json,
         ),
-        logger=scrapy_logger,
+        argv=argv,
     )
 
 

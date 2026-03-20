@@ -3,19 +3,17 @@ import sys
 import json
 import requests
 from typing import Any, Dict
+
 from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
 from core.utils import *
 from core.following import FollowUser
-from core.database import *
 from datetime import datetime
 from core.scrapy_runner import (
     dispatch_post,
-    prepare_followings,
-    run_followings,
-    run_posts,
-    update_after_batch,
+    run_platform_main,
 )
+from core.logger import get_platform_logger
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 COOKIE_DIR = BASE_DIR / 'cookies'
@@ -61,22 +59,7 @@ VIDEO_URL_KEYS = (
     "inch_5_mp4_hd",
     "stream_url_hd",
 )
-from loguru import logger
-
-logger.remove()
-logger.add(
-    sys.stderr,
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
-)
-logger.add(
-    str(LOG_DIR / 'scrapy_weibo.log'),
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
-    encoding="utf-8",
-    filter=lambda record: record["extra"].get("name") == "scrapy_weibo"
-)
-weibo_logger = logger.bind(name="scrapy_weibo")
+weibo_logger = get_platform_logger('weibo', LOG_DIR)
 
 
 class Following(FollowUser):
@@ -364,12 +347,15 @@ class WeiboScrapy(BasePlatform):
     """
 
     name = 'weibo'
+    content_name = '微博'
+    exclude_equal_latest_time = False
 
     def __init__(self, following: Following):
         self.scraping = following
         self.username = following.username
         self.userid = following.userid
         self.last_one_time = following.latest_time or datetime(2000, 12, 12, 12, 12, 12)
+        self.logger = weibo_logger
         self.post: list[WeiboPost] = []
 
     def get_post_from_api(self) -> None:
@@ -496,51 +482,8 @@ class WeiboScrapy(BasePlatform):
 
         weibo_logger.info(f'{self.username} 从本地 JSON 获取到 {len(self.post)} 个微博')
 
-    def filter_new_post(self, sent_urls: set[str]) -> list[WeiboPost]:
-        """过滤出真正的新微博。
-
-        这里只判断“是否已经发送过”，不判断“是否需要处理”。
-        文字微博、转发微博、V+ 微博依然是新微博，只是在发送阶段跳过。
-        """
-        new_post = []
-        for post in self.post:
-            if post.url in sent_urls or post.create_time < self.scraping.latest_time:
-                continue
-            new_post.append(post)
-        if self.scraping.username != 'favorite':
-            new_post.sort(key=lambda x: x.create_time)
-        return new_post
-
-    def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
-        """执行当前 following 的完整微博抓取、过滤和发送流程。"""
-        if use_local_json:
-            self.get_post_from_local()
-        else:
-            self.get_post_from_api()
-        new_post = self.filter_new_post(sent_urls)
-        if len(new_post) == 0:
-            self.scraping.end_msg = f'{self.username} 处理结束，没有新微博\n'
-            return
-
-        weibo_logger.info(f"{self.username} 有 {len(new_post)} 个新微博。 "
-                          f"{new_post[0].create_time}  {new_post[-1].create_time}")
-
-        summary = run_posts(
-            new_post,
-            dispatch_one=lambda post: dispatch_post(post, weibo_logger),
-            logger=weibo_logger
-        )
-        update_after_batch(lambda: update_db(
-            self.scraping.userid,
-            self.scraping.username,
-            new_post[-1].create_time.strftime('%Y-%m-%d %H:%M:%S')
-        ))
-        self.scraping.end_msg = (
-            f'{self.scraping.username} 处理结束，'
-            f'新微博 {summary.total} 个，'
-            f'跳过 {summary.skipped} 个，'
-            f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
-        )
+    def should_sort_filtered_posts(self) -> bool:
+        return self.scraping.username != 'favorite'
 
     @classmethod
     def run(cls, argv=None):
@@ -548,13 +491,15 @@ class WeiboScrapy(BasePlatform):
 
 
 def main(argv=None):
-    args, all_followings = prepare_followings('weibo', default_valid=(1,), argv=argv)
-    send_weibo_url = set(get_send_url('weibo'))
-    run_followings(
-        all_followings,
+    return run_platform_main(
+        'weibo',
+        weibo_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following: WeiboScrapy(following).start(send_weibo_url, use_local_json=args.local_json),
-        logger=weibo_logger,
+        run_one=lambda following, sent_urls, args: WeiboScrapy(following).start(
+            sent_urls,
+            use_local_json=args.local_json,
+        ),
+        argv=argv,
     )
 
 

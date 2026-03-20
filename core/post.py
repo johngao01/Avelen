@@ -46,10 +46,7 @@ class BasePost(ABC):
 
     @abstractmethod
     def start(self):
-        """post开始处理处理的函数
-
-        返回 是否处理，post一般信息 + （额外信息）
-        """
+        """返回当前 post 是否进入处理流水线，以及对应的日志信息。"""
         raise NotImplementedError
 
     @abstractmethod

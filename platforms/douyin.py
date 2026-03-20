@@ -18,33 +18,17 @@ from core.database import *
 from core.scrapy_runner import (
     dispatch_post,
     handle_dispatch_result,
-    prepare_followings,
-    run_followings,
-    run_posts,
-    update_after_batch,
+    run_platform_main,
 )
+from core.logger import get_platform_logger
 from gmssl import sm3, func
-from loguru import logger
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 COOKIE_DIR = BASE_DIR / 'cookies'
 LOG_DIR = BASE_DIR / 'logs'
 LOG_DIR.mkdir(exist_ok=True)
 
-logger.remove()
-logger.add(
-    sys.stderr,
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
-)
-logger.add(
-    str(LOG_DIR / 'scrapy_douyin.log'),
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    level="INFO",  # 记录 INFO 及以上（INFO、WARNING、ERROR、CRITICAL）
-    encoding="utf-8",
-    filter=lambda record: record["extra"].get("name") == "scrapy_douyin"
-)
-scrapy_logger = logger.bind(name="scrapy_douyin")
+douyin_logger = get_platform_logger('douyin', LOG_DIR)
 
 with open(COOKIE_DIR / '小号.txt', mode='r', encoding='utf8') as cookie_file:
     cookies = cookie_file.read()
@@ -1129,7 +1113,7 @@ def handler_douyin(aweme):
         aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
     user = Following(aweme['author']['sec_uid'], 'favorite', '')
     post = Aweme(user, aweme)
-    return handle_dispatch_result(dispatch_post(post, scrapy_logger), scrapy_logger, post.url) == 'success'
+    return handle_dispatch_result(dispatch_post(post, douyin_logger), douyin_logger, post.url) == 'success'
 
 
 class DouyinScrapy(BasePlatform):
@@ -1140,6 +1124,9 @@ class DouyinScrapy(BasePlatform):
     """
 
     name = 'douyin'
+    content_name = '作品'
+    show_time_range = False
+    exclude_equal_latest_time = False
 
     def __init__(self, following: Following):
         self.scraping = following
@@ -1155,6 +1142,7 @@ class DouyinScrapy(BasePlatform):
             'cookie': cookies,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
         }
+        self.logger = douyin_logger
         self.post = []
 
     def get_post_from_api(self):
@@ -1206,7 +1194,7 @@ class DouyinScrapy(BasePlatform):
                     timeout=30,
                 )
             if resp.text == '':
-                scrapy_logger.error('爬取失败，空响应')
+                douyin_logger.error('爬取失败，空响应')
                 raise RuntimeError('爬取失败，空响应')
             try:
                 resp = resp.text.encode('utf-8').decode('utf-8')
@@ -1237,24 +1225,24 @@ class DouyinScrapy(BasePlatform):
             scrapy_info = f'{self.username} 获取第{self.page}页完成，一共有{len(data_json['aweme_list'])}个抖音'
             if self.username == 'favorite' and len(self.post) >= SCRAPY_FAVORITE_LIMIT:
                 scrapy_info += "，获取新喜欢完成。"
-                scrapy_logger.info(scrapy_info)
+                douyin_logger.info(scrapy_info)
                 break
             if self.username != 'favorite' and not KEEP:
                 scrapy_info += "，获取新抖音完成。"
-                scrapy_logger.info(scrapy_info)
+                douyin_logger.info(scrapy_info)
                 break
-            scrapy_logger.info(scrapy_info)
+            douyin_logger.info(scrapy_info)
             self.page += 1
             if not data_json['has_more']:
                 scrapy_info += "，获取新抖音结束。"
-                scrapy_logger.info(scrapy_info)
+                douyin_logger.info(scrapy_info)
                 break
 
     def get_post_from_local(self):
         """从本地 JSON 缓存恢复当前账号的作品列表。"""
         json_dir = os.path.join(download_save_root_directory, 'douyin', 'json', self.username)
         if not os.path.isdir(json_dir):
-            scrapy_logger.warning(f'{self.username} 本地 JSON 目录不存在: {json_dir}')
+            douyin_logger.warning(f'{self.username} 本地 JSON 目录不存在: {json_dir}')
             return
 
         loaded_post = []
@@ -1266,13 +1254,13 @@ class DouyinScrapy(BasePlatform):
                 with open(json_path, encoding='utf-8') as json_file:
                     aweme = json.load(json_file)
             except (OSError, json.JSONDecodeError) as exc:
-                scrapy_logger.warning(f'读取本地抖音 JSON 失败: {json_path} {exc}')
+                douyin_logger.warning(f'读取本地抖音 JSON 失败: {json_path} {exc}')
                 continue
 
             if aweme.get('create_time_str'):
                 aweme_create_time = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
             else:
-                scrapy_logger.warning(f'本地抖音 JSON 缺少时间字段: {json_path}')
+                douyin_logger.warning(f'本地抖音 JSON 缺少时间字段: {json_path}')
                 continue
 
             aweme['username'] = self.username
@@ -1285,52 +1273,10 @@ class DouyinScrapy(BasePlatform):
                 self.max_time = aweme_create_time
 
         self.post.extend(loaded_post)
-        scrapy_logger.info(f'{self.username} 从本地 JSON 获取到 {len(loaded_post)} 个抖音')
+        douyin_logger.info(f'{self.username} 从本地 JSON 获取到 {len(loaded_post)} 个抖音')
 
-    def filter_new_post(self, sent_urls: set[str]):
-        """按抖音平台规则过滤出真正要处理的作品。"""
-        new_post = []
-        for post in self.post:
-            if post.aweme_url in sent_urls or post.create_time < self.scraping.latest_time:
-                continue
-            new_post.append(post)
-        if self.scraping.username != 'favorite':
-            new_post.sort(key=lambda x: x.create_time)
-        return new_post
-
-    def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
-        """执行当前 following 的完整抖音抓取、过滤和发送流程。"""
-        if use_local_json:
-            self.get_post_from_local()
-        else:
-            self.get_post_from_api()
-        new_post = self.filter_new_post(sent_urls)
-        if len(new_post) == 0:
-            scrapy_logger.info(f"{self.username} 没有新作品\n")
-            self.scraping.end_msg = f'{self.username} 处理结束，没有新作品\n'
-            return
-
-        latest_post = new_post[-1]
-
-        scrapy_logger.info(
-            f"{self.username} 有 {len(new_post)} 个新作品\n"
-        )
-
-        summary = run_posts(
-            new_post,
-            dispatch_one=lambda post: dispatch_post(post, scrapy_logger),
-            logger=scrapy_logger
-        )
-        update_after_batch(lambda: update_db(
-            self.scraping.userid,
-            self.scraping.username,
-            latest_post.create_time_str,
-        ))
-        self.scraping.end_msg = (
-            f'{self.scraping.username} 处理结束，'
-            f'新作品 {summary.total} 个，'
-            f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
-        )
+    def should_sort_filtered_posts(self) -> bool:
+        return self.scraping.username != 'favorite'
 
     @classmethod
     def run(cls, argv=None):
@@ -1339,17 +1285,16 @@ class DouyinScrapy(BasePlatform):
 
 
 def main(argv=None):
-    args, all_followings = prepare_followings(
+    return run_platform_main(
         'douyin',
+        douyin_logger,
+        build_following=lambda raw: Following(*raw),
+        run_one=lambda following, sent_urls, args: DouyinScrapy(following).start(
+            sent_urls,
+            use_local_json=args.local_json,
+        ),
         default_valid=(1,),
         argv=argv,
-    )
-    sent_urls = set(get_send_url('douyin'))
-    run_followings(
-        all_followings,
-        build_following=lambda raw: Following(*raw),
-        run_one=lambda following: DouyinScrapy(following).start(sent_urls, use_local_json=args.local_json),
-        logger=scrapy_logger,
     )
 
 

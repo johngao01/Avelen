@@ -9,18 +9,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
-from loguru import logger
-from core.database import get_send_url, update_db
 from core.following import FollowUser
 from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
 from core.scrapy_runner import (
-    dispatch_post,
-    prepare_followings,
-    run_followings,
-    run_posts,
-    update_after_batch,
+    run_platform_main,
 )
+from core.logger import get_platform_logger
 from core.utils import download_save_root_directory
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,20 +28,7 @@ GRAPHQL_URL = 'https://www.instagram.com/graphql/query'
 PROFILE_DOC_ID = '9830436980396988'
 INSTAGRAM_HOME_URL = 'https://www.instagram.com'
 
-logger.remove()
-logger.add(
-    sys.stderr,
-    format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
-    level='INFO',
-)
-logger.add(
-    str(LOG_DIR / 'scrapy_instagram.log'),
-    format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
-    level='INFO',
-    encoding='utf-8',
-    filter=lambda record: record['extra'].get('name') == 'scrapy_instagram',
-)
-instagram_logger = logger.bind(name='scrapy_instagram')
+instagram_logger = get_platform_logger('instagram', LOG_DIR)
 os.makedirs(JSON_DIR, exist_ok=True)
 
 
@@ -241,12 +223,14 @@ class InstagramScrapy(BasePlatform):
     """Instagram 平台抓取器。"""
 
     name = 'instagram'
+    content_name = '内容'
 
     def __init__(self, following: Following, cookie_header: str):
         self.scraping = following
         self.session = requests.Session()
         self.session.headers.update(build_instagram_headers(cookie_header))
         self.fb_dtsg = ''
+        self.logger = instagram_logger
         self.post: list[InstagramPost] = []
 
     def ensure_fb_dtsg(self) -> str:
@@ -354,52 +338,8 @@ class InstagramScrapy(BasePlatform):
 
         instagram_logger.info(f'{self.scraping.username} 从本地 JSON 获取到 {len(self.post)} 个内容')
 
-    def filter_new_post(self, sent_urls: set[str]) -> list[InstagramPost]:
-        # 本地 JSON 回放模式不会经过实时抓取时的过滤，因此这里补齐去重和置顶过滤。
-        new_post = []
-        for post in self.post:
-            if post.url in sent_urls:
-                continue
-            if post.create_time <= self.scraping.latest_time:
-                continue
-            if post.is_pinned:
-                continue
-            new_post.append(post)
-        new_post.sort(key=lambda current: current.create_time)
-        return new_post
-
-    def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
-        if use_local_json:
-            self.get_post_from_local()
-        else:
-            self.get_post_from_api()
-
-        new_post = self.filter_new_post(sent_urls)
-        if not new_post:
-            self.scraping.end_msg = f'{self.scraping.username} 处理结束，没有新内容\n'
-            return
-
-        instagram_logger.info(
-            f'{self.scraping.username} 有 {len(new_post)} 个新内容。 '
-            f'{new_post[0].create_time}  {new_post[-1].create_time}'
-        )
-
-        summary = run_posts(
-            new_post,
-            dispatch_one=lambda post: dispatch_post(post, instagram_logger),
-            logger=instagram_logger,
-        )
-        update_after_batch(lambda: update_db(
-            self.scraping.userid,
-            self.scraping.username,
-            new_post[-1].create_time.strftime('%Y-%m-%d %H:%M:%S'),
-        ))
-        self.scraping.end_msg = (
-            f'{self.scraping.username} 处理结束，'
-            f'新内容 {summary.total} 个，'
-            f'跳过 {summary.skipped} 个，'
-            f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
-        )
+    def should_skip_post_in_filter(self, post: InstagramPost) -> bool:
+        return post.is_pinned
 
     def _build_profile_post_variables(self, after: str) -> dict:
         variables = {
@@ -432,17 +372,16 @@ InstagramPlatform = InstagramScrapy
 
 
 def main(argv=None):
-    args, all_followings = prepare_followings('instagram', default_valid=(1,), argv=argv)
     cookie_header = load_instagram_cookie_header(COOKIE_FILE)
-    sent_urls = set(get_send_url('instagram'))
-    run_followings(
-        all_followings,
+    return run_platform_main(
+        'instagram',
+        instagram_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following: InstagramScrapy(following, cookie_header).start(
+        run_one=lambda following, sent_urls, args: InstagramScrapy(following, cookie_header).start(
             sent_urls,
             use_local_json=args.local_json,
         ),
-        logger=instagram_logger,
+        argv=argv,
     )
 
 

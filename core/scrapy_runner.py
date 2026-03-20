@@ -4,7 +4,7 @@ import traceback
 import argparse
 
 from core.downloader import Downloader
-from core.database import get_filtered_followings
+from core.database import get_filtered_followings, get_send_url, update_db
 from core.post import BasePost
 from core.settings import (
     disable_download_progress,
@@ -65,19 +65,105 @@ def run_posts(posts: list[Any],
         latest_post=ordered_posts[-1] if ordered_posts else None,
     )
     for index, post in enumerate(ordered_posts, start=1):
-        skip, start_message = post.start()
+        should_process, start_message = post.start()
         logger.info(f"{index}/{summary.total}\t{start_message}")
-        if skip:
+        if not should_process:
+            summary.skipped += 1
+            continue
+        status = handle_dispatch_result(dispatch_one(post), logger, post.url)
+        if status == 'success':
+            summary.success += 1
+        elif status == 'skip':
             summary.skipped += 1
         else:
-            status = handle_dispatch_result(dispatch_one(post), logger, post.url)
-            if status == 'success':
-                summary.success += 1
-            elif status == 'skip':
-                summary.skipped += 1
-            else:
-                summary.failure += 1
+            summary.failure += 1
     return summary
+
+
+def filter_new_posts(posts: list[Any],
+                     sent_urls: set[str],
+                     latest_time,
+                     *,
+                     exclude_equal: bool = True,
+                     should_sort: bool = True,
+                     skip_post: Callable[[Any], bool] | None = None) -> list[Any]:
+    """按公共规则过滤真正需要处理的新内容。
+
+    过滤逻辑不直接并入 `get_post_from_api()`，因为本地 JSON 回放模式也要复用同一套规则。
+    平台自己的 API 抓取阶段仍然可以做“提前终止分页”之类的优化，但最终去重与排序放在这里统一。
+    """
+    new_posts = []
+    for post in posts:
+        if post.url in sent_urls:
+            continue
+        if exclude_equal:
+            if post.create_time <= latest_time:
+                continue
+        elif post.create_time < latest_time:
+            continue
+        if skip_post and skip_post(post):
+            continue
+        new_posts.append(post)
+    if should_sort:
+        new_posts.sort(key=lambda post: post.create_time)
+    return new_posts
+
+
+def get_post_latest_time_str(post: Any) -> str:
+    """返回写回数据库时使用的 latest_time 字符串。"""
+    create_time_str = getattr(post, 'create_time_str', None)
+    if isinstance(create_time_str, str):
+        return create_time_str
+    return post.create_time.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def start_platform_scraping(scraper: Any,
+                            sent_urls: set[str],
+                            *,
+                            use_local_json: bool,
+                            logger,
+                            content_name: str,
+                            show_time_range: bool = True,
+                            dispatch_one: Callable[[Any], Any] | None = None) -> None:
+    """执行平台实例的通用抓取、过滤、发送和回写流程。"""
+    if use_local_json:
+        scraper.get_post_from_local()
+    else:
+        scraper.get_post_from_api()
+
+    new_posts = scraper.filter_new_post(sent_urls)
+    username = scraper.scraping.username
+    if not new_posts:
+        scraper.scraping.end_msg = f'{username} 处理结束，没有新{content_name}\n'
+        return
+
+    if show_time_range:
+        logger.info(
+            f'{username} 有 {len(new_posts)} 个新{content_name}。 '
+            f'{new_posts[0].create_time}  {new_posts[-1].create_time}'
+        )
+    else:
+        logger.info(f'{username} 有 {len(new_posts)} 个新{content_name}')
+
+    if dispatch_one is None:
+        dispatch_one = lambda post: dispatch_post(post, logger)
+
+    summary = run_posts(
+        new_posts,
+        dispatch_one=dispatch_one,
+        logger=logger,
+    )
+    update_after_batch(lambda: update_db(
+        scraper.scraping.userid,
+        scraper.scraping.username,
+        get_post_latest_time_str(new_posts[-1]),
+    ))
+    scraper.scraping.end_msg = (
+        f'{username} 处理结束，'
+        f'新{content_name} {summary.total} 个，'
+        f'跳过 {summary.skipped} 个，'
+        f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
+    )
 
 
 def run_followings(all_followings: list[Any],
@@ -160,3 +246,28 @@ def prepare_followings(platform: str, default_valid=(1,),
     else:
         disable_download_progress()
     return args, select_followings(platform, args)
+
+
+def run_platform_main(platform: str,
+                      logger,
+                      build_following: Callable[[Any], Any],
+                      run_one: Callable[[Any, set[str], argparse.Namespace], None],
+                      *,
+                      default_valid=(1,),
+                      configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
+                      argv=None):
+    """运行平台命令行入口的公共壳层。"""
+    args, all_followings = prepare_followings(
+        platform,
+        default_valid=default_valid,
+        configure_parser=configure_parser,
+        argv=argv,
+    )
+    sent_urls = set(get_send_url(platform))
+    run_followings(
+        all_followings,
+        build_following=build_following,
+        run_one=lambda following: run_one(following, sent_urls, args),
+        logger=logger,
+    )
+    return args, all_followings
