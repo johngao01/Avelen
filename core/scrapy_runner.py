@@ -6,13 +6,14 @@ import argparse
 from core.downloader import Downloader
 from core.database import get_filtered_followings, get_send_url, update_db
 from core.post import BasePost
+from core.sender_dispatcher import dispatch_post_data
 from core.settings import (
     disable_download_progress,
     enable_download_progress,
     enable_no_send_mode,
     is_no_send_mode,
 )
-from core.utils import download_log, log_error, rate_control, request_webhook
+from core.utils import download_log, log_error, rate_control
 
 
 @dataclass(slots=True)
@@ -30,7 +31,7 @@ def dispatch_post(post: BasePost, logger):
     post_data = post.to_dispatch_data(files)
     if not post_data:
         return '获取失败'
-    return request_webhook('/main', post_data, logger)
+    return dispatch_post_data(post_data)
 
 
 def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
@@ -105,7 +106,7 @@ def filter_new_posts(posts: list[Any],
             continue
         new_posts.append(post)
     if should_sort:
-        new_posts.sort(key=lambda post: post.create_time)
+        new_posts.sort(key=lambda x: x.create_time)
     return new_posts
 
 

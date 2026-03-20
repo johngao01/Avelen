@@ -1,48 +1,60 @@
 import time
-import sys
 import json
+import os
 import requests
 from typing import Any, Dict
 
 from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
-from core.utils import *
 from core.following import FollowUser
 from datetime import datetime
+from core.settings import (
+    COMMON_HEADERS,
+    LOGS_DIR,
+    SCRAPY_FAVORITE_LIMIT,
+    WEIBO_CONFIG,
+    WEIBO_COOKIE_PATH,
+    WEIBO_JSON_ROOT,
+)
+from core.utils import (
+    build_browser_headers,
+    build_platform_json_path,
+    bytes2md5,
+    find_file_by_name,
+    get_platform_json_dir,
+    log_error,
+    read_text_file,
+)
 from core.scrapy_runner import (
     dispatch_post,
     run_platform_main,
 )
 from core.logger import get_platform_logger
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-COOKIE_DIR = BASE_DIR / 'cookies'
-LOG_DIR = BASE_DIR / 'logs'
-LOG_DIR.mkdir(exist_ok=True)
+WEIBO_API_BASE_URL = WEIBO_CONFIG['base_url']
+WEIBO_WEB_BASE_URL = WEIBO_CONFIG['web_base_url']
+WEIBO_HOME_URL = f'{WEIBO_API_BASE_URL}/'
 
-with open(COOKIE_DIR / 'johnjohn01.txt') as cookie_file:
-    cookies = cookie_file.read()
+cookies = read_text_file(WEIBO_COOKIE_PATH)
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-    "Referer": "https://weibo.com/",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Cookie": cookies,
-    "X-Requested-With": "XMLHttpRequest",
-}
+headers = build_browser_headers(
+    referer=WEIBO_HOME_URL,
+    cookie=cookies,
+    accept=COMMON_HEADERS['json_accept'],
+    extra={'X-Requested-With': 'XMLHttpRequest'},
+)
 # 获取点赞的内容
-cookie_headers = {
-    **headers,
-    'referer': 'https://weibo.com/u/page/like/7767780215',
-}
+cookie_headers = build_browser_headers(
+    referer=WEIBO_CONFIG['favorite_referer'],
+    cookie=cookies,
+    accept=COMMON_HEADERS['json_accept'],
+    extra={'X-Requested-With': 'XMLHttpRequest'},
+)
 # 获取单个微博详细信息
-weibo_header = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                  'Chrome/104.0.0.0 Safari/537.36',
-    'referer': 'https://weibo.com/',
-    'cookie': cookies
-}
+weibo_header = build_browser_headers(
+    referer=WEIBO_HOME_URL,
+    cookie=cookies,
+)
 del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736',
             '3671086183ed683ec092b43b83fa461c']
 VIDEO_URL_KEYS = (
@@ -59,7 +71,7 @@ VIDEO_URL_KEYS = (
     "inch_5_mp4_hd",
     "stream_url_hd",
 )
-weibo_logger = get_platform_logger('weibo', LOG_DIR)
+weibo_logger = get_platform_logger('weibo', LOGS_DIR)
 
 
 class Following(FollowUser):
@@ -68,7 +80,7 @@ class Following(FollowUser):
     def __init__(self, userid, username, latest_time):
         user = FollowUser.from_db_row(userid, username, latest_time)
         super().__init__(user.userid, user.username, user.latest_time)
-        self.url = f'https://weibo.com/u/{self.userid}'
+        self.url = f'{WEIBO_API_BASE_URL}/u/{self.userid}'
         self.start_msg = f'开始获取 {self.username} 截至 {str(self.latest_time)} 微博，她的主页是 {self.url}'
         self.end_msg = ''
 
@@ -104,13 +116,13 @@ class WeiboPost(BasePost):
         self.nickname = self.data['user']['screen_name']
         self.idstr = weibo_data.get('idstr', '')
         self.id = self.idstr
-        self.url = "https://www.weibo.com" + "/" + self.userid + "/" + self.idstr
+        self.url = f'{WEIBO_WEB_BASE_URL}/{self.userid}/{self.idstr}'
         self.text_raw = weibo_data.get('text_raw', '')
         self.mblogid = weibo_data.get('mblogid', '')
         self.create_date = self.create_time.strftime("%Y%m%d")
         self.request_headers = {
             **weibo_header,
-            'referer': f"https://www.weibo.com/{weibo_data['user']['idstr']}/{weibo_data['idstr']}",
+            'Referer': f"{WEIBO_WEB_BASE_URL}/{weibo_data['user']['idstr']}/{weibo_data['idstr']}",
         }
         self.is_top = weibo_data.get('isTop', 0)
 
@@ -120,13 +132,7 @@ class WeiboPost(BasePost):
         data.pop('weibo_time', None)
         edit_count = weibo_edit_count(self.data)
         suffix = '' if edit_count == 0 else f'_{edit_count}'
-        json_path = os.path.join(
-            download_save_root_directory,
-            'weibo',
-            'json',
-            self.username,
-            f'{self.idstr}{suffix}.json',
-        )
+        json_path = build_platform_json_path('weibo', self.username, f'{self.idstr}{suffix}.json')
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, mode='w', encoding='utf8') as json_write:
             json.dump(data, json_write, ensure_ascii=False, indent=4)
@@ -275,7 +281,7 @@ class WeiboPost(BasePost):
 def get_weibo_data(weibo_link):
     weibo_id = weibo_link.split('/')[-1]
     try:
-        response = requests.get('https://weibo.com/ajax/statuses/show',
+        response = requests.get(f'{WEIBO_API_BASE_URL}/ajax/statuses/show',
                                 params={'id': weibo_id, 'locale': 'zh-CN'},
                                 headers=weibo_header)
         data = response.json()
@@ -310,8 +316,7 @@ def build_weibo_post(
             return 'skip'
 
     if 'user' not in weibo_data:
-        json_root = os.path.join(download_save_root_directory, 'weibo', 'json')
-        json_path = find_file_by_name(json_root, f'{weibo_url.split("/")[-1]}.json')
+        json_path = find_file_by_name(WEIBO_JSON_ROOT, f'{weibo_url.split("/")[-1]}.json')
         if not json_path:
             return False
         with open(json_path, encoding='utf-8') as file_obj:
@@ -368,7 +373,7 @@ class WeiboScrapy(BasePlatform):
             if self.username == 'favorite':
                 try:
                     response = requests.get(
-                        "https://weibo.com/ajax/statuses/likelist",
+                        f"{WEIBO_API_BASE_URL}/ajax/statuses/likelist",
                         params={
                             'uid': self.userid,
                             'page': page,
@@ -412,7 +417,7 @@ class WeiboScrapy(BasePlatform):
             else:
                 try:
                     response = requests.get(
-                        "https://weibo.com/ajax/statuses/mymblog",
+                        f"{WEIBO_API_BASE_URL}/ajax/statuses/mymblog",
                         params={"uid": self.userid, "page": page, "feature": 0},
                         headers=headers,
                         timeout=30,
@@ -459,7 +464,7 @@ class WeiboScrapy(BasePlatform):
 
     def get_post_from_local(self) -> None:
         """从本地 JSON 缓存恢复当前账号的微博列表。"""
-        json_dir = os.path.join(download_save_root_directory, 'weibo', 'json', self.username)
+        json_dir = get_platform_json_dir('weibo', self.username)
         if not os.path.isdir(json_dir):
             weibo_logger.warning(f'{self.username} 本地 JSON 目录不存在: {json_dir}')
             return

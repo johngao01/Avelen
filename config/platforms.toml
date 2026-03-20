@@ -1,0 +1,36 @@
+# 下载目录约定：
+# 媒体文件 -> /root/download/<platform>/<username>/<filename>
+# JSON 文件 -> /root/download/<platform>/json/<username>/<filename>
+[paths]
+download_root = "/root/download"
+
+[headers.common]
+# 默认浏览器请求头，各平台如无特殊需求统一复用这里的配置
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+accept_language = "zh-CN,zh;q=0.9,en;q=0.8,en-US;q=0.7"
+json_accept = "application/json, text/plain, */*"
+
+[platforms.weibo]
+cookie_file = "johnjohn01.txt"
+base_url = "https://weibo.com"
+web_base_url = "https://www.weibo.com"
+favorite_referer = "https://weibo.com/u/page/like/7767780215"
+
+[platforms.douyin]
+cookie_file = "小号.txt"
+favorite_cookie_file = "大号.txt"
+base_url = "https://www.douyin.com"
+video_url = "https://www.douyin.com/video/"
+note_url = "https://www.douyin.com/note/"
+user_url = "https://www.douyin.com/user/"
+
+[platforms.bilibili]
+cookie_file = "bl.txt"
+base_url = "https://www.bilibili.com"
+space_url = "https://space.bilibili.com"
+
+[platforms.instagram]
+cookie_file = "neverblock11.txt"
+base_url = "https://www.instagram.com"
+graphql_url = "https://www.instagram.com/graphql/query"
+profile_doc_id = "9830436980396988"

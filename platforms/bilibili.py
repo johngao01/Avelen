@@ -4,52 +4,30 @@ import json
 import os
 import time
 import requests
-from pathlib import Path
 from re import sub
 from lxml import etree
 from pydash import get
 
 from core.following import FollowUser
+from core.logger import get_platform_logger
 from core.platform import BasePlatform
+from core.settings import (
+    BILIBILI_CONFIG,
+    BILIBILI_COOKIE_PATH,
+    BILIBILI_JSON_ROOT,
+    LOGS_DIR,
+)
 from core.post import BasePost, MediaItem
 from core.scrapy_runner import (
     run_platform_main,
 )
-from core.logger import get_platform_logger
-from core.utils import download_save_root_directory
+from core.utils import build_browser_headers, build_platform_json_path, load_netscape_cookies
 from datetime import datetime
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-COOKIE_DIR = BASE_DIR / 'cookies'
-LOG_DIR = BASE_DIR / 'logs'
-LOG_DIR.mkdir(exist_ok=True)
-COOKIE_FILE = COOKIE_DIR / 'bl.txt'
-JSON_DIR = os.path.join(download_save_root_directory, 'bilibili', 'json')
-DYNAMIC_API_URL = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
-BILIBILI_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                  '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://www.bilibili.com',
-}
-bilibili_logger = get_platform_logger('bilibili', LOG_DIR, file_level='DEBUG')
-os.makedirs(JSON_DIR, exist_ok=True)
-
-
-def load_bilibili_cookies(path: Path) -> dict[str, str]:
-    """从 Netscape cookies 文件中提取可直接写入 requests 的键值对。"""
-    cookies: dict[str, str] = {}
-    with open(path, encoding='utf8') as cookie_file:
-        for raw_line in cookie_file:
-            line = raw_line.strip()
-            if not line:
-                continue
-            if line.startswith('#') and not line.startswith('#HttpOnly_.bilibili.com'):
-                continue
-            parts = line.split('\t')
-            if len(parts) != 7:
-                continue
-            cookies[parts[5].strip()] = parts[6].strip()
-    return cookies
+DYNAMIC_API_URL = f"{BILIBILI_CONFIG['base_url']}/x/polymer/web-dynamic/v1/feed/space"
+BILIBILI_HEADERS = build_browser_headers(referer=BILIBILI_CONFIG['base_url'])
+bilibili_logger = get_platform_logger('bilibili', LOGS_DIR, file_level='DEBUG')
+os.makedirs(BILIBILI_JSON_ROOT, exist_ok=True)
 
 
 class Following(FollowUser):
@@ -58,7 +36,7 @@ class Following(FollowUser):
     def __init__(self, userid, username, latest_time):
         user = FollowUser.from_db_row(userid, username, latest_time)
         super().__init__(user.userid, user.username, user.latest_time)
-        self.url = f'https://space.bilibili.com/{self.userid}/dynamic'
+        self.url = f"{BILIBILI_CONFIG['space_url']}/{self.userid}/dynamic"
         self.start_msg = f'开始获取 {self.username} 截至 {self.latest_time} 的动态，她的主页是 {self.url}'
         self.end_msg = ''
 
@@ -94,9 +72,9 @@ class BilibiliPost(BasePost):
         if jump_url:
             return jump_url
         if self.dynamic_type == 'DYNAMIC_TYPE_AV':
-            return f'https://www.bilibili.com/video/{self.video_id}'
+            return f"{BILIBILI_CONFIG['base_url']}/video/{self.video_id}"
         if self.dynamic_type == 'DYNAMIC_TYPE_DRAW':
-            return f'https://www.bilibili.com/opus/{self.idstr}'
+            return f"{BILIBILI_CONFIG['base_url']}/opus/{self.idstr}"
         return ''
 
     @property
@@ -119,7 +97,7 @@ class BilibiliPost(BasePost):
 
     def save_json(self) -> None:
         """将 B站动态原始数据保存为本地 JSON，供本地回放模式复用。"""
-        json_path = os.path.join(JSON_DIR, self.following.username, f'Dynamic_{self.idstr}.json')
+        json_path = build_platform_json_path('bilibili', self.following.username, f'Dynamic_{self.idstr}.json')
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         data = {**self.node, 'user_id': self.userid, 'username': self.username}
         with open(json_path, mode='w', encoding='utf8') as json_write:
@@ -267,7 +245,7 @@ class BilibiliScrapy(BasePlatform):
 
     def get_post_from_local(self) -> None:
         self.post = []
-        for root, _, files in os.walk(JSON_DIR):
+        for root, _, files in os.walk(BILIBILI_JSON_ROOT):
             for filename in files:
                 if not (filename.startswith('Dynamic_') and filename.endswith('.json')):
                     continue
@@ -286,7 +264,7 @@ class BilibiliScrapy(BasePlatform):
     def get_opus_desc(self, opus_id: str) -> str:
         """读取图文动态页面，补齐正文描述。"""
         try:
-            response = self.session.get(f'https://www.bilibili.com/opus/{opus_id}', timeout=30)
+            response = self.session.get(f"{BILIBILI_CONFIG['base_url']}/opus/{opus_id}", timeout=30)
         except Exception as exc:
             bilibili_logger.warning(f'获取 opus {opus_id} 页面失败: {exc}')
             return ''
@@ -303,7 +281,7 @@ class BilibiliScrapy(BasePlatform):
 
 
 def main(argv=None):
-    cookies = load_bilibili_cookies(COOKIE_FILE)
+    cookies = load_netscape_cookies(BILIBILI_COOKIE_PATH)
     return run_platform_main(
         'bilibili',
         bilibili_logger,

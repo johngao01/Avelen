@@ -3,38 +3,36 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 from datetime import datetime
-from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
 from core.following import FollowUser
+from core.logger import get_platform_logger
 from core.platform import BasePlatform
+from core.settings import (
+    INSTAGRAM_CONFIG,
+    INSTAGRAM_COOKIE_PATH,
+    INSTAGRAM_JSON_ROOT,
+    LOGS_DIR,
+)
 from core.post import BasePost, MediaItem
 from core.scrapy_runner import (
     run_platform_main,
 )
-from core.logger import get_platform_logger
-from core.utils import download_save_root_directory
+from core.utils import (
+    build_browser_headers,
+    build_platform_json_path,
+    get_platform_json_dir,
+    read_text_file,
+)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-COOKIE_DIR = BASE_DIR / 'cookies'
-LOG_DIR = BASE_DIR / 'logs'
-LOG_DIR.mkdir(exist_ok=True)
-COOKIE_FILE = COOKIE_DIR / 'neverblock11.txt'
-JSON_DIR = os.path.join(download_save_root_directory, 'instagram', 'json')
-GRAPHQL_URL = 'https://www.instagram.com/graphql/query'
-PROFILE_DOC_ID = '9830436980396988'
-INSTAGRAM_HOME_URL = 'https://www.instagram.com'
+GRAPHQL_URL = INSTAGRAM_CONFIG['graphql_url']
+PROFILE_DOC_ID = INSTAGRAM_CONFIG['profile_doc_id']
+INSTAGRAM_HOME_URL = INSTAGRAM_CONFIG['base_url']
 
-instagram_logger = get_platform_logger('instagram', LOG_DIR)
-os.makedirs(JSON_DIR, exist_ok=True)
-
-
-def load_instagram_cookie_header(path: Path) -> str:
-    with open(path, encoding='utf-8') as file_obj:
-        return file_obj.read()
+instagram_logger = get_platform_logger('instagram', LOGS_DIR)
+os.makedirs(INSTAGRAM_JSON_ROOT, exist_ok=True)
 
 
 def parse_cookie_header(header: str) -> dict[str, str]:
@@ -52,36 +50,35 @@ def parse_cookie_header(header: str) -> dict[str, str]:
 def build_instagram_headers(cookie_header: str) -> dict[str, str]:
     parsed = parse_cookie_header(cookie_header)
     csrftoken = parsed.get('csrftoken', '')
-    return {
-        'accept': '*/*',
-        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5',
-        'cache-control': 'no-cache',
-        'content-type': 'application/x-www-form-urlencoded',
-        'origin': INSTAGRAM_HOME_URL,
-        'pragma': 'no-cache',
-        'priority': 'u=1, i',
-        'referer': f'{INSTAGRAM_HOME_URL}/',
-        'sec-ch-prefers-color-scheme': 'light',
-        'sec-ch-ua': '"Chromium";v="136", "Microsoft Edge";v="136", "Not.A/Brand";v="99"',
-        'sec-ch-ua-full-version-list': '"Chromium";v="136.0.7103.113", "Microsoft Edge";v="136.0.3240.92", "Not.A/Brand";v="99.0.0.0"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-model': '""',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-ch-ua-platform-version': '"19.0.0"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                      '(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
-        'x-asbd-id': '359341',
-        'x-bloks-version-id': 'f4e32caf235c4c3198ceb3d7599c397741599ea3447ec2f785d4575aeb99766b',
-        'x-csrftoken': csrftoken,
-        'x-fb-friendly-name': 'PolarisProfilePostsQuery',
-        'x-fb-lsd': 'FASx-b1QHr26PyPKzuK9UW',
-        'x-ig-app-id': '936619743392459',
-        'x-root-field-name': 'xdt_api__v1__feed__user_timeline_graphql_connection',
-        'cookie': cookie_header,
-    }
+    return build_browser_headers(
+        referer=f'{INSTAGRAM_HOME_URL}/',
+        cookie=cookie_header,
+        accept='*/*',
+        extra={
+            'Origin': INSTAGRAM_HOME_URL,
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Pragma': 'no-cache',
+            'Priority': 'u=1, i',
+            'sec-ch-prefers-color-scheme': 'light',
+            'sec-ch-ua': '"Chromium";v="136", "Microsoft Edge";v="136", "Not.A/Brand";v="99"',
+            'sec-ch-ua-full-version-list': '"Chromium";v="136.0.7103.113", "Microsoft Edge";v="136.0.3240.92", "Not.A/Brand";v="99.0.0.0"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-model': '""',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-ch-ua-platform-version': '"19.0.0"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'x-asbd-id': '359341',
+            'x-bloks-version-id': 'f4e32caf235c4c3198ceb3d7599c397741599ea3447ec2f785d4575aeb99766b',
+            'x-csrftoken': csrftoken,
+            'x-fb-friendly-name': 'PolarisProfilePostsQuery',
+            'x-fb-lsd': 'FASx-b1QHr26PyPKzuK9UW',
+            'x-ig-app-id': '936619743392459',
+            'x-root-field-name': 'xdt_api__v1__feed__user_timeline_graphql_connection',
+        },
+    )
 
 
 class Following(FollowUser):
@@ -141,7 +138,7 @@ class InstagramPost(BasePost):
 
     def save_json(self) -> None:
         """将 Instagram 原始数据保存到本地 JSON，供本地回放模式复用。"""
-        json_path = os.path.join(JSON_DIR, self.following.userid, f'{self.shortcode}.json')
+        json_path = build_platform_json_path('instagram', self.following.username, f'{self.shortcode}.json')
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, mode='w', encoding='utf8') as json_write:
             json.dump(self.node, json_write, ensure_ascii=False, indent=4)
@@ -167,11 +164,7 @@ class InstagramPost(BasePost):
                 return ext
             return 'mp4' if media_type == 'video' else 'jpg'
 
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                          '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
-            'referer': self.url,
-        }
+        headers = build_browser_headers(referer=self.url)
         items: list[MediaItem] = []
         raw_nodes = self.carousel_media or [self.node]
 
@@ -200,7 +193,7 @@ class InstagramPost(BasePost):
             items.append(MediaItem(
                 url=url,
                 media_type=media_type,
-                filename_hint=os.path.join(self.owner_username, filename),
+                filename_hint=os.path.join(self.username, filename),
                 headers=headers,
                 referer=self.url,
                 ext=ext,
@@ -315,7 +308,7 @@ class InstagramScrapy(BasePlatform):
     def get_post_from_local(self) -> None:
         """从本地 JSON 缓存恢复当前账号的作品列表。"""
         self.post = []
-        json_dir = os.path.join(JSON_DIR, self.scraping.userid)
+        json_dir = get_platform_json_dir('instagram', self.scraping.username)
         if not os.path.isdir(json_dir):
             instagram_logger.warning(f'{self.scraping.username} 本地 JSON 目录不存在: {json_dir}')
             return
@@ -372,7 +365,7 @@ InstagramPlatform = InstagramScrapy
 
 
 def main(argv=None):
-    cookie_header = load_instagram_cookie_header(COOKIE_FILE)
+    cookie_header = read_text_file(INSTAGRAM_COOKIE_PATH)
     return run_platform_main(
         'instagram',
         instagram_logger,

@@ -1,7 +1,6 @@
 import json
-import os.path
+import os
 import re
-import sys
 import requests
 from re import sub
 from typing import Any, Dict
@@ -12,44 +11,45 @@ from time import time
 from urllib.parse import urlencode, quote
 from core.platform import BasePlatform
 from core.post import BasePost, MediaItem
-from core.utils import *
 from core.following import FollowUser
-from core.database import *
+from core.settings import (
+    DOUYIN_CONFIG,
+    DOUYIN_COOKIE_PATH,
+    DOUYIN_FAVORITE_COOKIE_PATH,
+    DOUYIN_JSON_ROOT,
+    LOGS_DIR,
+    SCRAPY_FAVORITE_LIMIT,
+)
 from core.scrapy_runner import (
     dispatch_post,
     handle_dispatch_result,
     run_platform_main,
 )
 from core.logger import get_platform_logger
+from core.utils import (
+    build_browser_headers,
+    build_platform_json_path,
+    find_file_by_name,
+    get_platform_json_dir,
+    read_text_file,
+)
 from gmssl import sm3, func
+from datetime import datetime
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-COOKIE_DIR = BASE_DIR / 'cookies'
-LOG_DIR = BASE_DIR / 'logs'
-LOG_DIR.mkdir(exist_ok=True)
+DOUYIN_HOME_URL = f"{DOUYIN_CONFIG['base_url']}/"
+DOUYIN_POST_API_URL = f"{DOUYIN_CONFIG['base_url']}/aweme/v1/web/aweme/post/"
+DOUYIN_FAVORITE_API_URL = f"{DOUYIN_CONFIG['base_url']}/aweme/v1/web/aweme/favorite/"
+DOUYIN_DETAIL_API_URL = f"{DOUYIN_CONFIG['base_url']}/aweme/v1/web/aweme/detail/?"
+VIDEO_URL = DOUYIN_CONFIG['video_url']
+NOTE_URL = DOUYIN_CONFIG['note_url']
+USER_URL = DOUYIN_CONFIG['user_url']
 
-douyin_logger = get_platform_logger('douyin', LOG_DIR)
+douyin_logger = get_platform_logger('douyin', LOGS_DIR)
 
-with open(COOKIE_DIR / '小号.txt', mode='r', encoding='utf8') as cookie_file:
-    cookies = cookie_file.read()
-douyin_headers = {
-    'referer': 'https://www.douyin.com/',
-    'cookie': cookies,
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
-}
-with open(COOKIE_DIR / '大号.txt', mode='r', encoding='utf-8') as f:
-    cookies1 = f.read()
-favorite_headers = {
-    'referer': 'https://www.douyin.com/',
-    'cookie': cookies1,
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
-}
-VIDEO_INDEX = 0
-video_aweme_detail_url = 'https://www.douyin.com/aweme/v1/web/aweme/detail/?'
-domain = 'https://www.douyin.com/'
-video_url = 'https://www.douyin.com/video/'
-note_url = 'https://www.douyin.com/note/'
-user_url = 'https://www.douyin.com/user/'
+cookies = read_text_file(DOUYIN_COOKIE_PATH)
+favorite_cookies = read_text_file(DOUYIN_FAVORITE_COOKIE_PATH)
+douyin_headers = build_browser_headers(referer=DOUYIN_HOME_URL, cookie=cookies)
+favorite_headers = build_browser_headers(referer=DOUYIN_HOME_URL, cookie=favorite_cookies)
 
 
 class NewXBogus:
@@ -865,7 +865,7 @@ class Following(FollowUser):
         user = FollowUser.from_db_row(userid, username, latest_time)
         super().__init__(user.userid, user.username, user.latest_time)
         self.user_sec_uid = user.userid
-        self.url = f'{user_url}{self.user_sec_uid}'
+        self.url = f'{USER_URL}{self.user_sec_uid}'
         self.start_msg = f'开始获取 {self.username} 截至 {str(self.latest_time)} 抖音，她的主页是 {self.url}'
         self.end_msg = ''
 
@@ -895,7 +895,7 @@ class Aweme(BasePost):
         将抖音数据存储在本地保存为json文件
         :return:
         """
-        json_path = os.path.join(download_save_root_directory, 'douyin', 'json', self.username, self.aweme_id + '.json')
+        json_path = build_platform_json_path('douyin', self.username, f'{self.aweme_id}.json')
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, mode='w', encoding='utf8') as json_write:
             data = self._node.copy()
@@ -905,9 +905,9 @@ class Aweme(BasePost):
     @property
     def url(self):
         if self.is_video:
-            return video_url + self.aweme_id
+            return VIDEO_URL + self.aweme_id
         else:
-            return note_url + self.aweme_id
+            return NOTE_URL + self.aweme_id
 
     def judge_is_video(self):
         if self._node.get('images'):
@@ -941,7 +941,7 @@ class Aweme(BasePost):
     def build_media_items(self) -> list[MediaItem]:
         """把抖音作品里的视频/图文节点转换成统一媒体列表。"""
         # 下载请求需要带当前作品页 referer。
-        headers = {**favorite_headers, 'referer': self.url}
+        headers = build_browser_headers(referer=self.url, cookie=favorite_cookies)
 
         # 文件名规则沿用原 AwemeMedia：描述最多 50 个字符，并去掉非法字符。
         desc = self.describe[:50] if len(self.describe) > 50 else self.describe
@@ -950,7 +950,7 @@ class Aweme(BasePost):
         def pick_url(url_list):
             if not url_list:
                 return ''
-            return url_list[VIDEO_INDEX] if len(url_list) > VIDEO_INDEX else url_list[0]
+            return url_list[0] if len(url_list) > 0 else url_list[0]
 
         # 优先从根视频节点里挑最高质量的地址，保持原 AwemeMedia 的排序逻辑。
         def get_best_video_url():
@@ -1016,7 +1016,7 @@ class Aweme(BasePost):
             items.append(make_item(
                 url=pick_url(image.get('url_list') or []),
                 media_type='photo',
-                filename_hint=os.path.join('images', self.username, f'{self.aweme_id}_{desc}_{idx}.jpg'),
+                filename_hint=os.path.join(self.username, f'{self.aweme_id}_{desc}_{idx}.jpg'),
                 ext='jpg',
                 index=idx,
             ))
@@ -1049,14 +1049,15 @@ class Aweme(BasePost):
 
 
 def get_url_id(share_info: str):
-    if share_info.startswith('https://www.douyin.com'):
-        url = re.search(r'https://www.douyin.com/(video|note)/(\d{19})/?', share_info).group(0)
+    douyin_url_pattern = rf'{re.escape(DOUYIN_CONFIG["base_url"])}/(video|note)/(\d{{19}})/?'
+    if share_info.startswith(DOUYIN_CONFIG['base_url']):
+        url = re.search(douyin_url_pattern, share_info).group(0)
         aweme_id = url.split('/')[-1]
     else:
         link = re.search('https://v.douyin.com/[A-Za-z0-9]+/', share_info)
         if link is None:
             url = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})?', share_info).group(0)
-            url = url.replace(r'https://www.iesdouyin.com/share', r'https://www.douyin.com')
+            url = url.replace(r'https://www.iesdouyin.com/share', DOUYIN_CONFIG['base_url'])
             aweme_id = url.split('/')[-1]
         else:
             link = link.group(0)
@@ -1065,7 +1066,7 @@ def get_url_id(share_info: str):
             if url.startswith('https://webcast.amemv.com/douyin/webcast/reflow/'):
                 return url, ''
             url = re.search(r'https://www.iesdouyin.com/share/(video|note|slides)/(\d{19})?', url).group(0)
-            url = url.replace(r'https://www.iesdouyin.com/share', r'https://www.douyin.com')
+            url = url.replace(r'https://www.iesdouyin.com/share', DOUYIN_CONFIG['base_url'])
             aweme_id = url.split('/')[-1]
     return url, aweme_id
 
@@ -1078,23 +1079,21 @@ def get_aweme_detail(aweme_id):
               'engine_version': '122.0.0.0', 'os_name': 'Windows', 'os_version': '10', 'cpu_core_num': 12,
               'device_memory': 8, 'platform': 'PC', 'msToken': '', 'aweme_id': aweme_id}
     a_bogus = ABogus().ab_model_2_endpoint(params)
-    api_post_url = f'https://www.douyin.com/aweme/v1/web/aweme/detail/?{urlencode(params)}&a_bogus={a_bogus}'
+    api_post_url = f'{DOUYIN_DETAIL_API_URL}{urlencode(params)}&a_bogus={a_bogus}'
     headers = favorite_headers.copy()
     headers[
         'User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
     rs = requests.get(api_post_url, params=params, headers=headers, timeout=5)
     if rs.text == '':
         print('空数据')
-        json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
+        json_path = find_file_by_name(DOUYIN_JSON_ROOT, f'{aweme_id}.json')
         if json_path:
             with open(json_path, encoding='utf-8') as f1:
                 return json.load(f1)
         return None
     response_json = json.loads(rs.text)
     if response_json['aweme_detail'] is None:
-        if 'notice' in response_json['filter_detail']:
-            result = response_json['filter_detail']['notice']
-        json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
+        json_path = find_file_by_name(DOUYIN_JSON_ROOT, f'{aweme_id}.json')
         if json_path:
             with open(json_path, encoding='utf-8') as f2:
                 return json.load(f2)
@@ -1137,11 +1136,7 @@ class DouyinScrapy(BasePlatform):
         self.max_time = self.last_one_time
         self.page = 1
         self.new_xbogus = NewXBogus()
-        self.header = {
-            'referer': 'https://www.douyin.com/',
-            'cookie': cookies,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
-        }
+        self.header = douyin_headers.copy()
         self.logger = douyin_logger
         self.post = []
 
@@ -1174,21 +1169,21 @@ class DouyinScrapy(BasePlatform):
             if self.username == 'favorite':
                 if self.user_sec_uid.endswith('WeSiDAItgr_J1c'):
                     resp = requests.get(
-                        url="https://www.douyin.com/aweme/v1/web/aweme/favorite/",
+                        url=DOUYIN_FAVORITE_API_URL,
                         headers=douyin_headers,
                         params=params,
                         timeout=30,
                     )
                 else:
                     resp = requests.get(
-                        url="https://www.douyin.com/aweme/v1/web/aweme/favorite/",
+                        url=DOUYIN_FAVORITE_API_URL,
                         headers=favorite_headers,
                         params=params,
                         timeout=30,
                     )
             else:
                 resp = requests.get(
-                    url='https://www.douyin.com/aweme/v1/web/aweme/post/',
+                    url=DOUYIN_POST_API_URL,
                     headers=self.header,
                     params=params,
                     timeout=30,
@@ -1240,7 +1235,7 @@ class DouyinScrapy(BasePlatform):
 
     def get_post_from_local(self):
         """从本地 JSON 缓存恢复当前账号的作品列表。"""
-        json_dir = os.path.join(download_save_root_directory, 'douyin', 'json', self.username)
+        json_dir = get_platform_json_dir('douyin', self.username)
         if not os.path.isdir(json_dir):
             douyin_logger.warning(f'{self.username} 本地 JSON 目录不存在: {json_dir}')
             return

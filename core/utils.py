@@ -1,29 +1,92 @@
+from __future__ import annotations
 import hashlib
 import os
-from types import SimpleNamespace
-from time import sleep
 from datetime import datetime
 from pathlib import Path
+from time import sleep
 
-import cv2
-from core.sender_dispatcher import dispatch_post_data
-from core.settings import is_no_send_mode
+from core.settings import (
+    COMMON_HEADERS,
+    ERROR_FILE,
+    SEND_LOG_FILE,
+    MAX_DOCUMENT_SIZE,
+    MAX_PHOTO_SIZE,
+    MAX_PHOTO_TOTAL_PIXEL,
+    MAX_VIDEO_SIZE,
+    PLATFORM_JSON_ROOTS,
+    PLATFORM_MEDIA_ROOTS,
+    RATE_LIMIT_STATE,
+)
 
-script_directory = os.path.dirname(os.path.abspath(__file__))
-project_root = Path(__file__).resolve().parent.parent
-logs_directory = project_root / 'logs'
-logs_directory.mkdir(exist_ok=True)
-download_save_root_directory = '/root/download'
-MAX_PHOTO_SIZE = 10 * 1024 * 1024
-MAX_PHOTO_TOTAL_PIXEL = 7000
-MAX_VIDEO_SIZE = 500 * 1024 * 1024
-MAX_DOCUMENT_SIZE = 500 * 1024 * 1024
-ERROR_TOKEN = os.getenv('ERROR_TELEGRAM_BOT_TOKEN', '')
-DEVELOPER_CHAT_ID = 708424141
-SCRAPY_FAVORITE_LIMIT = 100
-count = 0  # 发送了消息数量
-times = 0  # 第几次发送
-rate = 60  # 每分钟限制发送消息数
+
+def get_platform_download_dir(platform: str, username: str) -> str:
+    """返回平台媒体文件目录。"""
+    return os.path.join(PLATFORM_MEDIA_ROOTS[platform], username)
+
+
+def get_platform_json_root(platform: str) -> str:
+    """返回平台 JSON 根目录。"""
+    return PLATFORM_JSON_ROOTS[platform]
+
+
+def get_platform_json_dir(platform: str, username: str) -> str:
+    """返回平台用户 JSON 目录。"""
+    return os.path.join(get_platform_json_root(platform), username)
+
+
+def build_platform_media_path(platform: str, username: str, filename: str) -> str:
+    """拼出平台媒体文件完整路径。"""
+    return os.path.join(get_platform_download_dir(platform, username), filename)
+
+
+def build_platform_json_path(platform: str, username: str, filename: str) -> str:
+    """拼出平台 JSON 文件完整路径。"""
+    return os.path.join(get_platform_json_dir(platform, username), filename)
+
+
+def read_text_file(path: str | Path, *, encoding: str = 'utf-8') -> str:
+    """读取文本文件内容。"""
+    with open(path, encoding=encoding) as file_obj:
+        return file_obj.read()
+
+
+def load_netscape_cookies(path: str | Path) -> dict[str, str]:
+    """从 Netscape cookies 文件中提取 requests 可用的键值对。"""
+    cookies: dict[str, str] = {}
+    with open(path, encoding='utf8') as cookie_file:
+        for raw_line in cookie_file:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith('#') and not line.startswith('#HttpOnly_'):
+                continue
+            parts = line.split('\t')
+            if len(parts) != 7:
+                continue
+            cookies[parts[5].strip()] = parts[6].strip()
+    return cookies
+
+
+def build_browser_headers(*,
+                          referer: str | None = None,
+                          cookie: str | None = None,
+                          accept: str | None = None,
+                          user_agent: str | None = None,
+                          extra: dict[str, str] | None = None) -> dict[str, str]:
+    """构建平台共用的浏览器请求头。"""
+    headers = {
+        'User-Agent': user_agent or COMMON_HEADERS['user_agent'],
+        'Accept-Language': COMMON_HEADERS['accept_language'],
+    }
+    if accept:
+        headers['Accept'] = accept
+    if referer:
+        headers['Referer'] = referer
+    if cookie:
+        headers['Cookie'] = cookie
+    if extra:
+        headers.update(extra)
+    return headers
 
 
 def convert_bytes_to_human_readable(num_bytes):
@@ -33,28 +96,13 @@ def convert_bytes_to_human_readable(num_bytes):
         num_bytes /= 1024.0
 
 
-def get_duration_from_cv2(filepath):
-    """
-    获取视频文件文件的持续时间
-    :param filepath: 文件地址
-    :return: 文件持续时间，错误文件则返回0
-    """
-    cap = cv2.VideoCapture(filepath)
-    if cap.isOpened():
-        rate = cap.get(5)
-        frame_num = cap.get(7)
-        duration = frame_num / rate
-        return duration
-    return 0
-
-
 def download_log(response):
     response = response.json()
     messages = response['messages']
     message = messages[-1]
     log = (message['USERNAME'] + " " + message['CREATE_TIME'] + " " + message['DATE_TIME'] +
            " " + message['URL'] + " " + message['TEXT_RAW'].replace('\n', ' '))
-    with open(logs_directory / 'send.log', 'a', encoding='utf-8') as f:
+    with open(SEND_LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(log + "\n")
 
 
@@ -69,46 +117,17 @@ def bytes2md5(r_bytes):
     return file_hash.hexdigest()
 
 
-def save_content(save_path, response):
-    """
-    保存内容到本地
-    :param save_path: 文件保存地址
-    :param response: 请求下载响应
-    :return: 文件地址
-    """
-    try:
-        with open(save_path, mode='wb', buffering=8192) as f:
-            for chunk in response.iter_content(chunk_size=8192):  # Adjust the chunk size as needed
-                if chunk:
-                    f.write(chunk)
-        return True
-    except OSError as e:
-        print(e)
-        return False
-
-
-def request_webhook(method, post_data, logger):
-    # 保留旧调用接口名，内部已改为本地分发，不再走 HTTP webhook。
-    if is_no_send_mode():
-        return SimpleNamespace(status_code=200, json=lambda: {'messages': []})
-    if method != '/main':
-        logger.info(f'unsupported method: {method}')
-        return None
-    return dispatch_post_data(post_data)
-
-
-def rate_control(r, logger):
-    global count, times, rate
-    count = count + len(r.json()['messages'])
-    if count // rate > times:
-        times += 1
-        sleep_time = 60 * (1 + times / 10)
-        logger.info(str(count) + f"  sleep {sleep_time} seconds")
+def rate_control(send_result, logger):
+    RATE_LIMIT_STATE['count'] += len(send_result['messages'])
+    if RATE_LIMIT_STATE['count'] // RATE_LIMIT_STATE['rate'] > RATE_LIMIT_STATE['times']:
+        RATE_LIMIT_STATE['times'] += 1
+        sleep_time = 60 * (1 + RATE_LIMIT_STATE['times'] / 10)
+        logger.info(str(RATE_LIMIT_STATE['count']) + f"  sleep {sleep_time} seconds")
         sleep(sleep_time)
 
 
 def log_error(url, text=''):
-    with open(project_root / 'error.txt', 'a', encoding='utf-8') as f:
+    with open(ERROR_FILE, 'a', encoding='utf-8') as f:
         f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 处理 {url} 失败  {text}\n")
 
 

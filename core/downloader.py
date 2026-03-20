@@ -17,8 +17,12 @@ from urllib3.util.retry import Retry
 from yt_dlp import YoutubeDL
 from datetime import datetime
 from core.post import BasePost, MediaItem
-from core.settings import is_download_progress_enabled
-from core.utils import download_save_root_directory, handler_file, convert_bytes_to_human_readable
+from core.settings import BILIBILI_COOKIE_PATH, DOWNLOAD_ROOT, is_download_progress_enabled
+from core.utils import (
+    convert_bytes_to_human_readable,
+    get_platform_json_dir,
+    handler_file,
+)
 from rich.console import Console
 from rich.progress import (
     Progress,
@@ -234,7 +238,7 @@ class Downloader:
     def __init__(
             self,
             *,
-            root_dir: str = download_save_root_directory,
+            root_dir: str = DOWNLOAD_ROOT,
             timeout: int = 30,
             max_retries: int = 3,
             max_workers: int = 4,
@@ -504,13 +508,14 @@ class Downloader:
     @staticmethod
     def _bilibili_cookie_path() -> Path:
         """返回 Bilibili cookies 文件路径。"""
-        return Path(__file__).resolve().parent.parent / "cookies" / "bl.txt"
+        return BILIBILI_COOKIE_PATH
 
     def _move_bilibili_infojson(self, final_path: str):
         """将 `yt-dlp` 生成的 `.info.json` 统一归档到 json 目录。"""
         infojson_path = f"{os.path.splitext(final_path)[0]}.info.json"
         if not os.path.exists(infojson_path):
             return
-        save_path = os.path.join(self.root_dir, "bilibili", "json", os.path.basename(infojson_path))
+        username = os.path.basename(os.path.dirname(final_path))
+        save_path = os.path.join(get_platform_json_dir('bilibili', username), os.path.basename(infojson_path))
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         os.replace(infojson_path, save_path)
