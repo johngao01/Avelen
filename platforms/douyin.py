@@ -1057,6 +1057,12 @@ class Aweme(BasePost):
         post_data['files'] = files[0] if len(files) == 1 else files
         return post_data
 
+    def start(self):
+        if self.duration > 1800000:
+            return False, self.__str__() + " 视频过长，跳过处理"
+        else:
+            return True, self.__str__()
+
 
 def get_url_id(share_info: str):
     if share_info.startswith('https://www.douyin.com'):
@@ -1285,9 +1291,7 @@ class DouyinScrapy(BasePlatform):
         """按抖音平台规则过滤出真正要处理的作品。"""
         new_post = []
         for post in self.post:
-            if post.duration > 1800000:
-                continue
-            if post.aweme_url in sent_urls:
+            if post.aweme_url in sent_urls or post.create_time < self.scraping.latest_time:
                 continue
             new_post.append(post)
         if self.scraping.username != 'favorite':

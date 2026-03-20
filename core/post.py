@@ -45,6 +45,14 @@ class BasePost(ABC):
         return f'{self.username} {self.create_time} {self.url} {self.text_raw}'
 
     @abstractmethod
+    def start(self):
+        """post开始处理处理的函数
+
+        返回 是否处理，post一般信息 + （额外信息）
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def build_media_items(self) -> list[MediaItem]:
         """将平台原始媒体结构转换成统一的 `MediaItem` 列表。
 

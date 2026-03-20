@@ -269,30 +269,24 @@ class WeiboPost(BasePost):
             return standardize_weibo_date(self.data['edit_at'])
         return standardize_weibo_date(self.data['created_at'])
 
-
-def classify_weibo_post(post: WeiboPost, expected_userid: str | None = None) -> tuple[bool, str]:
-    """判断微博是否应进入统一发送流水线，并返回用于日志的类型描述。"""
-    weibo_dict = post.data
-    if weibo_dict.get('mblog_vip_type') == 1:
-        return False, 'V+微博'
-    if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
-            weibo_dict.get('retweeted_status', {}).get('user'), dict):
-        return False, '转发微博'
-    if expected_userid and weibo_dict.get('user', {}).get('idstr') != expected_userid:
-        return False, '转发微博'
-    if weibo_dict.get('mix_media_info', {}).get('items'):
-        return True, '图片视频微博'
-    if isinstance(weibo_dict.get('pic_ids'), list) and weibo_dict.get('pic_ids'):
-        return True, '图片微博'
-    media_info = (weibo_dict.get('page_info') or {}).get('media_info') or {}
-    if any(media_info.get(key) for key in VIDEO_URL_KEYS):
-        return True, '视频微博'
-    return False, '文字微博'
-
-
-def format_weibo_post_log(post: WeiboPost, label: str) -> str:
-    text = (post.text_raw or '').replace('\n', '\t')
-    return '\t'.join([post.url, post.create_time.strftime("%Y-%m-%d %H:%M:%S"), text, label])
+    def start(self, expected_userid: str | None = None):
+        """判断微博是否应进入统一发送流水线，并返回用于日志的类型描述。"""
+        weibo_dict = self.data
+        if weibo_dict.get('mblog_vip_type') == 1:
+            return False, self.__str__() + ' V+微博'
+        if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
+                weibo_dict.get('retweeted_status', {}).get('user'), dict):
+            return False, self.__str__() + ' 转发微博'
+        if expected_userid and weibo_dict.get('user', {}).get('idstr') != expected_userid:
+            return False, self.__str__() + ' 转发微博'
+        if weibo_dict.get('mix_media_info', {}).get('items'):
+            return True, self.__str__() + ' 图片视频微博'
+        if isinstance(weibo_dict.get('pic_ids'), list) and weibo_dict.get('pic_ids'):
+            return True, self.__str__() + ' 图片微博'
+        media_info = (weibo_dict.get('page_info') or {}).get('media_info') or {}
+        if any(media_info.get(key) for key in VIDEO_URL_KEYS):
+            return True, self.__str__() + ' 视频微博'
+        return False, self.__str__() + ' 文字微博'
 
 
 def get_weibo_data(weibo_link):
@@ -355,8 +349,8 @@ def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=
         return post
 
     expected_userid = None if username == 'favorite' else userid
-    should_process, label = classify_weibo_post(post, expected_userid)
-    weibo_logger.info(f"{weibo_index}\t{format_weibo_post_log(post, label)}")
+    should_process, start_message = post.start(expected_userid)
+    weibo_logger.info(f"{weibo_index}\t{start_message}")
     if not should_process:
         return 'skip'
     return dispatch_post(post, weibo_logger)
@@ -502,13 +496,6 @@ class WeiboScrapy(BasePlatform):
 
         weibo_logger.info(f'{self.username} 从本地 JSON 获取到 {len(self.post)} 个微博')
 
-    def classify_post(self, post: WeiboPost) -> tuple[bool, str]:
-        """按当前抓取账号上下文判断微博是否需要进入发送流程。"""
-        return classify_weibo_post(
-            post,
-            None if self.username == 'favorite' else self.userid,
-        )
-
     def filter_new_post(self, sent_urls: set[str]) -> list[WeiboPost]:
         """过滤出真正的新微博。
 
@@ -520,15 +507,9 @@ class WeiboScrapy(BasePlatform):
             if post.url in sent_urls or post.create_time < self.scraping.latest_time:
                 continue
             new_post.append(post)
-        new_post.sort(key=lambda item: item.create_time)
+        if self.scraping.username != 'favorite':
+            new_post.sort(key=lambda x: x.create_time)
         return new_post
-
-    def dispatch_one_post(self, post: WeiboPost):
-        """处理单条新微博；不需要发送的微博在这里返回 skip。"""
-        should_process, _ = self.classify_post(post)
-        if not should_process:
-            return 'skip'
-        return dispatch_post(post, weibo_logger)
 
     def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
         """执行当前 following 的完整微博抓取、过滤和发送流程。"""
@@ -546,7 +527,7 @@ class WeiboScrapy(BasePlatform):
 
         summary = run_posts(
             new_post,
-            dispatch_one=self.dispatch_one_post,
+            dispatch_one=lambda post: dispatch_post(post, weibo_logger),
             logger=weibo_logger
         )
         update_after_batch(lambda: update_db(

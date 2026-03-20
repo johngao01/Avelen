@@ -65,14 +65,18 @@ def run_posts(posts: list[Any],
         latest_post=ordered_posts[-1] if ordered_posts else None,
     )
     for index, post in enumerate(ordered_posts, start=1):
-        logger.info(f"{index}/{summary.total}\t{post}")
-        status = handle_dispatch_result(dispatch_one(post), logger, post.url)
-        if status == 'success':
-            summary.success += 1
-        elif status == 'skip':
+        skip, start_message = post.start()
+        logger.info(f"{index}/{summary.total}\t{start_message}")
+        if skip:
             summary.skipped += 1
         else:
-            summary.failure += 1
+            status = handle_dispatch_result(dispatch_one(post), logger, post.url)
+            if status == 'success':
+                summary.success += 1
+            elif status == 'skip':
+                summary.skipped += 1
+            else:
+                summary.failure += 1
     return summary
 
 
