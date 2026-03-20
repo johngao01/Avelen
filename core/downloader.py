@@ -435,10 +435,10 @@ class Downloader:
                     "noprogress": True,
                     "quiet": True,
                 }) as ydl:
-                    ydl.extract_info(task.url, download=True)
-            final_path = task.save_path
-            if not os.path.exists(final_path):
-                final_path = self._find_downloaded_path(task.save_path)
+                    video = ydl.extract_info(task.url, download=True)
+                    if not video:
+                        return DownloadResult(task=task, ok=False, error="yt-dlp download error")
+            final_path = task.save_path = ydl.prepare_filename(video)
             if not final_path or not os.path.exists(final_path):
                 return DownloadResult(task=task, ok=False, error="yt-dlp output missing")
             progress_tracker.finish(final_path)
