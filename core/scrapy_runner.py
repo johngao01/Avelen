@@ -58,20 +58,15 @@ def update_after_batch(on_update=None):
 
 def run_posts(posts: list[Any],
               dispatch_one: Callable[[Any], Any],
-              logger,
-              *,
-              describe_post: Callable[[Any], str] | None = None,
-              url_of: Callable[[Any], str] | None = None) -> PostProcessSummary:
+              logger) -> PostProcessSummary:
     ordered_posts = list(posts)
     summary = PostProcessSummary(
         total=len(ordered_posts),
         latest_post=ordered_posts[-1] if ordered_posts else None,
     )
     for index, post in enumerate(ordered_posts, start=1):
-        post_text = describe_post(post) if describe_post else str(post)
-        logger.info(f"{index}/{summary.total}\t{post_text}")
-        post_url = url_of(post) if url_of else getattr(post, 'url', post_text)
-        status = handle_dispatch_result(dispatch_one(post), logger, post_url)
+        logger.info(f"{index}/{summary.total}\t{post}")
+        status = handle_dispatch_result(dispatch_one(post), logger, post.url)
         if status == 'success':
             summary.success += 1
         elif status == 'skip':
