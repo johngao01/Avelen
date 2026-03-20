@@ -405,7 +405,7 @@ class Downloader:
         progress_tracker = DownloadProgress(task.save_path, progress=progress)
         try:
             with progress_tracker.live():
-                with YoutubeDL({
+                with YoutubeDL({  # type: ignore
                     'logger': self.logger,
                     "cookiefile": str(self._bilibili_cookie_path()),
                     "outtmpl": task.save_path,
