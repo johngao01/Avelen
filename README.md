@@ -2,49 +2,52 @@
 
 一个面向个人使用的多平台内容抓取与 Telegram 分发项目。
 
-项目当前支持抓取以下平台的新内容：
+当前支持平台：
 
 - 微博
 - 抖音
 - Instagram
 - Bilibili
 
-抓取到的内容会被统一解析、下载到本地，然后通过 Telegram Bot 发送给指定聊天，并把发送结果写入 MySQL，避免重复发送。
+项目会轮询数据库中的关注对象，抓取新内容，统一整理为内部 `Post` 结构，下载媒体文件，然后通过 Telegram Bot 发送，并把发送结果写入 MySQL 以便去重、补发和后续管理。
 
-## 项目目标
+## 项目特点
 
-这个项目主要解决一件事：
+- 统一入口：`main.py` 根据平台名选择对应抓取器运行
+- 统一模型：四个平台都收敛到 `BasePost` / `MediaItem`
+- 统一下载：`core/downloader.py` 负责并发下载、进度条、Bilibili `yt-dlp`
+- 统一发送：`core/sender_dispatcher.py` 串行发送到 Telegram 并即时落库
+- 统一配置：`core/settings.py` 在导入时只读取一次 `config/platforms.toml`
+- 统一目录：媒体和 JSON 都按平台 / 用户名组织
 
-1. 从多个平台轮询关注对象的新内容
-2. 把不同平台的数据统一成同一种内部结构
-3. 下载图片 / 视频等媒体到本地
-4. 通过 Telegram Bot 发送媒体和文本
-5. 记录发送结果，便于去重、补发和后续管理
-
-## 当前目录结构
+## 当前结构
 
 ```text
 weibo_tg_bot/
   main.py
+  README.md
+  pyproject.toml
+  requirements.txt
+  .env.example
+
+  config/
+    platforms.toml
+
+  core/
+    database.py
+    downloader.py
+    models.py
+    scrapy_runner.py
+    sender_dispatcher.py
+    settings.py
+    utils.py
 
   platforms/
+    __init__.py
     weibo.py
     douyin.py
     instagram.py
     bilibili.py
-
-  core/
-    platform.py
-    post.py
-    downloader.py
-    sender_dispatcher.py
-    scrapy_runner.py
-    following.py
-    database.py
-    settings.py
-    utils.py
-    package.py
-    pipeline.py
 
   ops/
     manage.py
@@ -56,189 +59,109 @@ weibo_tg_bot/
 
   cookies/
   logs/
-  .env.example
-  pyproject.toml
 ```
 
-### 目录职责
-
-- `main.py`
-  - 统一入口
-  - 根据平台名选择对应的 `Platform` 类并运行
-
-- `platforms/`
-  - 每个平台只有一个脚本
-  - 同时包含抓取、解析、下载协调、发送入口
-  - 暴露统一的 `Platform` 类给根目录入口注册
-
-- `core/`
-  - 平台共用的核心能力
-  - 包括平台基类、数据模型、下载器、发送分发、数据库、运行参数等
-
-- `ops/`
-  - 非主抓取链路的运维/辅助脚本
-  - 比如管理用户、补发错误、下载历史媒体、批量修改消息
-
-## 核心工作流
-
-主流程大致如下：
+## 核心流程
 
 ```text
 main.py
   -> platforms registry
-    -> selected Platform class
-      -> platforms/<platform>.py
-    -> 读取 user 表中的关注对象
-    -> 抓取平台内容
-    -> 转成 BasePost / MediaItem
-    -> Downloader 下载媒体
-    -> sender_dispatcher 发送到 Telegram
-    -> messages 表写入发送记录
-    -> user 表更新 latest_time / scrapy_time
+  -> 选择平台类
+  -> 查询 user 表关注对象
+  -> 抓取平台内容
+  -> 转成 BasePost / MediaItem
+  -> Downloader 下载媒体
+  -> sender_dispatcher 发送 Telegram
+  -> messages 表写入发送记录
+  -> user 表更新 latest_time / scrapy_time
 ```
 
-### 关键模块
+## 核心模块说明
 
-- `core/post.py`
-  - 定义统一内容结构
-  - `BasePost`：平台内容基类
-  - `MediaItem`：待下载媒体描述
+### `main.py`
 
-- `core/platform.py`
-  - 定义统一平台入口基类
-  - 每个平台通过 `Platform.run(argv)` 暴露启动能力
+统一入口，只负责：
 
-- `core/downloader.py`
-  - 统一下载入口
-  - 负责重试、Session 复用、落地文件、媒体分类
+- 解析平台名
+- 从 `platforms` 注册表选择平台类
+- 将剩余参数透传给平台的 `run()` 方法
 
-- `core/sender_dispatcher.py`
-  - 统一 Telegram 发送
-  - 串行发送，避免多个抓取任务互相打乱
-  - 发送后立即写数据库
+### `platforms/`
 
-- `core/database.py`
-  - MySQL 读写
-  - 查询关注对象、去重 URL、更新抓取时间、管理用户
+每个平台一个脚本，负责：
 
-- `core/scrapy_runner.py`
-  - 平台通用 CLI 参数
-  - 平台通用“遍历关注对象并执行”的入口
+- 平台关注对象模型
+- 平台原始数据抓取
+- 平台 `Post` 解析
+- 本地 JSON 回放
+- 进入公共抓取 / 下载 / 发送流程
 
-## 支持的平台脚本
+当前平台类：
 
-根目录 `main.py` 不再通过 `runpy` 按模块字符串跳转，而是先根据平台名从注册表中选择对应的平台类，再把剩余 CLI 参数透传给该类。
+- `WeiboScrapy`
+- `DouyinScrapy`
+- `InstagramScrapy`（对外兼容 `InstagramPlatform`）
+- `BilibiliScrapy`
 
-### `platforms/weibo.py`
+其中 Bilibili 还支持别名：
 
-负责：
+- `bili`
 
-- 微博关注对象模型
-- 微博接口抓取
-- 单条微博解析
-- 图片 / livephoto / 视频下载与分发
+### `core/models.py`
 
-适用命令：
+统一数据模型与抽象基类：
 
-```bash
-python main.py weibo
-```
+- `FollowUser`
+- `MediaItem`
+- `BasePost`
+- `BasePlatform`
+- `get_platform_logger()`
 
-### `platforms/douyin.py`
+`BasePost.__str__()` 现在统一输出创建时间、URL 和文案摘要，平台日志不再额外维护一套重复格式化函数。
 
-负责：
+### `core/scrapy_runner.py`
 
-- 抖音关注对象模型
-- 抖音作品列表抓取
-- `Aweme` 解析
-- 视频 / 图文笔记下载与分发
+平台公共运行壳层，负责：
 
-适用命令：
+- 构建公共 CLI 参数
+- 按条件筛选数据库中的关注对象
+- 控制 `--no-send`
+- 控制 `--download-progress` / `--no-download-progress`
+- 统一执行“抓取 -> 过滤 -> 下载 -> 发送 -> 回写数据库”
 
-```bash
-python main.py douyin
-```
+### `core/downloader.py`
 
-### `platforms/instagram.py`
+统一下载器，负责：
 
-负责：
+- 将 `BasePost.build_media_items()` 转成 `DownloadTask`
+- 多文件并发下载
+- Rich 下载进度条
+- Bilibili 视频自动切换到 `yt-dlp`
+- 下载结果统一转成发送层可直接消费的数据
 
-- Instagram 关注对象模型
-- GraphQL 抓取
-- 帖子解析
-- 图片 / 视频下载与分发
+### `core/sender_dispatcher.py`
 
-适用命令：
+统一 Telegram 发送器，负责：
 
-```bash
-python main.py instagram
-```
+- 串行发送，避免多抓取任务交错
+- 文件和文本消息分别发送
+- 发送完成后立即写入 `messages` 表
 
-### `platforms/bilibili.py`
+### `core/settings.py`
 
-负责：
+统一配置入口，职责很简单：
 
-- B 站关注对象模型
-- 动态抓取
-- 视频动态 / 图文动态解析
-- Bilibili 视频下载与分发
+- 只负责全局配置和运行时开关
+- 启动时读取一次 `config/platforms.toml`
+- 暴露下载目录、Cookie 路径、日志路径、平台配置等常量
 
-适用命令：
+## 配置说明
 
-```bash
-python main.py bilibili
-```
+### 1. Python 与依赖
 
-也支持别名：
-
-```bash
-python main.py bili
-```
-
-## 运维脚本
-
-### `ops/manage.py`
-
-一个 Telegram 管理脚本，主要用于：
-
-- 查询关注用户
-- 增加/修改关注对象
-- 按平台筛选用户
-- 手动重发部分内容
-
-### `ops/nicefuturebot.py`
-
-一个偏老的 Telegram 交互脚本，用来：
-
-- 通过 Telegram 文本命令触发抓取
-- 删除/重发消息
-- 做简单的错误处理
-
-### `ops/deal_error.py`
-
-读取 `error.txt` 中失败记录，尝试重新处理失败的微博/抖音内容。
-
-### `ops/chat_download.py`
-
-使用 Telethon 从 Telegram 聊天历史中回拉媒体文件到本地。
-
-### `ops/modify_msg.py`
-
-批量编辑已经发送到 Telegram 的消息文本，一般用于修复历史消息格式或用户名。
-
-### `ops/modify_msg_legacy.py`
-
-旧版本修改脚本，功能与 `ops/modify_msg.py` 接近，建议仅作参考或历史保留。
-
-## 安装要求
-
-### Python
+要求：
 
 - Python 3.12+
-
-### 依赖
-
-项目依赖定义在 `pyproject.toml`。
 
 推荐使用 `uv`：
 
@@ -252,15 +175,15 @@ uv sync
 pip install -r requirements.txt
 ```
 
-如果你完全依赖 `pyproject.toml`，也可以：
+如果你使用 `pyproject.toml` 安装：
 
 ```bash
 pip install -e .
 ```
 
-## 环境变量
+### 2. 环境变量
 
-可参考 `.env.example`：
+参考 [.env.example](./.env.example)：
 
 ```env
 # Telegram
@@ -275,79 +198,195 @@ MYSQL_PORT=3306
 MYSQL_DB=nicebot
 ```
 
-### 说明
+主流程实际依赖的核心环境变量：
 
 - `TELEGRAM_BOT_TOKEN`
-  - 主发送 Bot 的 token
+- `MYSQL_HOST`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+- `MYSQL_PORT`
+- `MYSQL_DB`
 
-- `ERROR_TELEGRAM_BOT_TOKEN`
-  - 当前代码里保留了错误通知相关变量，但主流程主要依赖 `TELEGRAM_BOT_TOKEN`
+可选环境变量：
 
-- `MYSQL_*`
-  - 用于连接 MySQL
+- `DOWNLOAD_ROOT`
+  作用：覆盖 `config/platforms.toml` 中的默认下载根目录
 
-## 额外运行前提
+### 3. 平台配置文件
 
-### 1. Cookie 文件
+平台公共配置在 [config/platforms.toml](./config/platforms.toml)。
 
-项目依赖本地 cookie 文件，不同平台使用不同文件：
+当前包含：
+
+- 下载根目录
+- 公共请求头
+- 各平台基础 URL
+- 各平台 Cookie 文件名
+
+这个文件会在 `core.settings` 导入时读取一次，其他模块直接使用已加载的常量，不会反复做配置文件 IO。
+
+### 4. Cookie 文件
+
+项目依赖本地 Cookie 文件，请将对应文件放到 `cookies/` 目录：
 
 - 微博：`cookies/johnjohn01.txt`
 - 抖音：`cookies/小号.txt`
-- 抖音收藏/特殊场景：`cookies/大号.txt`
+- 抖音收藏：`cookies/大号.txt`
 - Instagram：`cookies/neverblock11.txt`
 - Bilibili：`cookies/bl.txt`
 
-如果 cookie 失效，抓取会失败或返回空数据。
+如果 Cookie 失效，抓取可能失败、返回空数据或被风控。
 
-### 2. Telegram Bot API Server
+## 下载目录约定
 
-当前发送逻辑默认连接本地 Telegram Bot API Server：
+默认下载根目录来自 `config/platforms.toml`：
+
+```toml
+[paths]
+download_root = "/root/download"
+```
+
+也可以通过环境变量 `DOWNLOAD_ROOT` 覆盖。
+
+当前目录规则统一为：
+
+- 媒体文件：`<DOWNLOAD_ROOT>/<platform>/<username>/<filename>`
+- JSON 文件：`<DOWNLOAD_ROOT>/<platform>/json/<username>/<filename>`
+
+例如：
+
+```text
+/root/download/weibo/some_user/20260320_xxx.jpg
+/root/download/bilibili/json/some_user/123456.info.json
+```
+
+## 运行方式
+
+### 查看主入口帮助
+
+```bash
+python main.py --help
+```
+
+### 查看某个平台帮助
+
+```bash
+python main.py weibo --help
+python main.py douyin --help
+python main.py instagram --help
+python main.py bilibili --help
+```
+
+也可以直接运行平台脚本：
+
+```bash
+python platforms/weibo.py --help
+python platforms/douyin.py --help
+python platforms/instagram.py --help
+python platforms/bilibili.py --help
+```
+
+### 常用命令
+
+抓取某个平台：
+
+```bash
+python main.py weibo
+python main.py douyin
+python main.py instagram
+python main.py bilibili
+```
+
+使用 Bilibili 别名：
+
+```bash
+python main.py bili
+```
+
+只抓取和下载，不发送 Telegram：
+
+```bash
+python main.py weibo --no-send
+```
+
+关闭下载进度条：
+
+```bash
+python main.py bilibili --no-download-progress
+```
+
+从本地 JSON 回放：
+
+```bash
+python main.py weibo --local-json
+python main.py instagram --local-json
+```
+
+按用户筛选：
+
+```bash
+python main.py weibo --user-id 123456
+python main.py douyin --username favorite
+```
+
+按关注类型筛选：
+
+```bash
+python main.py instagram --valid 1
+python main.py bilibili --valid 1 2
+```
+
+按时间窗口筛选：
+
+```bash
+python main.py weibo --latest-time-start "2026-03-01 00:00:00"
+python main.py weibo --latest-time-end "2026-03-15 23:59:59"
+python main.py douyin --scrapy-time-start "2026-03-01 00:00:00"
+```
+
+### 公共 CLI 参数
+
+各平台统一支持以下参数：
+
+- `--valid`
+- `--user-id`
+- `--username`
+- `--latest-time-start`
+- `--latest-time-end`
+- `--scrapy-time-start`
+- `--scrapy-time-end`
+- `--no-send`
+- `--download-progress` / `--no-download-progress`
+- `--local-json`
+
+## Telegram 发送说明
+
+当前发送逻辑默认连接本地 Telegram Bot API Server，而不是直接使用公网默认地址。
+
+固定地址在 [core/sender_dispatcher.py](./core/sender_dispatcher.py)：
 
 - `http://localhost:8081/bot`
 - `http://localhost:8081/file/bot`
 
-也就是说：
+这意味着运行前需要满足以下条件之一：
 
-- 项目不是直接走默认公网 Bot API
-- 需要本机/服务器已经部署并启动了本地 Bot API Server
-
-相关代码在：
-
-- `core/sender_dispatcher.py`
-- `ops/nicefuturebot.py`
-
-### 3. 下载目录
-
-媒体下载根目录当前写死为：
-
-```text
-/root/download
-```
-
-定义位置：
-
-- `core/utils.py`
-
-这意味着：
-
-- 在 Linux / Docker 环境下更自然
-- 在 Windows 上运行时，建议先确认这个路径是否符合你的部署方式
+- 你已经部署并启动了本地 Bot API Server
+- 或者你自行修改发送器中的 `base_url` / `base_file_url`
 
 ## 数据库说明
 
-### `user` 表
+项目主要依赖两个表：
 
-主流程依赖 `user` 表保存关注对象。
+### `user`
 
-从代码使用方式看，至少需要这些字段：
+用于保存关注对象，主流程至少依赖这些字段：
 
 - `userid`
 - `username`
-- `latest_time`
 - `platform`
-- `scrapy_time`
 - `valid`
+- `latest_time`
+- `scrapy_time`
 
 其中：
 
@@ -357,11 +396,9 @@ MYSQL_DB=nicebot
   - `1`：特别关注
   - `2`：普通关注
 
-### `messages` 表
+### `messages`
 
-发送完成后，消息会写入 `messages` 表。
-
-当前插入使用的核心字段包括：
+用于保存发送结果和去重信息。代码中当前主要使用字段包括：
 
 - `MESSAGE_ID`
 - `CAPTION`
@@ -378,163 +415,70 @@ MYSQL_DB=nicebot
 - `MBLOGID`
 - `MSG_STR`
 
-该表主要用于：
-
-- URL 去重
-- 消息追踪
-- 历史补发
-- 管理脚本查询
-
-## 常用运行方式
-
-### 查看平台帮助
-
-```bash
-python main.py weibo --help
-python main.py douyin --help
-python main.py instagram --help
-python main.py bilibili --help
-```
-
-### 抓取某个平台
-
-```bash
-python main.py weibo
-python main.py douyin
-python main.py instagram
-python main.py bilibili
-```
-
-### 只抓取，不发送
-
-```bash
-python main.py weibo --no-send
-```
-
-这个模式下：
-
-- 会抓取和下载
-- 不发送 Telegram
-- 不更新用户 `latest_time`
-
-### 筛选部分用户
-
-按 `userid`：
-
-```bash
-python main.py weibo --user-id 123456
-```
-
-按 `username`：
-
-```bash
-python main.py douyin --username favorite
-```
-
-按关注类型：
-
-```bash
-python main.py instagram --valid 1
-python main.py bilibili --valid 1 2
-```
-
-按时间窗口：
-
-```bash
-python main.py weibo --latest-time-start "2026-03-01 00:00:00"
-python main.py weibo --latest-time-end "2026-03-15 23:59:59"
-```
-
-### Instagram 本地 JSON 模式
-
-```bash
-python main.py instagram --local-json
-```
-
-### Bilibili 本地 JSON 模式
-
-```bash
-python main.py bilibili --local-json
-```
-
 ## 日志与错误
 
-### 日志目录
+日志目录默认是 `logs/`。
 
-- 平台日志：`logs/`
-- 发送记录：`logs/send.log`
+当前主要文件：
 
-### 错误记录
+- 平台日志：`logs/scrapy_<platform>.log`
+- 发送日志：`logs/send.log`
+- 错误日志：`logs/error.txt`
 
-- `error.txt`
+## `ops/` 脚本说明
 
-一些失败内容可以通过：
+`ops/` 下的脚本不是主抓取入口，更多是个人运维和历史修复工具：
 
-```bash
-python ops/deal_error.py
-```
+- [ops/manage.py](./ops/manage.py)
+  Telegram 管理脚本
+- [ops/nicefuturebot.py](./ops/nicefuturebot.py)
+  较早期的 Telegram 交互脚本
+- [ops/deal_error.py](./ops/deal_error.py)
+  失败记录重试
+- [ops/chat_download.py](./ops/chat_download.py)
+  从 Telegram 历史回拉媒体
+- [ops/modify_msg.py](./ops/modify_msg.py)
+  批量修改已发送消息
 
-重新处理。
+这些脚本很多都带有真实副作用，例如：
 
-## 媒体处理规则
+- 直接连接 Telegram
+- 直接读写本地文件
+- 直接轮询 bot
 
-公共限制定义在 `core/utils.py`：
+使用前建议先阅读代码并确认其中的本地路径、Token、聊天 ID 和运行环境假设。
 
-- 图片上限：`10MB`
-- 视频上限：`500MB`
-- 文档上限：`500MB`
+## 当前推荐关注的代码入口
 
-发送前会统一判断媒体类型：
+如果你只关心主抓取链路，优先看这些文件：
 
-- `photo`
-- `video`
-- `document`
+- [main.py](./main.py)
+- [platforms/__init__.py](./platforms/__init__.py)
+- [platforms/weibo.py](./platforms/weibo.py)
+- [platforms/douyin.py](./platforms/douyin.py)
+- [platforms/instagram.py](./platforms/instagram.py)
+- [platforms/bilibili.py](./platforms/bilibili.py)
+- [core/models.py](./core/models.py)
+- [core/scrapy_runner.py](./core/scrapy_runner.py)
+- [core/downloader.py](./core/downloader.py)
+- [core/sender_dispatcher.py](./core/sender_dispatcher.py)
+- [core/database.py](./core/database.py)
+- [core/settings.py](./core/settings.py)
 
-Telegram 相册发送时还会做拆组，避免超出限制。
+## 当前状态
 
-## 设计说明
+目前主抓取入口已经整理为统一架构：
 
-这个项目现在采用的是：
+- 4 个平台都基于 `BasePlatform` / `BasePost`
+- 公共 CLI 参数已经统一
+- 下载目录和 JSON 目录已经统一
+- 下载进度条已经接入公共下载器
+- Bilibili 视频下载走 `yt-dlp`
+- 配置文件已经集中到 `config/platforms.toml`
 
-- 平台实现单文件化：每个平台一个脚本
-- 平台入口类注册：根入口只负责选择平台类并透传参数
-- 核心能力集中化：统一模型、统一下载、统一发送
-- 运维脚本隔离化：避免主抓取链路和辅助脚本混在一起
+## 注意事项
 
-相比旧结构，当前结构的好处是：
-
-- 更容易理解每个平台的完整流程
-- 公共逻辑更集中
-- 运维脚本不再和核心逻辑混放
-
-## 已知情况
-
-- 项目中仍保留少量历史脚本和旧风格代码
-- `ops/manage.py`、`ops/modify_msg.py` 等脚本存在若干 `SyntaxWarning`，但不影响当前主抓取入口的基本使用
-- 部分路径仍写死为 Linux 风格目录，如 `/root/download`
-- 部分平台高度依赖登录 cookie，cookie 失效后需要人工更新
-
-## 推荐使用方式
-
-如果你只关心主抓取链路，重点看这几个位置：
-
-- `main.py`
-- `platforms/`
-- `core/post.py`
-- `core/downloader.py`
-- `core/sender_dispatcher.py`
-- `core/database.py`
-
-如果你只关心管理和修复，重点看：
-
-- `ops/manage.py`
-- `ops/deal_error.py`
-- `ops/nicefuturebot.py`
-
-## 后续可继续优化的方向
-
-- 把下载根目录改为环境变量配置
-- 为数据库补充初始化 SQL
-- 清理历史运维脚本里的硬编码 token
-- 为 `ops/` 脚本补充更清晰的使用说明
-- 增加最基本的单元测试和集成测试
+- 项目高度依赖各平台登录 Cookie
+- Telegram 发送默认依赖本地 Bot API Server
+- `ops/` 脚本偏个人化，运行前先检查
+- Windows 终端里某些中文帮助文本可能出现编码显示问题，但不影响主入口运行
