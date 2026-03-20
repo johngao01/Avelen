@@ -957,7 +957,7 @@ class Aweme(BasePost):
     def build_media_items(self) -> list[MediaItem]:
         """把抖音作品里的视频/图文节点转换成统一媒体列表。"""
         # 下载请求需要带当前作品页 referer。
-        headers = {**favorite_headers, 'referer': self.aweme_url}
+        headers = {**favorite_headers, 'referer': self.url}
 
         # 文件名规则沿用原 AwemeMedia：描述最多 50 个字符，并去掉非法字符。
         desc = self.describe[:50] if len(self.describe) > 50 else self.describe
@@ -988,7 +988,7 @@ class Aweme(BasePost):
                     url_list,
                 ))
             if candidates:
-                candidates.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+                candidates.sort(key=lambda x: (x[0], x[1], x[2], x[3]))
                 return pick_url(candidates[-1][-1])
             if root_bit_rate and isinstance(root_bit_rate[0], dict):
                 return pick_url((root_bit_rate[0].get('play_addr') or {}).get('url_list') or [])
@@ -1011,7 +1011,7 @@ class Aweme(BasePost):
                 media_type=media_type,
                 filename_hint=filename_hint,
                 headers=headers,
-                referer=self.aweme_url,
+                referer=self.url,
                 ext=ext,
                 index=index,
             )
@@ -1028,21 +1028,21 @@ class Aweme(BasePost):
             )]
 
         items = []
-        for index, image in enumerate(self.media_info(), start=1):
+        for idx, image in enumerate(self.media_info(), start=1):
             items.append(make_item(
                 url=pick_url(image.get('url_list') or []),
                 media_type='photo',
-                filename_hint=os.path.join('images', self.username, f'{self.aweme_id}_{desc}_{index}.jpg'),
+                filename_hint=os.path.join('images', self.username, f'{self.aweme_id}_{desc}_{idx}.jpg'),
                 ext='jpg',
-                index=index,
+                index=idx,
             ))
             if 'video' in image:
                 items.append(make_item(
                     url=resolve_video_url(image['video']),
                     media_type='video',
-                    filename_hint=os.path.join(self.username, f'{self.aweme_id}_{desc}_{index}.mp4'),
+                    filename_hint=os.path.join(self.username, f'{self.aweme_id}_{desc}_{idx}.mp4'),
                     ext='mp4',
-                    index=index,
+                    index=idx,
                 ))
         return items
 
@@ -1103,8 +1103,8 @@ def get_aweme_detail(aweme_id):
         print('空数据')
         json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
         if json_path:
-            with open(json_path, encoding='utf-8') as f:
-                return json.load(f)
+            with open(json_path, encoding='utf-8') as f1:
+                return json.load(f1)
         return None
     response_json = json.loads(rs.text)
     if response_json['aweme_detail'] is None:
@@ -1112,8 +1112,8 @@ def get_aweme_detail(aweme_id):
             result = response_json['filter_detail']['notice']
         json_path = find_file_by_name('/root/download/douyin/json', f'{aweme_id}.json')
         if json_path:
-            with open(json_path, encoding='utf-8') as f:
-                return json.load(f)
+            with open(json_path, encoding='utf-8') as f2:
+                return json.load(f2)
     aweme = response_json['aweme_detail']
     return aweme
 
@@ -1129,7 +1129,7 @@ def handler_douyin(aweme):
         aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
     user = Following(aweme['author']['sec_uid'], 'favorite', '')
     post = Aweme(user, aweme)
-    return handle_dispatch_result(dispatch_post(post, scrapy_logger), scrapy_logger, post.aweme_url) == 'success'
+    return handle_dispatch_result(dispatch_post(post, scrapy_logger), scrapy_logger, post.url) == 'success'
 
 
 class DouyinScrapy(BasePlatform):
