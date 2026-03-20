@@ -906,7 +906,6 @@ class Aweme(BasePost):
         self.create_time = datetime.fromtimestamp(node['create_time'])
         self.is_video = self.judge_is_video()
 
-
     def save_json(self):
         """
         将抖音数据存储在本地保存为json文件
@@ -920,15 +919,11 @@ class Aweme(BasePost):
             json.dump(data, json_write, ensure_ascii=False, indent=4)
 
     @property
-    def aweme_url(self):
+    def url(self):
         if self.is_video:
             return video_url + self.aweme_id
         else:
             return note_url + self.aweme_id
-
-    @property
-    def create_time_str(self):
-        return self.create_time.strftime("%Y-%m-%d %H:%M:%S")
 
     def judge_is_video(self):
         if self._node.get('images'):
@@ -946,9 +941,6 @@ class Aweme(BasePost):
             return 'video'
         else:
             return 'images'
-
-    def __str__(self):
-        return f"{self.create_time_str} {self.aweme_url} {self.describe}"
 
     def media_info(self):
         if self.is_video:
@@ -1323,9 +1315,7 @@ class DouyinScrapy(BasePlatform):
         summary = run_posts(
             new_post,
             dispatch_one=lambda post: dispatch_post(post, scrapy_logger),
-            logger=scrapy_logger,
-            describe_post=str,
-            url_of=lambda post: post.aweme_url,
+            logger=scrapy_logger
         )
         update_after_batch(lambda: update_db(
             self.scraping.userid,

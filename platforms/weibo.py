@@ -131,10 +131,6 @@ class WeiboPost(BasePost):
         }
         self.is_top = weibo_data.get('isTop', 0)
 
-    def __str__(self):
-        """返回便于日志输出的微博摘要。"""
-        return f"{self.create_time.strftime('%Y-%m-%d %H:%M:%S')} {self.url} {self.text_raw}"
-
     def save_json(self):
         """将微博原始数据保存到本地 JSON，供本地回放模式复用。"""
         data = self.data.copy()
@@ -506,10 +502,6 @@ class WeiboScrapy(BasePlatform):
 
         weibo_logger.info(f'{self.username} 从本地 JSON 获取到 {len(self.post)} 个微博')
 
-    def describe_post(self, post: WeiboPost) -> str:
-        _, label = self.classify_post(post)
-        return format_weibo_post_log(post, label)
-
     def classify_post(self, post: WeiboPost) -> tuple[bool, str]:
         """按当前抓取账号上下文判断微博是否需要进入发送流程。"""
         return classify_weibo_post(
@@ -555,9 +547,7 @@ class WeiboScrapy(BasePlatform):
         summary = run_posts(
             new_post,
             dispatch_one=self.dispatch_one_post,
-            logger=weibo_logger,
-            describe_post=self.describe_post,
-            url_of=lambda post: post.url,
+            logger=weibo_logger
         )
         update_after_batch(lambda: update_db(
             self.scraping.userid,

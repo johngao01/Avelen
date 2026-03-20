@@ -40,6 +40,10 @@ class BasePost(ABC):
     create_time: datetime
     text_raw: str
 
+    def __str__(self) -> str:
+        """返回跨平台统一的日志摘要。"""
+        return f'{self.username} {self.create_time} {self.url} {self.text_raw}'
+
     @abstractmethod
     def build_media_items(self) -> list[MediaItem]:
         """将平台原始媒体结构转换成统一的 `MediaItem` 列表。
@@ -77,3 +81,9 @@ class BasePost(ABC):
             'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S'),
             'text_raw': self.text_raw,
         }
+
+    @property
+    def create_time_str(self):
+        if isinstance(self.create_time, datetime):
+            return self.create_time.strftime("%Y-%m-%d %H:%M:%S")
+        return '2099-12-12 12:12:12'
