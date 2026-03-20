@@ -17,6 +17,7 @@ from urllib3.util.retry import Retry
 from yt_dlp import YoutubeDL
 from datetime import datetime
 from core.post import BasePost, MediaItem
+from core.settings import is_download_progress_enabled
 from core.utils import download_save_root_directory, handler_file, convert_bytes_to_human_readable
 from rich.console import Console
 from rich.progress import (
@@ -41,20 +42,21 @@ class DownloadProgress:
     从而让多个文件同时显示在一组进度条中。
     """
 
-    def __init__(self, filename: str = "Download", progress: Progress | None = None):
+    def __init__(self, filename: str = "Download", progress: Progress | None = None, enabled: bool = True):
         self.start_time = None
         self.end_time = None
         self.total_size = 0
         self.final_filename = filename
+        self.enabled = enabled
         self.owns_progress = progress is None
 
         # 定义 Rich 进度条样式 (现代、简洁、带渐变感)
-        self.progress = progress or self._build_progress()
+        self.progress = progress if progress is not None else (self.build_progress() if enabled else None)
         self.task_id = None
         self.description = self._short_name(filename)
 
     @staticmethod
-    def _build_progress() -> Progress:
+    def build_progress() -> Progress:
         """构造统一风格的 Rich 进度条。"""
         return Progress(
             "   ",
@@ -76,6 +78,8 @@ class DownloadProgress:
         - 独占进度条时，真正启动/关闭 Rich 的 live 渲染。
         - 共享进度条时，避免重复进入同一个 `Progress` 上下文。
         """
+        if not self.enabled or self.progress is None:
+            return nullcontext()
         return self.progress if self.owns_progress else nullcontext()
 
     @staticmethod
@@ -85,6 +89,8 @@ class DownloadProgress:
 
     def start(self, filename: str | None = None, total: int | None = None):
         """初始化任务并在需要时创建对应进度条。"""
+        if not self.enabled or self.progress is None:
+            return
         if self.start_time is None:
             self.start_time = time.time()
         if filename:
@@ -103,6 +109,8 @@ class DownloadProgress:
 
     def update(self, completed: int, *, total: int | None = None, filename: str | None = None):
         """更新已下载字节数；如果总大小可知则一并更新。"""
+        if not self.enabled or self.progress is None:
+            return
         total = total if total and total > 0 else None
         if total is not None and completed > total:
             total = completed
@@ -121,6 +129,8 @@ class DownloadProgress:
 
     def finish(self, final_filename: str | None = None, total_size: int | None = None):
         """标记任务结束，并尽量补齐最终文件大小。"""
+        if not self.enabled or self.progress is None:
+            return
         if self.start_time is None:
             self.start_time = time.time()
         self.end_time = time.time()
@@ -139,6 +149,8 @@ class DownloadProgress:
 
     def progress_hook(self, d):
         """yt-dlp 回调函数"""
+        if not self.enabled:
+            return
         if d['status'] == 'downloading':
             total_size = d.get('total_bytes') or d.get('total_bytes_estimate')
             downloaded = d.get('downloaded_bytes', 0)
@@ -150,6 +162,8 @@ class DownloadProgress:
 
     def print_final_report(self):
         """下载完成后的单行精简输出"""
+        if not self.enabled:
+            return
         if not self.end_time or not self.start_time or not self.final_filename:
             return
 
@@ -224,6 +238,7 @@ class Downloader:
             timeout: int = 30,
             max_retries: int = 3,
             max_workers: int = 4,
+            show_progress: bool | None = None,
             logger=None,
             session: requests.Session | None = None,
     ):
@@ -231,6 +246,7 @@ class Downloader:
         self.timeout = timeout
         self.max_retries = max_retries
         self.max_workers = max_workers
+        self.show_progress = is_download_progress_enabled() if show_progress is None else show_progress
         self.logger = logger
         self._session = session
         self._session_local = local()
@@ -316,9 +332,9 @@ class Downloader:
             return [self._download_task(task) for task in tasks]
 
         results: list[DownloadResult | None] = [None] * len(tasks)
-        progress = DownloadProgress._build_progress()
+        progress = DownloadProgress.build_progress() if self.show_progress else None
         max_workers = min(self.max_workers, len(tasks))
-        with progress:
+        with (progress if progress is not None else nullcontext()):
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # future 与原始索引绑定，确保最终结果顺序稳定。
                 future_map = {
@@ -357,7 +373,7 @@ class Downloader:
         tmp_path = f"{task.save_path}.part"
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        progress_tracker = DownloadProgress(task.save_path, progress=progress)
+        progress_tracker = DownloadProgress(task.save_path, progress=progress, enabled=self.show_progress)
         try:
             response = self._get_session().get(
                 task.url,
@@ -402,7 +418,7 @@ class Downloader:
         if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
             return self._build_existing_result(task)
         os.makedirs(os.path.dirname(task.save_path), exist_ok=True)
-        progress_tracker = DownloadProgress(task.save_path, progress=progress)
+        progress_tracker = DownloadProgress(task.save_path, progress=progress, enabled=self.show_progress)
         try:
             with progress_tracker.live():
                 with YoutubeDL({  # type: ignore

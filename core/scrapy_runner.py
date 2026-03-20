@@ -6,7 +6,12 @@ import argparse
 from core.downloader import Downloader
 from core.database import get_filtered_followings
 from core.post import BasePost
-from core.settings import enable_no_send_mode, is_no_send_mode
+from core.settings import (
+    disable_download_progress,
+    enable_download_progress,
+    enable_no_send_mode,
+    is_no_send_mode,
+)
 from core.utils import download_log, log_error, rate_control, request_webhook
 
 
@@ -21,7 +26,7 @@ class PostProcessSummary:
 
 def dispatch_post(post: BasePost, logger):
     downloader = Downloader(logger=logger)
-    files = downloader.download_post(post)
+    files = downloader.download(post)
     post_data = post.to_dispatch_data(files)
     if not post_data:
         return '获取失败'
@@ -121,6 +126,8 @@ def build_common_cli_parser(default_valid=(1,)):
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
+    parser.add_argument('-dp', '--download-progress', action=argparse.BooleanOptionalAction, default=True,
+                        help='是否显示下载进度条，默认启用')
     parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
     return parser
 
@@ -149,4 +156,8 @@ def prepare_followings(platform: str, default_valid=(1,),
     args = parser.parse_args(argv)
     if getattr(args, 'no_send', False):
         enable_no_send_mode()
+    if getattr(args, 'download_progress', True):
+        enable_download_progress()
+    else:
+        disable_download_progress()
     return args, select_followings(platform, args)
