@@ -2,7 +2,7 @@
 FROM ubuntu:latest
 
 LABEL maintainer="johngao"
-ARG project=weibo_tg_bot
+ARG project=avelen
 ENV PYTHONPATH="/app/${project}"
 WORKDIR /app/${project}
 
@@ -17,4 +17,3 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY . /app/${project}
-

@@ -1,6 +1,8 @@
-# weibo-tg-bot
+# Avelen
 
-一个面向个人使用的多平台内容抓取与 Telegram 分发项目。
+Avelen 是一个面向个人使用的多平台内容抓取与 Telegram 分发项目。
+
+名字取意于爱情、追随与陪伴：安静地跟随关注对象，持续地抓取更新，并把重要内容稳定送达到 Telegram。
 
 当前支持平台：
 
@@ -9,7 +11,7 @@
 - Instagram
 - Bilibili
 
-项目会轮询数据库中的关注对象，抓取新内容，统一整理为内部 `Post` 结构，下载媒体文件，然后通过 Telegram Bot 发送，并把发送结果写入 MySQL 以便去重、补发和后续管理。
+项目会轮询数据库中的关注对象，抓取新内容，统一整理为内部 `Post` 结构，下载媒体文件，然后通过 Telegram Bot 发送，并把发送结果写入 MySQL，以便去重、补发和后续管理。
 
 ## 项目特点
 
@@ -23,7 +25,7 @@
 ## 当前结构
 
 ```text
-weibo_tg_bot/
+avelen/
   main.py
   README.md
   pyproject.toml
