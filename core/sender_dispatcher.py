@@ -18,20 +18,31 @@ from telegram import Bot, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 from telegram.constants import ChatAction, ParseMode
 
 from core.database import insert_data, get_db_conn, MESSAGES
+from core.settings import TELEGRAM_BASE_FILE_URL, TELEGRAM_BASE_URL, TELEGRAM_LOCAL_MODE
 from filelock import FileLock
 
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-API_URL = 'http://localhost:8081/bot'
-FILE_API_URL = 'http://localhost:8081/file/bot'
 MARKDOWN_CHAR = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 LOCK_FILE = "telegram_sender.lock"
 
 
 def _build_bot() -> Bot:
+    """构造 Telegram Bot 实例。
+
+    - 默认启用本地模式，连接本地 Bot API Server
+    - 当 `TELEGRAM_LOCAL_MODE=0` 时，退回官方默认模式 `Bot(token=TOKEN)`
+    """
     if not TOKEN:
         raise RuntimeError('TELEGRAM_BOT_TOKEN is required')
-    return Bot(token=TOKEN, local_mode=True, base_url=API_URL, base_file_url=FILE_API_URL)
+    if TELEGRAM_LOCAL_MODE:
+        return Bot(
+            token=TOKEN,
+            local_mode=True,
+            base_url=TELEGRAM_BASE_URL,
+            base_file_url=TELEGRAM_BASE_FILE_URL,
+        )
+    return Bot(token=TOKEN)
 
 
 def clear_name(text):
