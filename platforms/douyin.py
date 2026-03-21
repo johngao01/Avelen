@@ -19,7 +19,7 @@ from core.settings import (
     SCRAPY_FAVORITE_LIMIT,
 )
 from core.scrapy_runner import (
-    dispatch_post,
+    send_post_to_telegram,
     handle_dispatch_result,
     run_platform_main,
 )
@@ -1109,7 +1109,7 @@ def handler_douyin(aweme):
         aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
     user = Following(aweme['author']['sec_uid'], 'favorite', '')
     post = Aweme(user, aweme)
-    return handle_dispatch_result(dispatch_post(post, douyin_logger), douyin_logger, post.url) == 'success'
+    return handle_dispatch_result(send_post_to_telegram(post, douyin_logger), douyin_logger, post.url) == 'success'
 
 
 class DouyinScrapy(BasePlatform):

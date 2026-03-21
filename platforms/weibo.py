@@ -24,7 +24,7 @@ from core.utils import (
     read_text_file,
 )
 from core.scrapy_runner import (
-    dispatch_post,
+    send_post_to_telegram,
     run_platform_main,
 )
 
@@ -338,7 +338,7 @@ def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=
     weibo_logger.info(f"{weibo_index}\t{start_message}")
     if not should_process:
         return 'skip'
-    return dispatch_post(post, weibo_logger)
+    return send_post_to_telegram(post, weibo_logger)
 
 
 class WeiboScrapy(BasePlatform):

@@ -6,7 +6,7 @@ import argparse
 from core.downloader import Downloader
 from core.database import get_filtered_followings, get_send_url, update_db
 from core.models import BasePost
-from core.sender_dispatcher import dispatch_post_data
+from core.sender_dispatcher import send_post_payload_to_telegram
 from core.settings import (
     disable_download_progress,
     enable_download_progress,
@@ -25,17 +25,109 @@ class PostProcessSummary:
     latest_post: Any | None = None
 
 
-def dispatch_post(post: BasePost, logger):
+def build_post_summary(post: BasePost) -> dict[str, Any]:
+    return {
+        'platform': post.platform,
+        'username': post.username,
+        'nickname': post.nickname,
+        'url': post.url,
+        'userid': post.userid,
+        'idstr': post.idstr,
+        'mblogid': post.mblogid,
+        'create_time': post.create_time.strftime('%Y-%m-%d %H:%M:%S'),
+        'text_raw': post.text_raw,
+    }
+
+
+def build_download_summary(files: list[Any]) -> dict[str, Any]:
+    return {
+        'file_count': len(files),
+        'results': [{
+            'url': result.task.url,
+            'path': result.path,
+            'ok': result.ok,
+            'http_status': result.status_code,
+            'size': result.size,
+            'exists': result.exists,
+            'skipped': result.skipped,
+            'error': result.error,
+            'media_type': result.task.media_type,
+            'dispatch_file': result.to_dispatch_file(),
+        } for result in files],
+    }
+
+
+def send_post_to_telegram(post: BasePost, logger):
+    """下载单条作品媒体，并返回统一的 Telegram 处理结果。
+
+    职责：
+    - 调用 `Downloader` 下载当前作品对应的全部媒体
+    - 让平台对象把下载结果整理成发送 payload
+    - 在 `--no-send` 模式下返回成功但不实际发送
+    - 在正常模式下把 payload 交给 Telegram 发送层
+
+    返回值始终是 `dict`，核心字段如下：
+    - `ok`: 当前处理是否成功
+    - `error`: 失败原因，成功时为 `None`
+    - `mode`: `prepare` / `no-send` / `telegram`
+    - `post`: 当前作品摘要
+    - `download`: 下载结果摘要
+    - `persisted`: 是否已将 Telegram 消息写入数据库
+    - `messages`: 已落库的消息记录列表
+    - `telegram`: Telegram 发送过程详情
+    """
     downloader = Downloader(logger=logger)
     files = downloader.download(post)
+    download_summary = build_download_summary(files)
+    post_summary = build_post_summary(post)
     post_data = post.to_dispatch_data(files)
     if not post_data:
-        return '获取失败'
-    return dispatch_post_data(post_data)
+        return {
+            'ok': False,
+            'error': '构造发送数据失败',
+            'mode': 'prepare',
+            'post': post_summary,
+            'download': download_summary,
+            'messages': [],
+            'telegram': {
+                'chat_id': None,
+                'event_count': 0,
+                'message_count': 0,
+                'events': [],
+                'messages': [],
+                'persisted_messages': [],
+            },
+        }
+    if is_no_send_mode():
+        logger.info(f"no-send 模式，跳过 Telegram 发送：{post.url}")
+        return {
+            'ok': True,
+            'error': None,
+            'mode': 'no-send',
+            'post': post_summary,
+            'download': download_summary,
+            'persisted': False,
+            'messages': [],
+            'telegram': {
+                'skipped': True,
+                'chat_id': None,
+                'event_count': 0,
+                'message_count': 0,
+                'events': [],
+                'messages': [],
+                'persisted_messages': [],
+            },
+        }
+    result = send_post_payload_to_telegram(post_data)
+    if isinstance(result, dict):
+        result.setdefault('mode', 'telegram')
+        result.setdefault('post', post_summary)
+        result.setdefault('download', download_summary)
+    return result
 
 
 def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
-    if getattr(result, 'status_code', None) == 200:
+    if isinstance(result, dict) and result.get('ok'):
         if not is_no_send_mode():
             download_log(result)
             rate_control(result, logger)
@@ -46,7 +138,7 @@ def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_
         return 'skip'
     if on_failure_update:
         on_failure_update()
-    error_text = getattr(result, 'status_code', result)
+    error_text = result.get('error') if isinstance(result, dict) else result
     log_error(url, error_text)
     logger.error(f"处理 {url} 失败")
     return 'failure'
@@ -58,8 +150,9 @@ def update_after_batch(on_update=None):
 
 
 def run_posts(posts: list[Any],
-              dispatch_one: Callable[[Any], Any],
+              send_one: Callable[[Any], Any],
               logger) -> PostProcessSummary:
+    """串行处理一组作品，并统计发送结果。"""
     ordered_posts = list(posts)
     summary = PostProcessSummary(
         total=len(ordered_posts),
@@ -71,7 +164,7 @@ def run_posts(posts: list[Any],
         if not should_process:
             summary.skipped += 1
             continue
-        status = handle_dispatch_result(dispatch_one(post), logger, post.url)
+        status = handle_dispatch_result(send_one(post), logger, post.url)
         if status == 'success':
             summary.success += 1
         elif status == 'skip':
@@ -125,7 +218,7 @@ def start_platform_scraping(scraper: Any,
                             logger,
                             content_name: str,
                             show_time_range: bool = True,
-                            dispatch_one: Callable[[Any], Any] | None = None) -> None:
+                            send_one: Callable[[Any], Any] | None = None) -> None:
     """执行平台实例的通用抓取、过滤、发送和回写流程。"""
     if use_local_json:
         scraper.get_post_from_local()
@@ -146,12 +239,12 @@ def start_platform_scraping(scraper: Any,
     else:
         logger.info(f'{username} 有 {len(new_posts)} 个新{content_name}')
 
-    if dispatch_one is None:
-        dispatch_one = lambda post: dispatch_post(post, logger)
+    if send_one is None:
+        send_one = lambda post: send_post_to_telegram(post, logger)
 
     summary = run_posts(
         new_posts,
-        dispatch_one=dispatch_one,
+        send_one=send_one,
         logger=logger,
     )
     update_after_batch(lambda: update_db(

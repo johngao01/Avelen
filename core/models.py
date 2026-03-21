@@ -190,7 +190,7 @@ class BasePost(ABC):
     def to_dispatch_data(self, downloaded_files: list[Any]) -> dict[str, Any] | None:
         """将下载结果转换成发送层需要的 payload。
 
-        `dispatch_post()` 会先下载媒体，再把下载结果传给这个方法。
+        `send_post_to_telegram()` 会先下载媒体，再把下载结果传给这个方法。
         实现类通常会基于 `base_dispatch_data()` 追加 `files` 字段，
         并在下载结果不完整或不满足发送条件时返回 `None`，从而终止发送。
         """

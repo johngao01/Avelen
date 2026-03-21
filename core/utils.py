@@ -97,8 +97,9 @@ def convert_bytes_to_human_readable(num_bytes):
 
 
 def download_log(response):
-    response = response.json()
-    messages = response['messages']
+    messages = response.get('messages') or []
+    if not messages:
+        return
     message = messages[-1]
     log = (message['USERNAME'] + " " + message['CREATE_TIME'] + " " + message['DATE_TIME'] +
            " " + message['URL'] + " " + message['TEXT_RAW'].replace('\n', ' '))
@@ -118,7 +119,10 @@ def bytes2md5(r_bytes):
 
 
 def rate_control(send_result, logger):
-    RATE_LIMIT_STATE['count'] += len(send_result['messages'])
+    messages = send_result.get('messages') or []
+    if not messages:
+        return
+    RATE_LIMIT_STATE['count'] += len(messages)
     if RATE_LIMIT_STATE['count'] // RATE_LIMIT_STATE['rate'] > RATE_LIMIT_STATE['times']:
         RATE_LIMIT_STATE['times'] += 1
         sleep_time = 60 * (1 + RATE_LIMIT_STATE['times'] / 10)

@@ -30,7 +30,7 @@ for i, line in enumerate(lines_seen, start=1):
     else:
         continue
     send_url.append(url)
-    if getattr(r, 'status_code', None) == 200:
+    if isinstance(r, dict) and r.get('ok'):
         rate_control(r, weibo_logger)
     elif type(r) is str and 'skip' in r:
         continue
@@ -46,5 +46,3 @@ with open('../error.txt', 'w', encoding='utf-8') as file:
     for line in error_line:
         line = line.strip()  # 去掉行末尾的空白字符
         file.write(line + '\n')
-
-

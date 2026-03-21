@@ -396,7 +396,7 @@ async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weibo_link = update.message.text
     message_id = update.message.message_id
     r1 = handle_weibo('1/1', weibo_link)
-    if getattr(r1, 'status_code', None) == 200:
+    if isinstance(r1, dict) and r1.get('ok'):
         pass
     elif r1 is not None:
         print(f"处理微博 {weibo_link} 失败")
@@ -492,5 +492,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
