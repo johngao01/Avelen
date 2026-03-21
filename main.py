@@ -10,7 +10,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description="Unified scraper entrypoint")
     parser.add_argument(
         "platform",
-        type=str.lower,
+        type=str,
         choices=sorted(PLATFORM_REGISTRY.keys()),
         help="Platform to run",
     )
@@ -22,10 +22,10 @@ def main(argv=None):
     parser = build_parser()
     if not argv:
         parser.print_help()
-        return
+        return None
     if argv[0] in {"-h", "--help"}:
         parser.print_help()
-        return
+        return None
     args = parser.parse_args([argv[0]])
     platform_cls = get_platform(args.platform)
     return platform_cls.run(argv[1:])
@@ -33,5 +33,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
-
-
