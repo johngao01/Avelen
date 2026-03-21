@@ -1,10 +1,9 @@
-from dataclasses import dataclass
 from typing import Callable, Any
 import traceback
 import argparse
 
 from core.downloader import Downloader
-from core.database import get_filtered_followings, get_send_url, update_db
+from core.database import get_filtered_followings, get_send_url
 from core.models import BasePost
 from core.sender_dispatcher import send_post_payload_to_telegram
 from core.settings import (
@@ -14,15 +13,6 @@ from core.settings import (
     is_no_send_mode,
 )
 from core.utils import download_log, log_error, rate_control
-
-
-@dataclass(slots=True)
-class PostProcessSummary:
-    total: int = 0
-    success: int = 0
-    failure: int = 0
-    skipped: int = 0
-    latest_post: Any | None = None
 
 
 def build_post_summary(post: BasePost) -> dict[str, Any]:
@@ -142,122 +132,6 @@ def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_
     log_error(url, error_text)
     logger.error(f"处理 {url} 失败")
     return 'failure'
-
-
-def update_after_batch(on_update=None):
-    if not is_no_send_mode() and on_update:
-        on_update()
-
-
-def run_posts(posts: list[Any],
-              send_one: Callable[[Any], Any],
-              logger) -> PostProcessSummary:
-    """串行处理一组作品，并统计发送结果。"""
-    ordered_posts = list(posts)
-    summary = PostProcessSummary(
-        total=len(ordered_posts),
-        latest_post=ordered_posts[-1] if ordered_posts else None,
-    )
-    for index, post in enumerate(ordered_posts, start=1):
-        should_process, start_message = post.start()
-        logger.info(f"{index}/{summary.total}\t{start_message}")
-        if not should_process:
-            summary.skipped += 1
-            continue
-        status = handle_dispatch_result(send_one(post), logger, post.url)
-        if status == 'success':
-            summary.success += 1
-        elif status == 'skip':
-            summary.skipped += 1
-        else:
-            summary.failure += 1
-    return summary
-
-
-def filter_new_posts(posts: list[Any],
-                     sent_urls: set[str],
-                     latest_time,
-                     *,
-                     exclude_equal: bool = True,
-                     should_sort: bool = True,
-                     skip_post: Callable[[Any], bool] | None = None) -> list[Any]:
-    """按公共规则过滤真正需要处理的新内容。
-
-    过滤逻辑不直接并入 `get_post_from_api()`，因为本地 JSON 回放模式也要复用同一套规则。
-    平台自己的 API 抓取阶段仍然可以做“提前终止分页”之类的优化，但最终去重与排序放在这里统一。
-    """
-    new_posts = []
-    for post in posts:
-        if post.url in sent_urls:
-            continue
-        if exclude_equal:
-            if post.create_time <= latest_time:
-                continue
-        elif post.create_time < latest_time:
-            continue
-        if skip_post and skip_post(post):
-            continue
-        new_posts.append(post)
-    if should_sort:
-        new_posts.sort(key=lambda x: x.create_time)
-    return new_posts
-
-
-def get_post_latest_time_str(post: Any) -> str:
-    """返回写回数据库时使用的 latest_time 字符串。"""
-    create_time_str = getattr(post, 'create_time_str', None)
-    if isinstance(create_time_str, str):
-        return create_time_str
-    return post.create_time.strftime('%Y-%m-%d %H:%M:%S')
-
-
-def start_platform_scraping(scraper: Any,
-                            sent_urls: set[str],
-                            *,
-                            use_local_json: bool,
-                            logger,
-                            content_name: str,
-                            show_time_range: bool = True,
-                            send_one: Callable[[Any], Any] | None = None) -> None:
-    """执行平台实例的通用抓取、过滤、发送和回写流程。"""
-    if use_local_json:
-        scraper.get_post_from_local()
-    else:
-        scraper.get_post_from_api()
-
-    new_posts = scraper.filter_new_post(sent_urls)
-    username = scraper.scraping.username
-    if not new_posts:
-        scraper.scraping.end_msg = f'{username} 处理结束，没有新{content_name}\n'
-        return
-
-    if show_time_range:
-        logger.info(
-            f'{username} 有 {len(new_posts)} 个新{content_name}。 '
-            f'{new_posts[0].create_time}  {new_posts[-1].create_time}'
-        )
-    else:
-        logger.info(f'{username} 有 {len(new_posts)} 个新{content_name}')
-
-    if send_one is None:
-        send_one = lambda post: send_post_to_telegram(post, logger)
-
-    summary = run_posts(
-        new_posts,
-        send_one=send_one,
-        logger=logger,
-    )
-    update_after_batch(lambda: update_db(
-        scraper.scraping.userid,
-        scraper.scraping.username,
-        get_post_latest_time_str(new_posts[-1]),
-    ))
-    scraper.scraping.end_msg = (
-        f'{username} 处理结束，'
-        f'新{content_name} {summary.total} 个，'
-        f'跳过 {summary.skipped} 个，'
-        f'成功 {summary.success} 个，失败 {summary.failure} 个\n'
-    )
 
 
 def run_followings(all_followings: list[Any],

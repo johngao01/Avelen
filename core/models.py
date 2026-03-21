@@ -8,6 +8,8 @@ import sys
 from typing import Any
 
 from loguru import logger as _logger
+from core.database import update_db
+from core.settings import is_no_send_mode
 
 DEFAULT_LATEST_TIME = datetime(2000, 12, 12, 12, 12, 12)
 _STDERR_CONFIGURED = False
@@ -91,6 +93,9 @@ class BasePlatform(ABC):
     content_name: str = '内容'
     show_time_range: bool = True
     exclude_equal_latest_time: bool = True
+    scraping: Any
+    post: list[Any]
+    logger: Any
 
     @classmethod
     def all_names(cls) -> tuple[str, ...]:
@@ -114,29 +119,98 @@ class BasePlatform(ABC):
         raise NotImplementedError
 
     def filter_new_post(self, sent_urls: set[str]) -> list[Any]:
-        """基于抓取结果筛出真正需要处理的内容。"""
-        from core.scrapy_runner import filter_new_posts
+        """基于统一规则筛出当前平台真正需要处理的新内容。
 
-        return filter_new_posts(
-            self.post,
-            sent_urls,
-            self.scraping.latest_time,
-            exclude_equal=self.exclude_equal_latest_time,
-            should_sort=self.should_sort_filtered_posts(),
-            skip_post=self.should_skip_post_in_filter,
-        )
+        过滤顺序：
+        - 先按 `sent_urls` 去重
+        - 再按 `latest_time` 做增量过滤
+        - 然后应用平台自定义的跳过规则
+        - 最后按平台配置决定是否按发布时间排序
+        """
+        new_posts = []
+        for post in self.post:
+            if post.url in sent_urls:
+                continue
+            if self.exclude_equal_latest_time:
+                if post.create_time <= self.scraping.latest_time:
+                    continue
+            elif post.create_time < self.scraping.latest_time:
+                continue
+            if self.should_skip_post_in_filter(post):
+                continue
+            new_posts.append(post)
+        if self.should_sort_filtered_posts():
+            new_posts.sort(key=lambda item: item.create_time)
+        return new_posts
 
     def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
-        """执行单个 following 的完整处理流程。"""
-        from core.scrapy_runner import start_platform_scraping
+        """执行单个关注对象的完整处理流程。
 
-        start_platform_scraping(
-            self,
-            sent_urls,
-            use_local_json=use_local_json,
-            logger=self.logger,
-            content_name=self.content_name,
-            show_time_range=self.show_time_range,
+        处理顺序：
+        - 抓取远端内容，或从本地 JSON 恢复内容
+        - 过滤出真正需要处理的新内容
+        - 逐条下载并发送到 Telegram
+        - 在非 `no-send` 模式下回写数据库进度
+        - 生成本次处理的结束摘要日志
+        """
+        from core.scrapy_runner import handle_dispatch_result, send_post_to_telegram
+
+        if use_local_json:
+            self.get_post_from_local()
+        else:
+            self.get_post_from_api()
+
+        new_posts = self.filter_new_post(sent_urls)
+        username = self.scraping.username
+        if not new_posts:
+            self.scraping.end_msg = f'{username} 处理结束，没有新{self.content_name}\n'
+            return
+
+        if self.show_time_range:
+            self.logger.info(
+                f'{username} 有 {len(new_posts)} 个新{self.content_name}。 '
+                f'{new_posts[0].create_time}  {new_posts[-1].create_time}'
+            )
+        else:
+            self.logger.info(f'{username} 有 {len(new_posts)} 个新{self.content_name}')
+
+        success = 0
+        failure = 0
+        skipped = 0
+        for index, post in enumerate(new_posts, start=1):
+            should_process, start_message = post.start()
+            self.logger.info(f"{index}/{len(new_posts)}\t{start_message}")
+            if not should_process:
+                skipped += 1
+                continue
+            status = handle_dispatch_result(
+                send_post_to_telegram(post, self.logger),
+                self.logger,
+                post.url,
+            )
+            if status == 'success':
+                success += 1
+            elif status == 'skip':
+                skipped += 1
+            else:
+                failure += 1
+
+        if not is_no_send_mode():
+            latest_post = new_posts[-1]
+            latest_time = getattr(latest_post, 'create_time_str', None)
+            if not isinstance(latest_time, str):
+                latest_time = latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')
+            update_db(
+                self.scraping.userid,
+                self.scraping.username,
+                latest_time,
+            )
+
+        self.scraping.end_msg = (
+            f'{username} 处理结束，'
+            f'新{self.content_name} {len(new_posts)} 个，'
+            f'跳过 {skipped} 个，'
+            f'成功 {success} 个，失败 {failure} 个\n'
         )
 
     def should_skip_post_in_filter(self, post: Any) -> bool:
