@@ -191,6 +191,7 @@ pip install -e .
 # Telegram
 TELEGRAM_BOT_TOKEN=
 ERROR_TELEGRAM_BOT_TOKEN=
+TELEGRAM_LOCAL_MODE=1
 
 # MySQL
 MYSQL_HOST=localhost
@@ -213,6 +214,10 @@ MYSQL_DB=nicebot
 
 - `DOWNLOAD_ROOT`
   作用：覆盖 `config/platforms.toml` 中的默认下载根目录
+- `TELEGRAM_LOCAL_MODE`
+  作用：控制是否启用本地 Telegram Bot API 模式，默认 `1`
+  - `1`：使用本地模式，相当于 `Bot(token=TOKEN, local_mode=True, base_url=..., base_file_url=...)`
+  - `0`：关闭本地模式，相当于 `Bot(token=TOKEN)`
 
 ### 3. 平台配置文件
 
@@ -365,6 +370,14 @@ python main.py douyin --scrapy-time-start "2026-03-01 00:00:00"
 
 当前发送逻辑默认连接本地 Telegram Bot API Server，而不是直接使用公网默认地址。
 
+如果你不想走本地模式，可以设置：
+
+```env
+TELEGRAM_LOCAL_MODE=0
+```
+
+此时会退回官方默认模式，相当于直接使用 `Bot(token=TOKEN)`。
+
 固定地址在 [core/sender_dispatcher.py](./core/sender_dispatcher.py)：
 
 - `http://localhost:8081/bot`
@@ -481,6 +494,6 @@ python main.py douyin --scrapy-time-start "2026-03-01 00:00:00"
 ## 注意事项
 
 - 项目高度依赖各平台登录 Cookie
-- Telegram 发送默认依赖本地 Bot API Server
+- Telegram 发送默认依赖本地 Bot API Server，但可通过 `TELEGRAM_LOCAL_MODE=0` 关闭
 - `ops/` 脚本偏个人化，运行前先检查
 - Windows 终端里某些中文帮助文本可能出现编码显示问题，但不影响主入口运行
