@@ -55,11 +55,10 @@ class BilibiliPost(BasePost):
         self.username = following.username
         self.nickname = self.author.get('name') or following.username
         self.mblogid = ''
-        self.create_time = self.pub_time
         self.text_raw = self._resolve_text(api)
 
     @property
-    def pub_time(self) -> datetime:
+    def create_time(self) -> datetime:
         pub_ts = int(self.author.get('pub_ts') or 0)
         return datetime.fromtimestamp(pub_ts)
 

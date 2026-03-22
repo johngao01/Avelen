@@ -116,7 +116,7 @@ class InstagramPost(BasePost):
         self.url = f'{INSTAGRAM_HOME_URL}/p/{self.shortcode}'
 
     @property
-    def is_pinned(self) -> bool:
+    def is_top(self) -> bool:
         if not self.pin_info:
             return False
         owner_pk = str(self.owner.get('pk') or '')
@@ -127,7 +127,7 @@ class InstagramPost(BasePost):
         return len(self.build_media_items())
 
     def start(self):
-        if self.is_pinned:
+        if self.is_top:
             return False, f'{self} 置顶内容'
         if self.media_count == 0:
             return False, f'{self} 无媒体内容'
@@ -282,7 +282,7 @@ class InstagramScrapy(BasePlatform):
                 if not node:
                     continue
                 post = InstagramPost(self.scraping, node)
-                if post.is_pinned:
+                if post.is_top:
                     continue
                 if post.create_time <= self.scraping.latest_time:
                     keep = False
@@ -329,7 +329,7 @@ class InstagramScrapy(BasePlatform):
         instagram_logger.info(f'{self.scraping.username} 从本地 JSON 获取到 {len(self.post)} 个内容')
 
     def should_skip_post_in_filter(self, post: InstagramPost) -> bool:
-        return post.is_pinned
+        return post.is_top
 
     def _build_profile_post_variables(self, after: str) -> dict:
         variables = {

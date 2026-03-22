@@ -121,7 +121,10 @@ class WeiboPost(BasePost):
             **weibo_header,
             'Referer': f"{WEIBO_WEB_BASE_URL}/{weibo_data['user']['idstr']}/{weibo_data['idstr']}",
         }
-        self.is_top = weibo_data.get('isTop', 0)
+
+    @property
+    def is_top(self):
+        return self.data.get('isTop', 0)
 
     def save_json(self):
         """将微博原始数据保存到本地 JSON，供本地回放模式复用。"""

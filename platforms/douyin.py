@@ -1046,6 +1046,10 @@ class Aweme(BasePost):
         post_data['files'] = files[0] if len(files) == 1 else files
         return post_data
 
+    @property
+    def is_top(self):
+        return self._node.get('is_top', 0)
+
     def start(self):
         if self.duration > 1800000:
             return False, self.__str__() + " 视频过长，跳过处理"
@@ -1202,26 +1206,17 @@ class DouyinScrapy(BasePlatform):
             except Exception:
                 print(resp)
                 continue
-            page_add = 0
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
             if 'max_cursor' not in data_json:
                 continue
             self.max_cursor = data_json['max_cursor']
             for aweme in data_json['aweme_list']:
-                aweme_create_time = datetime.fromtimestamp(aweme['create_time'])
-                if self.username == 'favorite' or aweme_create_time > self.last_one_time:
-                    page_add += 1
-                    aweme['username'] = self.username
-                    aweme['user_sec_uid'] = aweme['author']['sec_uid']
-                    aweme['create_time_str'] = aweme_create_time.strftime("%Y-%m-%d %H:%M:%S")
-                    aweme = Aweme(self.scraping, aweme)
-                    aweme.save_json()
-                    self.post.append(aweme)
-                    if aweme.create_time > self.max_time:
-                        self.max_time = aweme.create_time
-                    if aweme.create_time < self.scraping.latest_time:
-                        KEEP = False
+                aweme = Aweme(self.scraping, aweme)
+                aweme.save_json()
+                self.post.append(aweme)
+                if not aweme.is_top and aweme.create_time < self.scraping.latest_time:
+                    KEEP = False
             scrapy_info = f'{self.username} 获取第{self.page}页完成，一共有{len(data_json['aweme_list'])}个抖音'
             if self.username == 'favorite' and len(self.post) >= SCRAPY_FAVORITE_LIMIT:
                 scrapy_info += "，获取新喜欢完成。"

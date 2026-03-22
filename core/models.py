@@ -291,3 +291,8 @@ class BasePost(ABC):
         if isinstance(self.create_time, datetime):
             return self.create_time.strftime("%Y-%m-%d %H:%M:%S")
         return '2099-12-12 12:12:12'
+
+    @abstractmethod
+    @property
+    def is_top(self):
+        raise NotImplementedError
