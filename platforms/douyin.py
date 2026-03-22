@@ -875,14 +875,22 @@ class Aweme(BasePost):
     """
 
     def __init__(self, following: Following, node: Dict[str, Any]):
+        """把抖音 aweme 节点整理成统一的 `BasePost` 字段。"""
         super().__init__()
         self._node = node
+        author = node.get('author') or {}
+        self.platform = 'douyin'
         self.username = following.username
+        self.nickname = author.get('nickname') or following.username
+        self.userid = following.user_sec_uid
         self.user_sec_uid = following.user_sec_uid
         self.aweme_id = node['aweme_id']
         self.id = self.aweme_id
+        self.idstr = self.aweme_id
+        self.mblogid = ''
         self.aweme_type = node['aweme_type']
         self.describe = node.get('desc') or ''
+        self.text_raw = self.describe
         self.duration = node.get('duration', 0)
         self.create_time = datetime.fromtimestamp(node['create_time'])
         self.is_video = self.judge_is_video()
