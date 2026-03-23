@@ -135,6 +135,8 @@ class BilibiliPost(BasePost):
     def start(self):
         if self.badge_text == '充电专属':
             return False, self.__str__() + ' 充电专属 跳过处理'
+        elif self.is_only_fans:
+            return False, self.__str__() + ' 粉丝专属 跳过处理'
         elif self.dynamic_type in ('DYNAMIC_TYPE_AV', 'DYNAMIC_TYPE_DRAW'):
             return True, self.__str__()
         else:
