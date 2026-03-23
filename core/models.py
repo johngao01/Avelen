@@ -239,6 +239,9 @@ class BasePost(ABC):
     create_time: datetime
     text_raw: str
 
+    def __init__(self):
+        self._post_data: dict[str, Any] | None = None
+
     def __str__(self) -> str:
         """返回跨平台统一的日志摘要。"""
         return f'{self.username} {self.create_time} {self.url} {self.text_raw}'
@@ -260,20 +263,15 @@ class BasePost(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def to_dispatch_data(self, downloaded_files: list[Any]) -> dict[str, Any] | None:
-        """将下载结果转换成发送层需要的 payload。
+    @property
+    def post_data(self) -> dict[str, Any]:
+        if self._post_data is None:
+            self._post_data = self.build_post_data()
+        return self._post_data
 
-        `send_post_to_telegram()` 会先下载媒体，再把下载结果传给这个方法。
-        实现类通常会基于 `base_dispatch_data()` 追加 `files` 字段，
-        并在下载结果不完整或不满足发送条件时返回 `None`，从而终止发送。
-        """
-        raise NotImplementedError
+    def build_post_data(self) -> dict[str, Any]:
+        """构造跨平台共用的发送字段基本信息。
 
-    def base_dispatch_data(self) -> dict[str, Any]:
-        """构造跨平台共用的发送字段。
-
-        平台实现类可以在 `to_dispatch_data()` 里以此为基础继续补充平台特有字段。
         """
         return {
             'username': self.username,
@@ -282,7 +280,7 @@ class BasePost(ABC):
             'userid': self.userid,
             'idstr': self.idstr,
             'mblogid': self.mblogid,
-            'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'create_time': self.create_time_str,
             'text_raw': self.text_raw,
         }
 

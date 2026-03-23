@@ -285,10 +285,10 @@ async def execute_task(data):
     photos, videos, documents = [], [], []
 
     for file in raw_files:
-        path = file.get('path') or file.get('media', '')
+        path = file.get('path', '')
         caption = file.get('caption') or os.path.basename(path)
         size = file.get('size') or os.path.getsize(path)
-        filetype = file.get('type')
+        filetype = file.get('filetype')
 
         if filetype == 'video':
             videos.append([path, caption, size])

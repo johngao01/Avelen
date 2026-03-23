@@ -11,6 +11,7 @@ dependencies = [
     "gmssl",
     "loguru",
     "lxml>=6.0.2",
+    "opencv-python-headless>=4.11.0",
     "pillow",
     "pydash>=8.0.6",
     "pymysql",

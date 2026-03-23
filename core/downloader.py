@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import cv2
 import requests
-import glob
 import os
 import time
 from contextlib import nullcontext
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from threading import local
 from urllib.parse import urlparse
 from requests.adapters import HTTPAdapter
@@ -17,12 +16,16 @@ from urllib3.util.retry import Retry
 from yt_dlp import YoutubeDL
 from datetime import datetime
 from core.models import BasePost, MediaItem
-from core.settings import BILIBILI_COOKIE_PATH, DOWNLOAD_ROOT, is_download_progress_enabled
-from core.utils import (
-    convert_bytes_to_human_readable,
-    get_platform_json_dir,
-    handler_file,
+from core.settings import (
+    BILIBILI_COOKIE_PATH,
+    DOWNLOAD_ROOT,
+    MAX_DOCUMENT_SIZE,
+    MAX_PHOTO_SIZE,
+    MAX_PHOTO_TOTAL_PIXEL,
+    MAX_VIDEO_SIZE,
+    is_download_progress_enabled,
 )
+from core.utils import convert_bytes_to_human_readable, get_platform_json_dir
 from rich.console import Console
 from rich.progress import (
     Progress,
@@ -203,26 +206,31 @@ class DownloadTask:
     index: int = 1
 
 
-@dataclass(slots=True)
-class DownloadResult:
-    """统一的下载结果描述，供发送层直接消费。"""
+def format_seconds_to_hms(seconds: float | int | None) -> str:
+    if seconds is None:
+        return ""
+    total_seconds = max(int(round(float(seconds))), 0)
+    hour, remainder = divmod(total_seconds, 3600)
+    minute, second = divmod(remainder, 60)
+    return f"{hour:02d}:{minute:02d}:{second:02d}"
 
-    task: DownloadTask
-    ok: bool
-    path: str = ""
-    status_code: int = 0
-    size: int = 0
-    exists: bool = False
-    skipped: bool = False
-    error: str = ""
-    response_headers: dict = field(default_factory=dict)
-    dispatch_file: dict | None = None
-    response: requests.Response | SimpleNamespace | None = None
 
-    def to_dispatch_file(self) -> dict | None:
-        if not self.dispatch_file:
-            return None
-        return dict(self.dispatch_file)
+def get_video_duration_hms(path: str) -> str:
+    capture = cv2.VideoCapture(path)
+    try:
+        if not capture.isOpened():
+            return ""
+        fps = capture.get(cv2.CAP_PROP_FPS)
+        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)
+        if fps and fps > 0 and frame_count and frame_count > 0:
+            return format_seconds_to_hms(frame_count / fps)
+        capture.set(cv2.CAP_PROP_POS_AVI_RATIO, 1)
+        duration_ms = capture.get(cv2.CAP_PROP_POS_MSEC)
+        if duration_ms and duration_ms > 0:
+            return format_seconds_to_hms(duration_ms / 1000)
+        return ""
+    finally:
+        capture.release()
 
 
 class Downloader:
@@ -230,9 +238,9 @@ class Downloader:
 
     负责：
     - 将 `BasePost` 转换为 `DownloadTask`
-    - 在多个任务之间做并发调度
+    - 下载当前 post 的全部媒体
     - 为 Bilibili 视频自动切换到 `yt-dlp`
-    - 将下载结果转换成发送层可直接使用的结构
+    - 下载完成后把 `files` 写入 `post.post_data`
     """
 
     def __init__(
@@ -293,22 +301,104 @@ class Downloader:
             index=item.index,
         )
 
-    def download(self, source: BasePost | DownloadTask | list[DownloadTask]) -> DownloadResult | list[DownloadResult]:
-        """统一下载入口。
+    def download(self, post: BasePost) -> dict:
+        """下载当前 post 的全部媒体，并返回更新后的 `post.post_data`。"""
 
-        支持三种输入：
-        - `BasePost`：自动展开为多个媒体任务
-        - `DownloadTask`：下载单个文件
-        - `list[DownloadTask]`：批量下载多个文件
-        """
-        if isinstance(source, BasePost):
-            tasks = [self.build_task(source.platform, item) for item in source.build_media_items()]
-            return self._download_tasks(tasks)
-        if isinstance(source, DownloadTask):
-            return self._download_task(source)
-        if isinstance(source, list):
-            return self._download_tasks(source)
-        raise TypeError("download() 只支持 BasePost、DownloadTask 或 list[DownloadTask]")
+        def build_file_detail(file_path: str, file_index: int) -> dict | None:
+            media_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path)
+            file_ext = media_name.split('.')[-1].lower()
+            human_readable_size = convert_bytes_to_human_readable(file_size)
+            should_log_file_detail = not self.show_progress and self.logger is not None
+            if file_ext in ['jpg', 'png', 'jpeg', 'webp']:
+                from PIL import Image
+                with Image.open(file_path) as img:
+                    resolution = f'{img.width}*{img.height}'
+                if should_log_file_detail:
+                    msg = ' '.join(["\t", str(file_index), file_path, resolution, human_readable_size])
+                    self.logger.info(msg)
+                width, height = map(int, resolution.split('*'))
+                if width + height > MAX_PHOTO_TOTAL_PIXEL:
+                    if file_size < MAX_DOCUMENT_SIZE:
+                        return {'filetype': 'document', 'resolution': resolution}
+                    return None
+                if file_size < MAX_PHOTO_SIZE:
+                    return {'filetype': 'photo', 'resolution': resolution}
+                if MAX_PHOTO_SIZE < file_size < MAX_DOCUMENT_SIZE:
+                    return {'filetype': 'document', 'resolution': resolution}
+                return None
+
+            duration = get_video_duration_hms(file_path)
+            if duration and should_log_file_detail:
+                self.logger.info(' '.join(["\t", str(file_index), file_path, duration, human_readable_size]))
+            if file_size < MAX_VIDEO_SIZE:
+                return {'filetype': 'video', 'duration': duration}
+            return None
+
+        def should_skip_file(file_path: str, file_type: str) -> bool:
+            if post.platform != 'weibo' or file_type not in {'photo', 'document'}:
+                return False
+            is_deleted_media = getattr(post, '_is_deleted_media', None)
+            if not callable(is_deleted_media):
+                return False
+            if is_deleted_media(file_path):
+                if self.logger:
+                    self.logger.info("和谐的内容：" + file_path)
+                return True
+            return False
+
+        post_data = post.post_data
+        tasks = [self.build_task(post.platform, item) for item in post.build_media_items()]
+        if not tasks:
+            error = '没有可下载的媒体'
+            if self.logger:
+                self.logger.error(f'{post.url} {error}')
+            post_data['files'] = []
+            post_data['ok'] = False
+            return post_data
+
+        paths: list[str | None] = [None] * len(tasks)
+        progress = DownloadProgress.build_progress() if self.show_progress else None
+        if len(tasks) == 1 or self.max_workers <= 1:
+            with (progress if progress is not None else nullcontext()):
+                for index, task in enumerate(tasks):
+                    paths[index] = self._download_media(task, progress)
+        else:
+            max_workers = min(self.max_workers, len(tasks))
+            with (progress if progress is not None else nullcontext()):
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_map = {
+                        executor.submit(self._download_media, task, progress): index
+                        for index, task in enumerate(tasks)
+                    }
+                    for future in as_completed(future_map):
+                        index = future_map[future]
+                        paths[index] = future.result()
+
+        files = []
+        failed_urls: list[str] = []
+        for task, path in zip(tasks, paths):
+            path = path or task.save_path
+            size = os.path.getsize(path) if path and os.path.exists(path) else 0
+            detail = build_file_detail(path, task.index) if size > 0 else None
+            if detail is None or not detail.get('filetype'):
+                failed_urls.append(task.url)
+                continue
+            if should_skip_file(path, detail['filetype']):
+                continue
+            file_info = {
+                'path': path,
+                'caption': os.path.basename(path) if path else '',
+                'size': size,
+                'filetype': detail.get('filetype', ''),
+                'detail': detail,
+            }
+            files.append(file_info)
+        post_data['files'] = files
+        post_data['ok'] = len(failed_urls) == 0
+        if failed_urls and self.logger:
+            self.logger.error(f"{post.url} 下载失败：{' | '.join(failed_urls)}")
+        return post_data
 
     def _get_session(self) -> requests.Session:
         """获取当前线程专属的 Session。
@@ -324,34 +414,8 @@ class Downloader:
             self._session_local.session = session
         return session
 
-    def _download_tasks(self, tasks: list[DownloadTask]) -> list[DownloadResult]:
-        """批量下载任务。
-
-        多文件时使用线程池并发下载，同时共享一组 Rich 进度条；
-        返回结果顺序保持与输入任务顺序一致。
-        """
-        if not tasks:
-            return []
-        if len(tasks) == 1 or self.max_workers <= 1:
-            return [self._download_task(task) for task in tasks]
-
-        results: list[DownloadResult | None] = [None] * len(tasks)
-        progress = DownloadProgress.build_progress() if self.show_progress else None
-        max_workers = min(self.max_workers, len(tasks))
-        with (progress if progress is not None else nullcontext()):
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # future 与原始索引绑定，确保最终结果顺序稳定。
-                future_map = {
-                    executor.submit(self._download_task, task, progress): index
-                    for index, task in enumerate(tasks)
-                }
-                for future in as_completed(future_map):
-                    index = future_map[future]
-                    results[index] = future.result()
-        return [result for result in results if result is not None]
-
-    def _download_task(self, task: DownloadTask, progress: Progress | None = None) -> DownloadResult:
-        """下载单个任务，并根据 URL/媒体类型选择具体实现。"""
+    def _download_media(self, task: DownloadTask, progress: Progress | None = None) -> str:
+        """下载单个媒体，并根据 URL/媒体类型选择具体实现。"""
         parsed = urlparse(task.url)
         if task.media_type == "video" and parsed.netloc.endswith("bilibili.com") and "/video/" in parsed.path:
             return self._download_with_yt_dlp(task, progress=progress)
@@ -369,10 +433,10 @@ class Downloader:
             return None
         return total if total > 0 else None
 
-    def _download_http(self, task: DownloadTask, *, progress: Progress | None = None) -> DownloadResult:
+    def _download_http(self, task: DownloadTask, *, progress: Progress | None = None) -> str:
         """使用普通 HTTP 流式下载文件。"""
         if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
-            return self._build_existing_result(task)
+            return task.save_path
         os.makedirs(os.path.dirname(task.save_path), exist_ok=True)
         tmp_path = f"{task.save_path}.part"
         if os.path.exists(tmp_path):
@@ -387,14 +451,9 @@ class Downloader:
             )
             status_code = response.status_code
             if status_code != 200:
-                return DownloadResult(
-                    task=task,
-                    ok=False,
-                    status_code=status_code,
-                    error=f"http {status_code}",
-                    response_headers=dict(response.headers),
-                    response=response,
-                )
+                if self.logger:
+                    self.logger.error(f"{task.url} 下载失败：http {status_code}")
+                return task.save_path
             total_size = self._get_content_length(response)
             downloaded = 0
             with open(tmp_path, mode="wb", buffering=8192) as file_obj:
@@ -410,17 +469,18 @@ class Downloader:
             progress_tracker.finish(task.save_path)
             if progress_tracker.owns_progress:
                 progress_tracker.print_final_report()
-            result = self._build_result(task, response=response, status_code=status_code)
-            return result
+            return task.save_path
         except Exception as exc:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
-            return DownloadResult(task=task, ok=False, error=str(exc))
+            if self.logger:
+                self.logger.error(f"{task.url} 下载异常：{exc}")
+            return task.save_path
 
-    def _download_with_yt_dlp(self, task: DownloadTask, *, progress: Progress | None = None) -> DownloadResult:
+    def _download_with_yt_dlp(self, task: DownloadTask, *, progress: Progress | None = None) -> str:
         """使用 `yt-dlp` 下载 Bilibili 视频并复用统一进度展示。"""
         if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
-            return self._build_existing_result(task)
+            return task.save_path
         os.makedirs(os.path.dirname(task.save_path), exist_ok=True)
         progress_tracker = DownloadProgress(task.save_path, progress=progress, enabled=self.show_progress)
         try:
@@ -441,69 +501,27 @@ class Downloader:
                 }) as ydl:
                     video = ydl.extract_info(task.url, download=True)
                     if not video:
-                        return DownloadResult(task=task, ok=False, error="yt-dlp download error")
-            final_path = task.save_path = ydl.prepare_filename(video)
+                        if self.logger:
+                            self.logger.error(f"{task.url} 下载失败：yt-dlp download error")
+                        return task.save_path
+            final_path = task.save_path
             if not final_path or not os.path.exists(final_path):
-                return DownloadResult(task=task, ok=False, error="yt-dlp output missing")
+                prepared_path = ydl.prepare_filename(video)
+                if prepared_path and os.path.exists(prepared_path):
+                    final_path = task.save_path = prepared_path
+                if not final_path or not os.path.exists(final_path):
+                    if self.logger:
+                        self.logger.error(f"{task.url} 下载失败：yt-dlp output missing")
+                    return task.save_path
             progress_tracker.finish(final_path)
             if progress_tracker.owns_progress:
                 progress_tracker.print_final_report()
             self._move_bilibili_infojson(final_path)
-            return self._build_result(task, response=None, status_code=200, final_path=final_path)
+            return final_path
         except Exception as exc:
-            return DownloadResult(task=task, ok=False, error=str(exc))
-
-    def _build_existing_result(self, task: DownloadTask) -> DownloadResult:
-        """为已存在文件构造“跳过下载”的结果对象。"""
-        result = self._build_result(task, response=None, status_code=200)
-        result.exists = True
-        result.skipped = True
-        return result
-
-    def _build_result(
-            self,
-            task: DownloadTask,
-            *,
-            response: requests.Response | None,
-            status_code: int,
-            final_path: str | None = None,
-    ) -> DownloadResult:
-        """组装统一的下载结果，并预生成发送层所需的文件描述。"""
-        path = final_path or task.save_path
-        size = os.path.getsize(path) if os.path.exists(path) else 0
-        dispatch_file = None
-        if size:
-            dispatch_file = handler_file(path, task.index, self.logger)
-            if dispatch_file:
-                dispatch_file = {
-                    **dispatch_file,
-                    "path": path,
-                    "media": path,
-                    "caption": dispatch_file.get("caption") or os.path.basename(path),
-                    "size": dispatch_file.get("size", size),
-                }
-        return DownloadResult(
-            task=task,
-            ok=status_code == 200 and size > 0,
-            path=path,
-            status_code=status_code,
-            size=size,
-            response_headers=dict(response.headers) if response is not None else {},
-            dispatch_file=dispatch_file,
-            response=response,
-        )
-
-    @staticmethod
-    def _find_downloaded_path(expected_path: str) -> str:
-        """在 `yt-dlp` 实际输出扩展名变化时回查真实文件路径。"""
-        stem = os.path.splitext(expected_path)[0]
-        matched = [
-            path for path in glob.glob(f"{stem}.*")
-            if not path.endswith((".part", ".info.json"))
-        ]
-        if matched:
-            return matched[0]
-        return expected_path
+            if self.logger:
+                self.logger.error(f"{task.url} 下载异常：{exc}")
+            return task.save_path
 
     @staticmethod
     def _bilibili_cookie_path() -> Path:

@@ -29,24 +29,6 @@ def build_post_summary(post: BasePost) -> dict[str, Any]:
     }
 
 
-def build_download_summary(files: list[Any]) -> dict[str, Any]:
-    return {
-        'file_count': len(files),
-        'results': [{
-            'url': result.task.url,
-            'path': result.path,
-            'ok': result.ok,
-            'http_status': result.status_code,
-            'size': result.size,
-            'exists': result.exists,
-            'skipped': result.skipped,
-            'error': result.error,
-            'media_type': result.task.media_type,
-            'dispatch_file': result.to_dispatch_file(),
-        } for result in files],
-    }
-
-
 def send_post_to_telegram(post: BasePost, logger):
     """下载单条作品媒体，并返回统一的 Telegram 处理结果。
 
@@ -66,15 +48,21 @@ def send_post_to_telegram(post: BasePost, logger):
     - `messages`: 已落库的消息记录列表
     - `telegram`: Telegram 发送过程详情
     """
-    downloader = Downloader(logger=logger)
-    files = downloader.download(post)
-    download_summary = build_download_summary(files)
     post_summary = build_post_summary(post)
-    post_data = post.to_dispatch_data(files)
-    if not post_data:
+    downloader = Downloader(logger=logger)
+    post_data = downloader.download(post)
+    files = post_data.get('files') or []
+    download_ok = bool(post_data.get('ok'))
+    download_error = None if download_ok else ('构造发送数据失败' if not files else '文件下载失败')
+    download_summary = {
+        'ok': download_ok,
+        'error': download_error,
+        'files': files,
+    }
+    if not download_ok:
         return {
             'ok': False,
-            'error': '构造发送数据失败',
+            'error': download_error,
             'mode': 'prepare',
             'post': post_summary,
             'download': download_summary,

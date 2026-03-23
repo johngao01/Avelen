@@ -132,15 +132,6 @@ class BilibiliPost(BasePost):
             ))
         return items
 
-    def to_dispatch_data(self, downloaded_files) -> dict | None:
-        """把下载结果整理成发送层需要的 payload。"""
-        files = [result.to_dispatch_file() for result in downloaded_files if result.to_dispatch_file()]
-        if not files:
-            return None
-        post_data = self.base_dispatch_data()
-        post_data['files'] = files[0] if len(files) == 1 else files
-        return post_data
-
     def start(self):
         if self.badge_text == '充电专属':
             return False, self.__str__() + ' 充电专属 跳过处理'

@@ -882,7 +882,10 @@ class Aweme(BasePost):
         self.platform = 'douyin'
         self.username = following.username
         self.nickname = author.get('nickname') or following.username
-        self.userid = following.user_sec_uid
+        if self.username == 'favorite':
+            self.userid = self._node['author']['sec_uid']
+        else:
+            self.userid = following.user_sec_uid
         self.user_sec_uid = following.user_sec_uid
         self.aweme_id = node['aweme_id']
         self.id = self.aweme_id
@@ -1035,15 +1038,11 @@ class Aweme(BasePost):
                 ))
         return items
 
-    def to_dispatch_data(self, downloaded_files) -> dict | None:
-        """把下载结果转换成发送层需要的 payload。"""
-        files = [result.to_dispatch_file() for result in downloaded_files if result.to_dispatch_file()]
-        if not files:
-            return None
-        post_data = self.base_dispatch_data()
+    def build_post_data(self) -> dict[str, Any]:
+        """构造抖音发送数据。"""
+        post_data = super().build_post_data()
         if self.username == 'favorite':
-            post_data.update({'userid': self._node['author']['sec_uid']})
-        post_data['files'] = files[0] if len(files) == 1 else files
+            post_data['userid'] = self._node['author']['sec_uid']
         return post_data
 
     @property

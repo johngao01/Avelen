@@ -4,6 +4,7 @@ import json
 import os
 import re
 from datetime import datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -122,16 +123,8 @@ class InstagramPost(BasePost):
         owner_pk = str(self.owner.get('pk') or '')
         return owner_pk in {str(item) for item in self.pin_info}
 
-    @property
-    def media_count(self) -> int:
-        return len(self.build_media_items())
-
     def start(self):
-        if self.is_top:
-            return False, f'{self} 置顶内容'
-        if self.media_count == 0:
-            return False, f'{self} 无媒体内容'
-        return True, str(self)
+        return True, self.__str__()
 
     def save_json(self) -> None:
         """将 Instagram 原始数据保存到本地 JSON，供本地回放模式复用。"""
@@ -197,16 +190,6 @@ class InstagramPost(BasePost):
                 index=index,
             ))
         return items
-
-    def to_dispatch_data(self, downloaded_files) -> dict | None:
-        """把下载结果转换成发送层需要的 payload。"""
-        files = [result.to_dispatch_file() for result in downloaded_files if result.to_dispatch_file()]
-        if len(files) != self.media_count:
-            instagram_logger.error(self.url + ' 所有内容未全部下载')
-            return None
-        post_data = self.base_dispatch_data()
-        post_data['files'] = files[0] if len(files) == 1 else files
-        return post_data
 
 
 class InstagramScrapy(BasePlatform):

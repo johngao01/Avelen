@@ -219,23 +219,6 @@ class WeiboPost(BasePost):
 
         return []
 
-    def to_dispatch_data(self, downloaded_files) -> dict | None:
-        """将下载结果整理成发送层需要的 webhook 数据。"""
-        files = []
-        for result in downloaded_files:
-            file_data = result.to_dispatch_file()
-            if not file_data:
-                continue
-            if file_data.get('type') in {'photo', 'document'} and self._is_deleted_media(result.path):
-                weibo_logger.info("和谐的内容：" + result.path)
-                continue
-            files.append(file_data)
-        if not files:
-            return None
-        post_data = self.base_dispatch_data()
-        post_data['files'] = files[0] if len(files) == 1 else files
-        return post_data
-
     @staticmethod
     def _is_deleted_media(path: str) -> bool:
         """检查下载后的媒体是否命中微博和谐文件特征。"""
