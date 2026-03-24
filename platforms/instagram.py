@@ -311,9 +311,6 @@ class InstagramScrapy(BasePlatform):
 
         instagram_logger.info(f'{self.scraping.username} 从本地 JSON 获取到 {len(self.post)} 个内容')
 
-    def should_skip_post_in_filter(self, post: InstagramPost) -> bool:
-        return post.is_top
-
     def _build_profile_post_variables(self, after: str) -> dict:
         variables = {
             'data': {

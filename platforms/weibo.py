@@ -17,7 +17,6 @@ from core.settings import (
 from core.utils import (
     build_browser_headers,
     build_platform_json_path,
-    bytes2md5,
     find_file_by_name,
     get_platform_json_dir,
     log_error,
@@ -52,8 +51,7 @@ weibo_header = build_browser_headers(
     referer=WEIBO_HOME_URL,
     cookie=cookies,
 )
-del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736',
-            '3671086183ed683ec092b43b83fa461c']
+
 VIDEO_URL_KEYS = (
     "mp4_720p_mp4",
     "stream_url",
@@ -218,15 +216,6 @@ class WeiboPost(BasePost):
             return items
 
         return []
-
-    @staticmethod
-    def _is_deleted_media(path: str) -> bool:
-        """检查下载后的媒体是否命中微博和谐文件特征。"""
-        try:
-            with open(path, mode='rb') as file_obj:
-                return bytes2md5(file_obj.read()) in del_file
-        except OSError:
-            return False
 
     @property
     def create_time(self):
@@ -469,9 +458,6 @@ class WeiboScrapy(BasePlatform):
             self.post.append(WeiboPost(self.scraping, weibo_data))
 
         weibo_logger.info(f'{self.username} 从本地 JSON 获取到 {len(self.post)} 个微博')
-
-    def should_sort_filtered_posts(self) -> bool:
-        return self.scraping.username != 'favorite'
 
     @classmethod
     def run(cls, argv=None):

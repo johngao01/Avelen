@@ -91,8 +91,6 @@ class BasePlatform(ABC):
     name: str = ""
     aliases: tuple[str, ...] = ()
     content_name: str = '内容'
-    show_time_range: bool = True
-    exclude_equal_latest_time: bool = True
     scraping: Any
     post: list[Any]
     logger: Any
@@ -124,22 +122,16 @@ class BasePlatform(ABC):
         过滤顺序：
         - 先按 `sent_urls` 去重
         - 再按 `latest_time` 做增量过滤
-        - 然后应用平台自定义的跳过规则
         - 最后按平台配置决定是否按发布时间排序
         """
         new_posts = []
         for post in self.post:
             if post.url in sent_urls:
                 continue
-            if self.exclude_equal_latest_time:
-                if post.create_time <= self.scraping.latest_time:
-                    continue
-            elif post.create_time < self.scraping.latest_time:
-                continue
-            if self.should_skip_post_in_filter(post):
+            if post.create_time < self.scraping.latest_time:
                 continue
             new_posts.append(post)
-        if self.should_sort_filtered_posts():
+        if self.scraping.username != 'favorite':
             new_posts.sort(key=lambda item: item.create_time)
         return new_posts
 
@@ -166,13 +158,10 @@ class BasePlatform(ABC):
             self.scraping.end_msg = f'{username} 处理结束，没有新{self.content_name}\n'
             return
 
-        if self.show_time_range:
-            self.logger.info(
-                f'{username} 有 {len(new_posts)} 个新{self.content_name}。 '
-                f'{new_posts[0].create_time}  {new_posts[-1].create_time}'
-            )
-        else:
-            self.logger.info(f'{username} 有 {len(new_posts)} 个新{self.content_name}')
+        self.logger.info(
+            f'{username} 有 {len(new_posts)} 个新{self.content_name}。 '
+            f'{new_posts[0].create_time}  {new_posts[-1].create_time}'
+        )
 
         success = 0
         failure = 0
@@ -213,14 +202,6 @@ class BasePlatform(ABC):
             f'成功 {success} 个，失败 {failure} 个\n'
         )
 
-    def should_skip_post_in_filter(self, post: Any) -> bool:
-        """给平台在公共过滤流程里补充自定义跳过规则。"""
-        return False
-
-    def should_sort_filtered_posts(self) -> bool:
-        """决定过滤后的结果是否按发布时间排序。"""
-        return True
-
 
 class BasePost(ABC):
     """统一内容对象接口。
@@ -244,7 +225,7 @@ class BasePost(ABC):
 
     def __str__(self) -> str:
         """返回跨平台统一的日志摘要。"""
-        return f'{self.username} {self.create_time} {self.url} {self.text_raw}'
+        return f'{self.username} {self.create_time} {self.url} {self.text_raw.replace("\n", " ")[:50]}'
 
     @abstractmethod
     def start(self):
@@ -263,13 +244,7 @@ class BasePost(ABC):
         """
         raise NotImplementedError
 
-    @property
     def post_data(self) -> dict[str, Any]:
-        if self._post_data is None:
-            self._post_data = self.build_post_data()
-        return self._post_data
-
-    def build_post_data(self) -> dict[str, Any]:
         """构造跨平台共用的发送字段基本信息。
 
         """
@@ -290,7 +265,7 @@ class BasePost(ABC):
             return self.create_time.strftime("%Y-%m-%d %H:%M:%S")
         return '2099-12-12 12:12:12'
 
-    @abstractmethod
     @property
+    @abstractmethod
     def is_top(self):
         raise NotImplementedError

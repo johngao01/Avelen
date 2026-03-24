@@ -1038,13 +1038,6 @@ class Aweme(BasePost):
                 ))
         return items
 
-    def build_post_data(self) -> dict[str, Any]:
-        """构造抖音发送数据。"""
-        post_data = super().build_post_data()
-        if self.username == 'favorite':
-            post_data['userid'] = self._node['author']['sec_uid']
-        return post_data
-
     @property
     def is_top(self):
         return self._node.get('is_top', 0)
@@ -1268,9 +1261,6 @@ class DouyinScrapy(BasePlatform):
 
         self.post.extend(loaded_post)
         douyin_logger.info(f'{self.username} 从本地 JSON 获取到 {len(loaded_post)} 个抖音')
-
-    def should_sort_filtered_posts(self) -> bool:
-        return self.scraping.username != 'favorite'
 
     @classmethod
     def run(cls, argv=None):
