@@ -15,20 +15,6 @@ from core.settings import (
 from core.utils import download_log, log_error, rate_control
 
 
-def build_post_summary(post: BasePost) -> dict[str, Any]:
-    return {
-        'platform': post.platform,
-        'username': post.username,
-        'nickname': post.nickname,
-        'url': post.url,
-        'userid': post.userid,
-        'idstr': post.idstr,
-        'mblogid': post.mblogid,
-        'create_time': post.create_time.strftime('%Y-%m-%d %H:%M:%S'),
-        'text_raw': post.text_raw,
-    }
-
-
 def send_post_to_telegram(post: BasePost, logger):
     """下载单条作品媒体，并返回统一的 Telegram 处理结果。
 
@@ -48,24 +34,15 @@ def send_post_to_telegram(post: BasePost, logger):
     - `messages`: 已落库的消息记录列表
     - `telegram`: Telegram 发送过程详情
     """
-    post_summary = build_post_summary(post)
     downloader = Downloader(logger=logger)
     post_data = downloader.download(post)
-    files = post_data.get('files') or []
     download_ok = bool(post_data.get('ok'))
-    download_error = None if download_ok else ('构造发送数据失败' if not files else '文件下载失败')
-    download_summary = {
-        'ok': download_ok,
-        'error': download_error,
-        'files': files,
-    }
     if not download_ok:
         return {
             'ok': False,
-            'error': download_error,
+            'error': '所有文件未全部下载完成',
             'mode': 'prepare',
-            'post': post_summary,
-            'download': download_summary,
+            'post_data': post_data,
             'messages': [],
             'telegram': {
                 'chat_id': None,
@@ -77,14 +54,11 @@ def send_post_to_telegram(post: BasePost, logger):
             },
         }
     if is_no_send_mode():
-        logger.info(f"no-send 模式，跳过 Telegram 发送：{post.url}")
         return {
             'ok': True,
             'error': None,
             'mode': 'no-send',
-            'post': post_summary,
-            'download': download_summary,
-            'persisted': False,
+            'post_data': post_data,
             'messages': [],
             'telegram': {
                 'skipped': True,
@@ -97,10 +71,6 @@ def send_post_to_telegram(post: BasePost, logger):
             },
         }
     result = send_post_payload_to_telegram(post_data)
-    if isinstance(result, dict):
-        result.setdefault('mode', 'telegram')
-        result.setdefault('post', post_summary)
-        result.setdefault('download', download_summary)
     return result
 
 
@@ -167,7 +137,7 @@ def build_common_cli_parser(default_valid=(1,)):
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
-    parser.add_argument('-dp', '--download-progress', action=argparse.BooleanOptionalAction, default=True,
+    parser.add_argument('-dp', '--download-progress', action='store_true', default=True,
                         help='是否显示下载进度条，默认启用')
     parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
     return parser
