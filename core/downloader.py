@@ -25,8 +25,9 @@ from core.settings import (
     MAX_VIDEO_SIZE,
     is_download_progress_enabled,
 )
-from core.utils import convert_bytes_to_human_readable, get_platform_json_dir
+from core.utils import convert_bytes_to_human_readable, get_platform_json_dir, bytes2md5
 from rich.console import Console
+from rich.table import Column
 from rich.progress import (
     Progress,
     TextColumn,
@@ -39,6 +40,8 @@ from rich.progress import (
 
 # 初始化 Rich 控制台
 console = Console()
+del_file = ['7e80fb31ec58b1ca2fb3548480e1b95e', '4cf24fe8401f7ab2eba2c6cb82dffb0e', '41e5d4e3002de5cea3c8feae189f0736',
+            '3671086183ed683ec092b43b83fa461c']
 
 
 class DownloadProgress:
@@ -49,35 +52,34 @@ class DownloadProgress:
     从而让多个文件同时显示在一组进度条中。
     """
 
-    def __init__(self, filename: str = "Download", progress: Progress | None = None, enabled: bool = True):
+    def __init__(self, filename):
         self.start_time = None
         self.end_time = None
         self.total_size = 0
         self.final_filename = filename
-        self.enabled = enabled
-        self.owns_progress = progress is None
 
         # 定义 Rich 进度条样式 (现代、简洁、带渐变感)
-        self.progress = progress if progress is not None else (self.build_progress() if enabled else None)
-        self.task_id = None
-        self.description = self._short_name(filename)
-
-    @staticmethod
-    def build_progress() -> Progress:
-        """构造统一风格的 Rich 进度条。"""
-        return Progress(
-            "   ",
+        self.progress = Progress(
             SpinnerColumn("dots"),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=None),
+            TextColumn(
+                "[bold blue]{task.description}",
+                table_column=Column(ratio=2, min_width=24)  # 描述列更宽
+            ),
+            BarColumn(
+                bar_width=24,  # 不要用 None
+                table_column=Column(ratio=1)  # 进度条列更窄
+            ),
             "[progress.percentage]{task.percentage:>3.0f}%",
             DownloadColumn(),
             TransferSpeedColumn(),
             "ETA:",
             TimeRemainingColumn(),
             console=console,
-            transient=True  # 下载完成后进度条自动消失
+            transient=True,
+            expand=True,
         )
+        self.task_id = None
+        self.description = os.path.basename(filename)
 
     def live(self):
         """返回一个可用于 `with` 的上下文。
@@ -85,24 +87,13 @@ class DownloadProgress:
         - 独占进度条时，真正启动/关闭 Rich 的 live 渲染。
         - 共享进度条时，避免重复进入同一个 `Progress` 上下文。
         """
-        if not self.enabled or self.progress is None:
-            return nullcontext()
-        return self.progress if self.owns_progress else nullcontext()
+        return self.progress if is_download_progress_enabled() else nullcontext()
 
-    @staticmethod
-    def _short_name(filename: str) -> str:
-        pure_name = os.path.basename(filename or "Download") or "Download"
-        return (pure_name[:20] + '..') if len(pure_name) > 20 else pure_name
-
-    def start(self, filename: str | None = None, total: int | None = None):
+    def start(self, total: int | None = None):
         """初始化任务并在需要时创建对应进度条。"""
-        if not self.enabled or self.progress is None:
-            return
         if self.start_time is None:
             self.start_time = time.time()
-        if filename:
-            self.final_filename = filename
-            self.description = self._short_name(filename)
+        self.description = self.final_filename
         if total and total > 0:
             self.total_size = total
         if self.task_id is None:
@@ -116,13 +107,11 @@ class DownloadProgress:
 
     def update(self, completed: int, *, total: int | None = None, filename: str | None = None):
         """更新已下载字节数；如果总大小可知则一并更新。"""
-        if not self.enabled or self.progress is None:
-            return
         total = total if total and total > 0 else None
         if total is not None and completed > total:
             total = completed
         if self.task_id is None:
-            self.start(filename=filename, total=total)
+            self.start(total=total)
         elif filename and filename != self.final_filename:
             self.final_filename = filename
         if total is not None:
@@ -134,19 +123,15 @@ class DownloadProgress:
             update_kwargs["total"] = total
         self.progress.update(self.task_id, **update_kwargs)
 
-    def finish(self, final_filename: str | None = None, total_size: int | None = None):
+    def finish(self):
         """标记任务结束，并尽量补齐最终文件大小。"""
-        if not self.enabled or self.progress is None:
-            return
         if self.start_time is None:
             self.start_time = time.time()
         self.end_time = time.time()
-        if final_filename:
-            self.final_filename = final_filename
-        if total_size is not None and total_size > 0:
-            self.total_size = total_size
-        elif self.final_filename and os.path.exists(self.final_filename):
+        if self.final_filename and os.path.exists(self.final_filename):
             self.total_size = os.path.getsize(self.final_filename)
+        else:
+            self.total_size = 0
         if self.task_id is not None:
             completed = self.total_size or int(self.progress.tasks[self.task_id].completed)
             update_kwargs = {"completed": completed}
@@ -156,36 +141,38 @@ class DownloadProgress:
 
     def progress_hook(self, d):
         """yt-dlp 回调函数"""
-        if not self.enabled:
-            return
         if d['status'] == 'downloading':
-            total_size = d.get('total_bytes') or d.get('total_bytes_estimate')
+            if self.start_time is None:
+                self.start_time = time.time()
+
+                # 获取文件大小
+            self.total_size = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
             downloaded = d.get('downloaded_bytes', 0)
-            self.update(downloaded, total=total_size, filename=d.get('filename'))
+
+            if self.task_id is None:
+                # 提取纯文件名用于进度条显示
+                filename = os.path.basename(d.get('filename', 'Video'))
+                short_name = (filename[:20] + '..') if len(filename) > 20 else filename
+                self.task_id = self.progress.add_task(f"[cyan]{short_name}", total=self.total_size)
+
+            self.progress.update(self.task_id, completed=downloaded)
 
         elif d['status'] == 'finished':
-            info_dict = d.get('info_dict') or {}
-            self.finish(info_dict.get('_filename') or d.get('filename'))
+            self.end_time = time.time()
+            # 这里的 filename 可能是临时文件，yt-dlp 会在后续逻辑中更新它
+            self.final_filename = d.get('info_dict').get('_filename') or d.get('filename')
+            self.finish()
 
     def print_final_report(self):
         """下载完成后的单行精简输出"""
-        if not self.enabled:
-            return
-        if not self.end_time or not self.start_time or not self.final_filename:
-            return
-
         duration = self.end_time - self.start_time
         speed = self.total_size / duration if duration > 0 else 0
-        abspath = os.path.abspath(self.final_filename)
-        size = self.total_size
-        if os.path.exists(abspath):
-            size = os.path.getsize(abspath)
-            self.total_size = size
+        self.total_size = os.path.getsize(self.final_filename)
 
         # 核心输出逻辑：一行展示所有信息，不同颜色标记
         console.print(
-            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | INFO |\t[white][/white][cyan]{abspath}[/cyan] "
-            f"[white][/white][green]{convert_bytes_to_human_readable(size)}[/green] "
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | INFO |\t[white][/white][cyan]{self.final_filename}[/cyan] "
+            f"[white][/white][green]{convert_bytes_to_human_readable(self.total_size)}[/green] "
             f"[white][/white][yellow]{convert_bytes_to_human_readable(speed)}/s[/yellow] "
             f"[white][/white][magenta]{duration:.2f}s[/magenta]"
         )
@@ -250,7 +237,6 @@ class Downloader:
             timeout: int = 30,
             max_retries: int = 3,
             max_workers: int = 4,
-            show_progress: bool | None = None,
             logger=None,
             session: requests.Session | None = None,
     ):
@@ -258,7 +244,6 @@ class Downloader:
         self.timeout = timeout
         self.max_retries = max_retries
         self.max_workers = max_workers
-        self.show_progress = is_download_progress_enabled() if show_progress is None else show_progress
         self.logger = logger
         self._session = session
         self._session_local = local()
@@ -309,7 +294,9 @@ class Downloader:
             file_size = os.path.getsize(file_path)
             file_ext = media_name.split('.')[-1].lower()
             human_readable_size = convert_bytes_to_human_readable(file_size)
-            should_log_file_detail = not self.show_progress and self.logger is not None
+            file_detail = {'size': file_size, 'caption': media_name, 'duration': 0,
+                           'size_str': human_readable_size, 'ext': file_ext}
+            should_log_file_detail = not is_download_progress_enabled() and self.logger is not None
             if file_ext in ['jpg', 'png', 'jpeg', 'webp']:
                 from PIL import Image
                 with Image.open(file_path) as img:
@@ -320,84 +307,68 @@ class Downloader:
                 width, height = map(int, resolution.split('*'))
                 if width + height > MAX_PHOTO_TOTAL_PIXEL:
                     if file_size < MAX_DOCUMENT_SIZE:
-                        return {'filetype': 'document', 'resolution': resolution}
-                    return None
-                if file_size < MAX_PHOTO_SIZE:
-                    return {'filetype': 'photo', 'resolution': resolution}
-                if MAX_PHOTO_SIZE < file_size < MAX_DOCUMENT_SIZE:
-                    return {'filetype': 'document', 'resolution': resolution}
-                return None
-
+                        file_detail.update({'filetype': 'document', 'resolution': resolution})
+                    else:
+                        return None
+                elif file_size < MAX_PHOTO_SIZE:
+                    file_detail.update({'filetype': 'photo', 'resolution': resolution})
+                elif MAX_PHOTO_SIZE < file_size < MAX_DOCUMENT_SIZE:
+                    file_detail.update({'filetype': 'document', 'resolution': resolution})
+                return file_detail
             duration = get_video_duration_hms(file_path)
-            if duration and should_log_file_detail:
+            if should_log_file_detail:
                 self.logger.info(' '.join(["\t", str(file_index), file_path, duration, human_readable_size]))
             if file_size < MAX_VIDEO_SIZE:
-                return {'filetype': 'video', 'duration': duration}
+                file_detail.update({'filetype': 'video', 'duration': duration})
+                return file_detail
             return None
 
-        def should_skip_file(file_path: str, file_type: str) -> bool:
-            if post.platform != 'weibo' or file_type not in {'photo', 'document'}:
+        def should_skip_file(file_path: str) -> bool:
+            """检查下载后的媒体是否命中微博和谐文件特征。"""
+            try:
+                with open(file_path, mode='rb') as file_obj:
+                    return bytes2md5(file_obj.read()) in del_file
+            except OSError:
                 return False
-            is_deleted_media = getattr(post, '_is_deleted_media', None)
-            if not callable(is_deleted_media):
-                return False
-            if is_deleted_media(file_path):
-                if self.logger:
-                    self.logger.info("和谐的内容：" + file_path)
-                return True
-            return False
 
-        post_data = post.post_data
+        post_data = post.post_data()
         tasks = [self.build_task(post.platform, item) for item in post.build_media_items()]
-        if not tasks:
-            error = '没有可下载的媒体'
-            if self.logger:
-                self.logger.error(f'{post.url} {error}')
-            post_data['files'] = []
-            post_data['ok'] = False
-            return post_data
+        total_file_count = len(tasks)
+        skip_file_count = 0
 
         paths: list[str | None] = [None] * len(tasks)
-        progress = DownloadProgress.build_progress() if self.show_progress else None
         if len(tasks) == 1 or self.max_workers <= 1:
-            with (progress if progress is not None else nullcontext()):
-                for index, task in enumerate(tasks):
-                    paths[index] = self._download_media(task, progress)
+            for index, task in enumerate(tasks):
+                paths[index] = self._download_media(task)
         else:
             max_workers = min(self.max_workers, len(tasks))
-            with (progress if progress is not None else nullcontext()):
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    future_map = {
-                        executor.submit(self._download_media, task, progress): index
-                        for index, task in enumerate(tasks)
-                    }
-                    for future in as_completed(future_map):
-                        index = future_map[future]
-                        paths[index] = future.result()
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_map = {
+                    executor.submit(self._download_media, task): index
+                    for index, task in enumerate(tasks)
+                }
+                for future in as_completed(future_map):
+                    index = future_map[future]
+                    paths[index] = future.result()
 
         files = []
-        failed_urls: list[str] = []
         for task, path in zip(tasks, paths):
             path = path or task.save_path
-            size = os.path.getsize(path) if path and os.path.exists(path) else 0
-            detail = build_file_detail(path, task.index) if size > 0 else None
-            if detail is None or not detail.get('filetype'):
-                failed_urls.append(task.url)
+            if not os.path.exists(path) or os.path.getsize(path) == 0:
                 continue
-            if should_skip_file(path, detail['filetype']):
+            if post.platform == 'weibo' and should_skip_file(path):
+                skip_file_count += 1
+                continue
+            detail = build_file_detail(path, task.index)
+            if not detail:
                 continue
             file_info = {
                 'path': path,
-                'caption': os.path.basename(path) if path else '',
-                'size': size,
-                'filetype': detail.get('filetype', ''),
-                'detail': detail,
+                **detail
             }
             files.append(file_info)
         post_data['files'] = files
-        post_data['ok'] = len(failed_urls) == 0
-        if failed_urls and self.logger:
-            self.logger.error(f"{post.url} 下载失败：{' | '.join(failed_urls)}")
+        post_data['ok'] = 1 if total_file_count == len(files) + skip_file_count else 0
         return post_data
 
     def _get_session(self) -> requests.Session:
@@ -414,12 +385,12 @@ class Downloader:
             self._session_local.session = session
         return session
 
-    def _download_media(self, task: DownloadTask, progress: Progress | None = None) -> str:
+    def _download_media(self, task: DownloadTask) -> str:
         """下载单个媒体，并根据 URL/媒体类型选择具体实现。"""
         parsed = urlparse(task.url)
         if task.media_type == "video" and parsed.netloc.endswith("bilibili.com") and "/video/" in parsed.path:
-            return self._download_with_yt_dlp(task, progress=progress)
-        return self._download_http(task, progress=progress)
+            return self._download_with_yt_dlp(task)
+        return self._download_http(task)
 
     @staticmethod
     def _get_content_length(response: requests.Response) -> int | None:
@@ -433,15 +404,17 @@ class Downloader:
             return None
         return total if total > 0 else None
 
-    def _download_http(self, task: DownloadTask, *, progress: Progress | None = None) -> str:
+    def _download_http(self, task: DownloadTask) -> str:
         """使用普通 HTTP 流式下载文件。"""
+        progress = DownloadProgress(task.save_path)
         if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
+            progress.finish()
+            progress.print_final_report()
             return task.save_path
         os.makedirs(os.path.dirname(task.save_path), exist_ok=True)
         tmp_path = f"{task.save_path}.part"
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        progress_tracker = DownloadProgress(task.save_path, progress=progress, enabled=self.show_progress)
         try:
             response = self._get_session().get(
                 task.url,
@@ -457,18 +430,17 @@ class Downloader:
             total_size = self._get_content_length(response)
             downloaded = 0
             with open(tmp_path, mode="wb", buffering=8192) as file_obj:
-                with progress_tracker.live():
-                    progress_tracker.start(task.save_path, total=total_size)
+                with progress.live():
+                    progress.start(total=total_size)
                     # 分块写入，边下载边刷新进度，避免一次性读入内存。
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             file_obj.write(chunk)
                             downloaded += len(chunk)
-                            progress_tracker.update(downloaded, total=total_size)
+                            progress.update(downloaded, total=total_size)
             os.replace(tmp_path, task.save_path)
-            progress_tracker.finish(task.save_path)
-            if progress_tracker.owns_progress:
-                progress_tracker.print_final_report()
+            progress.finish()
+            progress.print_final_report()
             return task.save_path
         except Exception as exc:
             if os.path.exists(tmp_path):
@@ -477,14 +449,15 @@ class Downloader:
                 self.logger.error(f"{task.url} 下载异常：{exc}")
             return task.save_path
 
-    def _download_with_yt_dlp(self, task: DownloadTask, *, progress: Progress | None = None) -> str:
+    def _download_with_yt_dlp(self, task: DownloadTask) -> str:
         """使用 `yt-dlp` 下载 Bilibili 视频并复用统一进度展示。"""
+        progress = DownloadProgress(task.save_path)
         if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
+            progress.print_final_report()
             return task.save_path
         os.makedirs(os.path.dirname(task.save_path), exist_ok=True)
-        progress_tracker = DownloadProgress(task.save_path, progress=progress, enabled=self.show_progress)
         try:
-            with progress_tracker.live():
+            with progress.live():
                 with YoutubeDL({  # type: ignore
                     'logger': self.logger,
                     "cookiefile": str(self._bilibili_cookie_path()),
@@ -495,7 +468,7 @@ class Downloader:
                     "retries": 10,
                     "ignoreerrors": False,
                     "writeinfojson": True,
-                    "progress_hooks": [progress_tracker.progress_hook],
+                    "progress_hooks": [progress.progress_hook],
                     "noprogress": True,
                     "quiet": True,
                 }) as ydl:
@@ -513,9 +486,8 @@ class Downloader:
                     if self.logger:
                         self.logger.error(f"{task.url} 下载失败：yt-dlp output missing")
                     return task.save_path
-            progress_tracker.finish(final_path)
-            if progress_tracker.owns_progress:
-                progress_tracker.print_final_report()
+            progress.finish(final_path)
+            progress.print_final_report()
             self._move_bilibili_infojson(final_path)
             return final_path
         except Exception as exc:
