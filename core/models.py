@@ -9,7 +9,6 @@ from typing import Any
 
 from loguru import logger as _logger
 from core.database import update_db
-from core.settings import is_no_send_mode
 
 DEFAULT_LATEST_TIME = datetime(2000, 12, 12, 12, 12, 12)
 _STDERR_CONFIGURED = False
@@ -135,7 +134,11 @@ class BasePlatform(ABC):
             new_posts.sort(key=lambda item: item.create_time)
         return new_posts
 
-    def start(self, sent_urls: set[str], use_local_json: bool = False) -> None:
+    def start(
+            self,
+            sent_urls: set[str],
+            options: RunOptions | None = None,
+    ) -> None:
         """执行单个关注对象的完整处理流程。
 
         处理顺序：
@@ -147,7 +150,10 @@ class BasePlatform(ABC):
         """
         from core.scrapy_runner import handle_dispatch_result, send_post_to_telegram
 
-        if use_local_json:
+        if options is None:
+            options = RunOptions()
+
+        if options.use_local_json:
             self.get_post_from_local()
         else:
             self.get_post_from_api()
@@ -173,9 +179,14 @@ class BasePlatform(ABC):
                 skipped += 1
                 continue
             status = handle_dispatch_result(
-                send_post_to_telegram(post, self.logger),
+                send_post_to_telegram(
+                    post,
+                    self.logger,
+                    options=options,
+                ),
                 self.logger,
                 post.url,
+                options=options,
             )
             if status == 'success':
                 success += 1
@@ -184,7 +195,7 @@ class BasePlatform(ABC):
             else:
                 failure += 1
 
-        if not is_no_send_mode():
+        if not options.no_send:
             latest_post = new_posts[-1]
             latest_time = getattr(latest_post, 'create_time_str', None)
             if not isinstance(latest_time, str):
@@ -269,3 +280,12 @@ class BasePost(ABC):
     @abstractmethod
     def is_top(self):
         raise NotImplementedError
+
+
+@dataclass(slots=True, frozen=True)
+class RunOptions:
+    """抓取执行链路共享的运行时参数。"""
+
+    use_local_json: bool = False
+    no_send: bool = False
+    download_progress: bool = True

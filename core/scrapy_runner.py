@@ -4,18 +4,17 @@ import argparse
 
 from core.downloader import Downloader
 from core.database import get_filtered_followings, get_send_url
-from core.models import BasePost
+from core.models import BasePost, RunOptions
 from core.sender_dispatcher import send_post_payload_to_telegram
-from core.settings import (
-    disable_download_progress,
-    enable_download_progress,
-    enable_no_send_mode,
-    is_no_send_mode,
-)
 from core.utils import download_log, log_error, rate_control
 
 
-def send_post_to_telegram(post: BasePost, logger):
+def send_post_to_telegram(
+        post: BasePost,
+        logger,
+        *,
+        options: RunOptions | None = None,
+):
     """下载单条作品媒体，并返回统一的 Telegram 处理结果。
 
     职责：
@@ -34,7 +33,10 @@ def send_post_to_telegram(post: BasePost, logger):
     - `messages`: 已落库的消息记录列表
     - `telegram`: Telegram 发送过程详情
     """
-    downloader = Downloader(logger=logger)
+    if options is None:
+        options = RunOptions()
+
+    downloader = Downloader(logger=logger, show_progress=options.download_progress)
     post_data = downloader.download(post)
     download_ok = bool(post_data.get('ok'))
     if not download_ok:
@@ -53,7 +55,7 @@ def send_post_to_telegram(post: BasePost, logger):
                 'persisted_messages': [],
             },
         }
-    if is_no_send_mode():
+    if options.no_send:
         return {
             'ok': True,
             'error': None,
@@ -74,9 +76,20 @@ def send_post_to_telegram(post: BasePost, logger):
     return result
 
 
-def handle_dispatch_result(result, logger, url: str, on_success_update=None, on_failure_update=None) -> str:
+def handle_dispatch_result(
+        result,
+        logger,
+        url: str,
+        on_success_update=None,
+        on_failure_update=None,
+        *,
+        options: RunOptions | None = None,
+) -> str:
+    if options is None:
+        options = RunOptions()
+
     if isinstance(result, dict) and result.get('ok'):
-        if not is_no_send_mode():
+        if not options.no_send:
             download_log(result)
             rate_control(result, logger)
             if on_success_update:
@@ -137,7 +150,7 @@ def build_common_cli_parser(default_valid=(1,)):
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
-    parser.add_argument('-dp', '--download-progress', action='store_true', default=True,
+    parser.add_argument('-dp', '--download-progress', action=argparse.BooleanOptionalAction, default=True,
                         help='是否显示下载进度条，默认启用')
     parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
     return parser
@@ -160,24 +173,27 @@ def select_followings(platform: str, args):
 def prepare_followings(platform: str, default_valid=(1,),
                        configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
                        argv=None):
-    """Build parser, parse args, apply runtime flags, and select followings in one call."""
+    """Build parser, parse args, and select followings in one call."""
     parser = build_common_cli_parser(default_valid=default_valid)
     if configure_parser:
         configure_parser(parser)
     args = parser.parse_args(argv)
-    if getattr(args, 'no_send', False):
-        enable_no_send_mode()
-    if getattr(args, 'download_progress', True):
-        enable_download_progress()
-    else:
-        disable_download_progress()
     return args, select_followings(platform, args)
+
+
+def build_run_options(args: argparse.Namespace) -> RunOptions:
+    """从 CLI 参数中提取执行链路需要的运行时参数。"""
+    return RunOptions(
+        use_local_json=getattr(args, 'local_json', False),
+        no_send=getattr(args, 'no_send', False),
+        download_progress=getattr(args, 'download_progress', True),
+    )
 
 
 def run_platform_main(platform: str,
                       logger,
                       build_following: Callable[[Any], Any],
-                      run_one: Callable[[Any, set[str], argparse.Namespace], None],
+                      run_one: Callable[[Any, set[str], RunOptions], None],
                       *,
                       default_valid=(1,),
                       configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
@@ -189,11 +205,12 @@ def run_platform_main(platform: str,
         configure_parser=configure_parser,
         argv=argv,
     )
+    options = build_run_options(args)
     sent_urls = set(get_send_url(platform))
     run_followings(
         all_followings,
         build_following=build_following,
-        run_one=lambda following: run_one(following, sent_urls, args),
+        run_one=lambda following: run_one(following, sent_urls, options),
         logger=logger,
     )
     return args, all_followings

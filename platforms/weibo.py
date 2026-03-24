@@ -4,7 +4,7 @@ import os
 import requests
 from typing import Any, Dict
 
-from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
+from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger, RunOptions
 from datetime import datetime
 from core.settings import (
     COMMON_HEADERS,
@@ -302,7 +302,14 @@ def build_weibo_post(
     return WeiboPost(following, weibo_data)
 
 
-def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=None):
+def handle_weibo(
+        weibo_index,
+        weibo_url,
+        weibo_data=None,
+        userid=None,
+        username=None,
+        options: RunOptions | None = None,
+):
     """兼容旧调用方式，处理单条微博的下载与发送。"""
     post = build_weibo_post(weibo_url, weibo_data=weibo_data, userid=userid, username=username)
     if post is False or post == 'skip':
@@ -313,7 +320,7 @@ def handle_weibo(weibo_index, weibo_url, weibo_data=None, userid=None, username=
     weibo_logger.info(f"{weibo_index}\t{start_message}")
     if not should_process:
         return 'skip'
-    return send_post_to_telegram(post, weibo_logger)
+    return send_post_to_telegram(post, weibo_logger, options=options)
 
 
 class WeiboScrapy(BasePlatform):
@@ -469,10 +476,7 @@ def main(argv=None):
         'weibo',
         weibo_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_urls, args: WeiboScrapy(following).start(
-            sent_urls,
-            use_local_json=args.local_json,
-        ),
+        run_one=lambda following, sent_urls, options: WeiboScrapy(following).start(sent_urls, options),
         argv=argv,
     )
 

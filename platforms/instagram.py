@@ -4,7 +4,6 @@ import json
 import os
 import re
 from datetime import datetime
-from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -347,10 +346,7 @@ def main(argv=None):
         'instagram',
         instagram_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_urls, args: InstagramScrapy(following, cookie_header).start(
-            sent_urls,
-            use_local_json=args.local_json,
-        ),
+        run_one=lambda following, sent_urls, options: InstagramScrapy(following, cookie_header).start(sent_urls, options),
         argv=argv,
     )
 

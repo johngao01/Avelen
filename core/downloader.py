@@ -21,7 +21,6 @@ from core.settings import (
     MAX_PHOTO_SIZE,
     MAX_PHOTO_TOTAL_PIXEL,
     MAX_VIDEO_SIZE,
-    is_download_progress_enabled,
 )
 from core.utils import convert_bytes_to_human_readable, get_platform_json_dir, bytes2md5
 from rich.console import Console
@@ -226,6 +225,7 @@ class Downloader:
             timeout: int = 30,
             max_retries: int = 3,
             max_workers: int = 4,
+            show_progress: bool = True,
             logger=None,
             session: requests.Session | None = None,
     ):
@@ -233,6 +233,7 @@ class Downloader:
         self.timeout = timeout
         self.max_retries = max_retries
         self.max_workers = max_workers
+        self.show_progress = show_progress
         self.logger = logger
         self._session = session
         self._session_local = local()
@@ -299,7 +300,7 @@ class Downloader:
             console=console,
             transient=True,
             expand=True,
-            disable=not is_download_progress_enabled()
+            disable=not self.show_progress,
         )
 
         with shared_progress:

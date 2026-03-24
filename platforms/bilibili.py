@@ -275,10 +275,7 @@ def main(argv=None):
         'bilibili',
         bilibili_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_urls, args: BilibiliScrapy(following, cookies).start(
-            sent_urls,
-            use_local_json=args.local_json,
-        ),
+        run_one=lambda following, sent_urls, options: BilibiliScrapy(following, cookies).start(sent_urls, options),
         argv=argv,
     )
 

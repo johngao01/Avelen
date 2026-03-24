@@ -9,7 +9,7 @@ from random import randint, random, choice
 from re import compile
 from time import time
 from urllib.parse import urlencode, quote
-from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
+from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger, RunOptions
 from core.settings import (
     DOUYIN_CONFIG,
     DOUYIN_COOKIE_PATH,
@@ -1102,7 +1102,7 @@ def get_aweme_detail(aweme_id):
     return aweme
 
 
-def handler_douyin(aweme):
+def handler_douyin(aweme, options: RunOptions | None = None):
     if aweme is None:
         return False
     if isinstance(aweme.get('create_time'), datetime):
@@ -1113,7 +1113,12 @@ def handler_douyin(aweme):
         aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
     user = Following(aweme['author']['sec_uid'], 'favorite', '')
     post = Aweme(user, aweme)
-    return handle_dispatch_result(send_post_to_telegram(post, douyin_logger), douyin_logger, post.url) == 'success'
+    return handle_dispatch_result(
+        send_post_to_telegram(post, douyin_logger, options=options),
+        douyin_logger,
+        post.url,
+        options=options,
+    ) == 'success'
 
 
 class DouyinScrapy(BasePlatform):
@@ -1273,10 +1278,7 @@ def main(argv=None):
         'douyin',
         douyin_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_urls, args: DouyinScrapy(following).start(
-            sent_urls,
-            use_local_json=args.local_json,
-        ),
+        run_one=lambda following, sent_urls, options: DouyinScrapy(following).start(sent_urls, options),
         default_valid=(1,),
         argv=argv,
     )
