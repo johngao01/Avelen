@@ -135,6 +135,12 @@ class BilibiliPost(BasePost):
     def start(self):
         if self.badge_text == '充电专属':
             return False, self.__str__() + ' 充电专属 跳过处理'
+        elif duration_text := get(self.modules, 'module_dynamic.major.archive.duration_text'):
+            # 视频时长超过10分钟 跳过
+            if str(duration_text).startswith('0'):
+                return True, self.__str__()
+            else:
+                return False, self.__str__() + f' 视频过长 {duration_text} 跳过处理'
         elif self.is_only_fans:
             return False, self.__str__() + ' 粉丝专属 跳过处理'
         elif self.dynamic_type in ('DYNAMIC_TYPE_AV', 'DYNAMIC_TYPE_DRAW'):
