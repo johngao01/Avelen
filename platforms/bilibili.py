@@ -21,7 +21,7 @@ from core.scrapy_runner import (
 from core.utils import build_browser_headers, build_platform_json_path, load_netscape_cookies
 from datetime import datetime
 
-DYNAMIC_API_URL = f"{BILIBILI_CONFIG['base_url']}/x/polymer/web-dynamic/v1/feed/space"
+DYNAMIC_API_URL = f"{BILIBILI_CONFIG['api_url']}/x/polymer/web-dynamic/v1/feed/space"
 BILIBILI_HEADERS = build_browser_headers(referer=BILIBILI_CONFIG['base_url'])
 bilibili_logger = get_platform_logger('bilibili', LOGS_DIR, file_level='DEBUG')
 os.makedirs(BILIBILI_JSON_ROOT, exist_ok=True)
@@ -183,12 +183,10 @@ class BilibiliScrapy(BasePlatform):
 
     def get_post_from_api(self) -> None:
         """实时请求 B站接口，抓取当前账号的新动态。"""
-        dynamics: list[BilibiliPost] = []
         offset = ''
         page = 1
         keep = True
         while keep:
-            reached_latest = False
             try:
                 response = self.session.get(
                     DYNAMIC_API_URL,
@@ -215,25 +213,22 @@ class BilibiliScrapy(BasePlatform):
                 item['username'] = self.scraping.username
                 post = BilibiliPost(self.scraping, item)
                 post.save_json()
-                dynamics.append(post)
+                self.post.append(post)
                 if post.create_time <= self.scraping.latest_time and not post.is_top:
-                    reached_latest = True
+                    keep = False
 
             bilibili_logger.info(
                 f'第 {page} 页获取到 {len(items)} 个动态, '
-                f'一共获取到 {len(dynamics)} 个动态'
+                f'一共获取到 {len(self.post)} 个动态'
             )
 
-            if reached_latest or not data.get('has_more'):
+            if data.get('has_more'):
                 break
 
             page += 1
             time.sleep(2)
 
-        self.post = dynamics
-
     def get_post_from_local(self) -> None:
-        self.post = []
         for root, _, files in os.walk(BILIBILI_JSON_ROOT):
             for filename in files:
                 if not (filename.startswith('Dynamic_') and filename.endswith('.json')):

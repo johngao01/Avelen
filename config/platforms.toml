@@ -28,6 +28,7 @@ user_url = "https://www.douyin.com/user/"
 cookie_file = "bl.txt"
 base_url = "https://www.bilibili.com"
 space_url = "https://space.bilibili.com"
+api_url = "https://api.bilibili.com"
 
 [platforms.instagram]
 cookie_file = "neverblock11.txt"
