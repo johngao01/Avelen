@@ -174,7 +174,7 @@ class BasePlatform(ABC):
         skipped = 0
         for index, post in enumerate(new_posts, start=1):
             should_process, start_message = post.start()
-            self.logger.info(f"{index}/{len(new_posts)}\t{start_message}")
+            self.logger.info(f"{index}/{len(new_posts)} {start_message}")
             if not should_process:
                 skipped += 1
                 continue

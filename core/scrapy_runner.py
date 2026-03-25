@@ -121,7 +121,7 @@ def run_followings(all_followings: list[Any],
     for i, raw_data in enumerate(all_followings, start=1):
         following = build_following(raw_data)
         try:
-            logger.info(f"{i}/{following_count}\t{following.start_msg}")
+            logger.info(f"{i}/{following_count} {following.start_msg}")
             run_one(following)
         except Exception:
             logger.info(traceback.format_exc())
