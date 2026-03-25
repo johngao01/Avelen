@@ -1196,12 +1196,11 @@ class DouyinScrapy(BasePlatform):
                 )
             if resp.text == '':
                 douyin_logger.error('爬取失败，空响应')
-                raise RuntimeError('爬取失败，空响应')
             try:
                 resp = resp.text.encode('utf-8').decode('utf-8')
                 data_json = json.loads(resp)
             except Exception:
-                print(resp)
+                douyin_logger.error('爬取失败, 无法json化数据。')
                 continue
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
@@ -1212,7 +1211,7 @@ class DouyinScrapy(BasePlatform):
                 aweme = Aweme(self.scraping, aweme)
                 aweme.save_json()
                 self.post.append(aweme)
-                if not aweme.is_top and aweme.create_time < self.scraping.latest_time:
+                if self.username != 'favorite' and not aweme.is_top and aweme.create_time < self.scraping.latest_time:
                     KEEP = False
             scrapy_info = f'{self.username} 获取第{self.page}页完成，一共有{len(data_json['aweme_list'])}个抖音'
             if self.username == 'favorite' and len(self.post) >= SCRAPY_FAVORITE_LIMIT:
