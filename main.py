@@ -17,8 +17,8 @@ def build_parser():
     return parser
 
 
-def main(argv=None):
-    argv = list(sys.argv[1:] if argv is None else argv)
+def main():
+    argv = sys.argv[1:]
     parser = build_parser()
     if not argv:
         parser.print_help()
@@ -28,7 +28,7 @@ def main(argv=None):
         return None
     args = parser.parse_args([argv[0]])
     platform_cls = get_platform(args.platform)
-    return platform_cls.run(argv[1:])
+    return platform_cls.run()
 
 
 if __name__ == "__main__":

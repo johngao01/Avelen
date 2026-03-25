@@ -265,18 +265,17 @@ class BilibiliScrapy(BasePlatform):
         return desc_list[0] if desc_list else ''
 
     @classmethod
-    def run(cls, argv=None):
-        return main(argv)
+    def run(cls):
+        return main()
 
 
-def main(argv=None):
+def main():
     cookies = load_netscape_cookies(BILIBILI_COOKIE_PATH)
     return run_platform_main(
         'bilibili',
         bilibili_logger,
         build_following=lambda raw: Following(*raw),
         run_one=lambda following, sent_urls, options: BilibiliScrapy(following, cookies).start(sent_urls, options),
-        argv=argv,
     )
 
 

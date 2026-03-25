@@ -101,7 +101,7 @@ class BasePlatform(ABC):
 
     @classmethod
     @abstractmethod
-    def run(cls, argv=None):
+    def run(cls):
         """执行平台命令行入口。"""
         raise NotImplementedError
 

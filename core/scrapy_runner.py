@@ -1,6 +1,7 @@
-from typing import Callable, Any
-import traceback
 import argparse
+import sys
+import traceback
+from typing import Callable, Any
 
 from core.downloader import Downloader
 from core.database import get_filtered_followings, get_send_url
@@ -131,10 +132,10 @@ def run_followings(all_followings: list[Any],
         logger.info(finished_message)
 
 
-def build_common_cli_parser(default_valid=(1,)):
+def build_common_cli_parser():
     """构建各平台共用命令行参数。"""
     parser = argparse.ArgumentParser(description='Scrapy runner options')
-    parser.add_argument('--valid', nargs='+', type=int, default=list(default_valid), choices=[0, 1, 2],
+    parser.add_argument('--valid', nargs='+', type=int, default=list((1,)), choices=[0, 1, 2],
                         help='关注类型，可多选：0取消关注 1特别关注 2普通关注，默认 1')
     parser.add_argument('--user-id', action='append', dest='user_ids', default=[],
                         help='按 user.userid 精确筛选，可重复传参')
@@ -170,17 +171,6 @@ def select_followings(platform: str, args):
     )
 
 
-def prepare_followings(platform: str, default_valid=(1,),
-                       configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
-                       argv=None):
-    """Build parser, parse args, and select followings in one call."""
-    parser = build_common_cli_parser(default_valid=default_valid)
-    if configure_parser:
-        configure_parser(parser)
-    args = parser.parse_args(argv)
-    return args, select_followings(platform, args)
-
-
 def build_run_options(args: argparse.Namespace) -> RunOptions:
     """从 CLI 参数中提取执行链路需要的运行时参数。"""
     return RunOptions(
@@ -193,18 +183,14 @@ def build_run_options(args: argparse.Namespace) -> RunOptions:
 def run_platform_main(platform: str,
                       logger,
                       build_following: Callable[[Any], Any],
-                      run_one: Callable[[Any, set[str], RunOptions], None],
-                      *,
-                      default_valid=(1,),
-                      configure_parser: Callable[[argparse.ArgumentParser], None] | None = None,
-                      argv=None):
+                      run_one: Callable[[Any, set[str], RunOptions], None]):
     """运行平台命令行入口的公共壳层。"""
-    args, all_followings = prepare_followings(
-        platform,
-        default_valid=default_valid,
-        configure_parser=configure_parser,
-        argv=argv,
-    )
+    parser = build_common_cli_parser()
+    argv = sys.argv[1:]
+    if argv and argv[0] == platform:
+        argv = argv[1:]
+    args = parser.parse_args(argv)
+    all_followings = select_followings(platform, args)
     options = build_run_options(args)
     sent_urls = set(get_send_url(platform))
     run_followings(

@@ -467,17 +467,16 @@ class WeiboScrapy(BasePlatform):
         weibo_logger.info(f'{self.username} 从本地 JSON 获取到 {len(self.post)} 个微博')
 
     @classmethod
-    def run(cls, argv=None):
-        return main(argv)
+    def run(cls):
+        return main()
 
 
-def main(argv=None):
+def main():
     return run_platform_main(
         'weibo',
         weibo_logger,
         build_following=lambda raw: Following(*raw),
         run_one=lambda following, sent_urls, options: WeiboScrapy(following).start(sent_urls, options),
-        argv=argv,
     )
 
 

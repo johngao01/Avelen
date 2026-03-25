@@ -333,21 +333,20 @@ class InstagramScrapy(BasePlatform):
         return variables
 
     @classmethod
-    def run(cls, argv=None):
-        return main(argv)
+    def run(cls):
+        return main()
 
 
 InstagramPlatform = InstagramScrapy
 
 
-def main(argv=None):
+def main():
     cookie_header = read_text_file(INSTAGRAM_COOKIE_PATH)
     return run_platform_main(
         'instagram',
         instagram_logger,
         build_following=lambda raw: Following(*raw),
         run_one=lambda following, sent_urls, options: InstagramScrapy(following, cookie_header).start(sent_urls, options),
-        argv=argv,
     )
 
 

@@ -19,9 +19,9 @@ from core.settings import (
     SCRAPY_FAVORITE_LIMIT,
 )
 from core.scrapy_runner import (
-    send_post_to_telegram,
     handle_dispatch_result,
     run_platform_main,
+    send_post_to_telegram,
 )
 from core.utils import (
     build_browser_headers,
@@ -1268,19 +1268,17 @@ class DouyinScrapy(BasePlatform):
         douyin_logger.info(f'{self.username} 从本地 JSON 获取到 {len(loaded_post)} 个抖音')
 
     @classmethod
-    def run(cls, argv=None):
+    def run(cls):
         """抖音平台命令行入口。"""
-        return main(argv)
+        return main()
 
 
-def main(argv=None):
+def main():
     return run_platform_main(
         'douyin',
         douyin_logger,
         build_following=lambda raw: Following(*raw),
         run_one=lambda following, sent_urls, options: DouyinScrapy(following).start(sent_urls, options),
-        default_valid=(1,),
-        argv=argv,
     )
 
 
