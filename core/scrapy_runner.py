@@ -16,64 +16,37 @@ def send_post_to_telegram(
         *,
         options: RunOptions | None = None,
 ):
-    """下载单条作品媒体，并返回统一的 Telegram 处理结果。
+    """下载单条作品媒体，并返回统一处理结果。
 
     职责：
     - 调用 `Downloader` 下载当前作品对应的全部媒体
-    - 让平台对象把下载结果整理成发送 payload
     - 在 `--no-send` 模式下返回成功但不实际发送
-    - 在正常模式下把 payload 交给 Telegram 发送层
+    - 在正常模式下把下载结果交给 Telegram 发送层
 
-    返回值始终是 `dict`，核心字段如下：
+    返回值始终是 `dict`，仅保留后续流程真正依赖的字段：
     - `ok`: 当前处理是否成功
     - `error`: 失败原因，成功时为 `None`
-    - `mode`: `prepare` / `no-send` / `telegram`
-    - `post`: 当前作品摘要
-    - `download`: 下载结果摘要
-    - `persisted`: 是否已将 Telegram 消息写入数据库
     - `messages`: 已落库的消息记录列表
-    - `telegram`: Telegram 发送过程详情
     """
     if options is None:
         options = RunOptions()
 
     downloader = Downloader(logger=logger, show_progress=options.download_progress)
-    post_data = downloader.download(post)
-    download_ok = bool(post_data.get('ok'))
+    payload = downloader.download(post)
+    download_ok = bool(payload.get('ok'))
     if not download_ok:
         return {
             'ok': False,
             'error': '所有文件未全部下载完成',
-            'mode': 'prepare',
-            'post_data': post_data,
             'messages': [],
-            'telegram': {
-                'chat_id': None,
-                'event_count': 0,
-                'message_count': 0,
-                'events': [],
-                'messages': [],
-                'persisted_messages': [],
-            },
         }
     if options.no_send:
         return {
             'ok': True,
             'error': None,
-            'mode': 'no-send',
-            'post_data': post_data,
             'messages': [],
-            'telegram': {
-                'skipped': True,
-                'chat_id': None,
-                'event_count': 0,
-                'message_count': 0,
-                'events': [],
-                'messages': [],
-                'persisted_messages': [],
-            },
         }
-    result = send_post_payload_to_telegram(post_data)
+    result = send_post_payload_to_telegram(payload)
     return result
 
 
