@@ -115,17 +115,17 @@ class BasePlatform(ABC):
         """从本地缓存恢复当前账号内容。"""
         raise NotImplementedError
 
-    def filter_new_post(self, sent_urls: set[str]) -> list[Any]:
+    def filter_new_post(self, sent_post: set[str]) -> list[Any]:
         """基于统一规则筛出当前平台真正需要处理的新内容。
 
         过滤顺序：
-        - 先按 `sent_urls` 去重
+        - 先按 `sent_post` 去重
         - 再按 `latest_time` 做增量过滤
         - 最后按平台配置决定是否按发布时间排序
         """
         new_posts = []
         for post in self.post:
-            if post.url in sent_urls:
+            if post.idstr in sent_post:
                 continue
             if post.create_time < self.scraping.latest_time:
                 continue
@@ -136,7 +136,7 @@ class BasePlatform(ABC):
 
     def start(
             self,
-            sent_urls: set[str],
+            sent_post: set[str],
             options: RunOptions | None = None,
     ) -> None:
         """执行单个关注对象的完整处理流程。
@@ -158,7 +158,7 @@ class BasePlatform(ABC):
         else:
             self.get_post_from_api()
 
-        new_posts = self.filter_new_post(sent_urls)
+        new_posts = self.filter_new_post(sent_post)
         username = self.scraping.username
         if not new_posts:
             self.scraping.end_msg = f'{username} 处理结束，没有新{self.content_name}\n'

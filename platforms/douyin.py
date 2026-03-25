@@ -1278,7 +1278,7 @@ def main():
         'douyin',
         douyin_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_urls, options: DouyinScrapy(following).start(sent_urls, options),
+        run_one=lambda following, sent_post, options: DouyinScrapy(following).start(sent_post, options),
     )
 
 

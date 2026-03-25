@@ -346,7 +346,7 @@ def main():
         'instagram',
         instagram_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_urls, options: InstagramScrapy(following, cookie_header).start(sent_urls, options),
+        run_one=lambda following, sent_post, options: InstagramScrapy(following, cookie_header).start(sent_post, options),
     )
 
 

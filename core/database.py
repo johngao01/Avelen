@@ -95,8 +95,8 @@ def exec_sql_get_data(sql, data=None):
     return data
 
 
-def get_send_url(douyin_weibo):
-    return exec_sql_get_data('SELECT DISTINCT url FROM messages WHERE url LIKE %s;', (f'%{douyin_weibo}%',))
+def get_sent_post(douyin_weibo):
+    return exec_sql_get_data('SELECT DISTINCT idstr FROM messages WHERE url LIKE %s;', (f'%{douyin_weibo}%',))
 
 
 def get_file(url):

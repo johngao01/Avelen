@@ -476,7 +476,7 @@ def main():
         'weibo',
         weibo_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_urls, options: WeiboScrapy(following).start(sent_urls, options),
+        run_one=lambda following, sent_post, options: WeiboScrapy(following).start(sent_post, options),
     )
 
 

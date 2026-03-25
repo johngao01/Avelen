@@ -4,7 +4,7 @@ import traceback
 from typing import Callable, Any
 
 from core.downloader import Downloader
-from core.database import get_filtered_followings, get_send_url
+from core.database import get_filtered_followings, get_sent_post
 from core.models import BasePost, RunOptions
 from core.sender_dispatcher import send_post_payload_to_telegram
 from core.utils import download_log, log_error, rate_control
@@ -165,11 +165,11 @@ def run_platform_main(platform: str,
     args = parser.parse_args(argv)
     all_followings = select_followings(platform, args)
     options = build_run_options(args)
-    sent_urls = set(get_send_url(platform))
+    sent_post = set(get_sent_post(platform))
     run_followings(
         all_followings,
         build_following=build_following,
-        run_one=lambda following: run_one(following, sent_urls, options),
+        run_one=lambda following: run_one(following, sent_post, options),
         logger=logger,
     )
     return args, all_followings

@@ -1,12 +1,12 @@
 from platforms.douyin import *
 from platforms.weibo import *
-from core.database import get_send_url
+from core.database import get_sent_post
 
 # 使用set存储行，避免重复
 with open('../error.txt', 'r', encoding='utf-8') as file:
     lines = file.readlines()
 error_line = []
-send_url = get_send_url('')
+send_url = get_sent_post('')
 lines_seen = set(lines)
 total = len(lines_seen)
 url_pattern = re.compile(r'https://www\.(douyin|weibo)+\.com\S+')
