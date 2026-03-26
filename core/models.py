@@ -192,7 +192,7 @@ class BasePlatform(ABC):
         for post in self.post:
             if post.idstr in sent_post:
                 continue
-            if post.create_time < self.scraping.latest_time:
+            if self.scraping.username != 'favorite' and post.create_time < self.scraping.latest_time:
                 continue
             new_posts.append(post)
         if self.scraping.username != 'favorite':
