@@ -105,6 +105,7 @@ def persist_messages(messages: telegram.Message | list[telegram.Message] | None,
     conn = get_db_conn()
     try:
         for m in messages:
+            if not isinstance(m, telegram.Message): continue
             send_response_dict = process_message(m, data)
             insert_data(conn, 'messages', MESSAGES, send_response_dict)
             persisted_rows.append(send_response_dict)
