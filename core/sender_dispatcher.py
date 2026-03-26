@@ -75,14 +75,6 @@ async def retry_send(fun, **kwargs):
     return None
 
 
-def ensure_message_list(messages: telegram.Message | list[telegram.Message] | None) -> list[telegram.Message]:
-    if not messages:
-        return []
-    if isinstance(messages, list):
-        return messages
-    return [messages]
-
-
 def process_message(message: telegram.Message, data: PostData):
     username = data.display_username
     return {
@@ -107,13 +99,12 @@ def process_message(message: telegram.Message, data: PostData):
 def persist_messages(messages: telegram.Message | list[telegram.Message] | None, data: PostData) -> list[
     dict[str, Any]]:
     """将 Telegram 返回消息结构落库。"""
-    normalized_messages = ensure_message_list(messages)
-    if not normalized_messages:
-        return []
+    if isinstance(messages, telegram.Message):
+        messages = [messages]
     persisted_rows: list[dict[str, Any]] = []
     conn = get_db_conn()
     try:
-        for m in normalized_messages:
+        for m in messages:
             send_response_dict = process_message(m, data)
             insert_data(conn, 'messages', MESSAGES, send_response_dict)
             persisted_rows.append(send_response_dict)
