@@ -5,7 +5,7 @@ from typing import Callable, Any
 
 from core.downloader import Downloader
 from core.database import get_filtered_followings, get_sent_post
-from core.models import BasePost, RunOptions
+from core.models import BasePost, CookieExpiredError, RunOptions
 from core.sender_dispatcher import send_post_payload_to_telegram
 from core.utils import download_log, log_error, rate_control
 
@@ -99,8 +99,16 @@ def run_followings(all_followings: list[Any],
         try:
             logger.info(f"{i}/{following_count} {following.start_msg}")
             run_one(following)
+        except CookieExpiredError as exc:
+            error_message = (
+                f"Cookie 已失效，程序退出\n"
+                f"账号: {following.username} ({following.userid})\n"
+                f"错误: {exc}"
+            )
+            logger.error(error_message)
+            raise SystemExit(1) from exc
         except Exception:
-            logger.info(traceback.format_exc())
+            logger.error(traceback.format_exc())
         finally:
             if following.end_msg:
                 logger.info(following.end_msg)

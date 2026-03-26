@@ -17,6 +17,10 @@ _STDERR_CONFIGURED = False
 _FILE_SINK_KEYS: set[tuple[str, str]] = set()
 
 
+class CookieExpiredError(RuntimeError):
+    """Cookie 失效时抛出的异常，用于中断整个程序。"""
+
+
 @dataclass
 class FollowUser:
     """跨平台统一关注用户模型。"""
@@ -210,6 +214,11 @@ class BasePlatform(ABC):
         - 生成本次处理的结束摘要日志
         """
         from core.scrapy_runner import handle_dispatch_result, send_post_to_telegram
+        from core.utils import (
+            build_error_notify_key,
+            clear_error_notification,
+            send_error_notification,
+        )
 
         if options is None:
             options = RunOptions()
@@ -217,7 +226,42 @@ class BasePlatform(ABC):
         if options.use_local_json:
             self.get_post_from_local()
         else:
-            self.get_post_from_api()
+            dedupe_key = build_error_notify_key(
+                category='fetch',
+                platform=self.name,
+                userid=self.scraping.userid,
+                username=self.scraping.username,
+            )
+            try:
+                self.get_post_from_api()
+            except CookieExpiredError as exc:
+                error_message = (
+                    f'{self.name} 抓取失败（Cookie 失效）\n'
+                    f'账号: {self.scraping.username} ({self.scraping.userid})\n'
+                    f'错误: {exc}'
+                )
+                self.logger.error(error_message)
+                send_error_notification(
+                    error_message,
+                    logger=self.logger,
+                    dedupe_key=dedupe_key,
+                )
+                raise
+            except Exception as exc:
+                error_message = (
+                    f'{self.name} 抓取失败\n'
+                    f'账号: {self.scraping.username} ({self.scraping.userid})\n'
+                    f'错误: {exc}'
+                )
+                self.logger.error(error_message)
+                send_error_notification(
+                    error_message,
+                    logger=self.logger,
+                    dedupe_key=dedupe_key,
+                )
+                raise
+            else:
+                clear_error_notification(dedupe_key, logger=self.logger)
 
         new_posts = self.filter_new_post(sent_post)
         username = self.scraping.username

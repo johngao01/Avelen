@@ -4,7 +4,7 @@ import os
 import requests
 from typing import Any, Dict
 
-from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger, RunOptions
+from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger, RunOptions
 from datetime import datetime
 from core.settings import (
     COMMON_HEADERS,
@@ -356,20 +356,15 @@ class WeiboScrapy(BasePlatform):
                         params={
                             'uid': self.userid,
                             'page': page,
-                            'count': 50,
-                            'since_id': since_id,
+                            'count': 50
                         },
                         headers=cookie_headers,
                         timeout=30,
                     )
-                    info = response.json()
-                except Exception as exc:
-                    weibo_logger.error(f'{self.username} 获取喜欢微博失败: {exc}')
-                    break
-                if info.get('ok') != 1:
-                    weibo_logger.warning(f'{self.username} 喜欢微博接口返回异常: {info}')
-                    break
-                mblogs = info.get('data', {}).get('list') or []
+                    response.raise_for_status()
+                    mblogs = response.json()['data']['list']
+                except Exception:
+                    raise CookieExpiredError("微博爬取数据失败，返回数据无效。")
                 if not mblogs:
                     break
                 for weibo_info in mblogs:
@@ -380,14 +375,9 @@ class WeiboScrapy(BasePlatform):
                         continue
                     weibo = WeiboPost(self.scraping, weibo_info)
                     self.post.append(weibo)
-                since_id = info.get('data', {}).get('since_id', '')
                 scrapy_info = f'{self.username} 获取第{page}页完成，有{len(mblogs)}个微博, 共获取 {len(self.post)} 个微博'
                 if len(self.post) >= SCRAPY_FAVORITE_LIMIT:
                     scrapy_info += ",获取新喜欢完成。"
-                    weibo_logger.info(scrapy_info)
-                    break
-                if not since_id:
-                    scrapy_info += ",没有新喜欢了。"
                     weibo_logger.info(scrapy_info)
                     break
                 weibo_logger.info(scrapy_info)
@@ -395,17 +385,19 @@ class WeiboScrapy(BasePlatform):
                 continue
             else:
                 try:
+                    params = {'uid': self.userid, 'page': page, 'feature': 0}
+                    if page > 1 and since_id != '':
+                        params.update({'since_id': since_id})
                     response = requests.get(
                         f"{WEIBO_API_BASE_URL}/ajax/statuses/mymblog",
-                        params={"uid": self.userid, "page": page, "feature": 0},
+                        params=params,
                         headers=headers,
                         timeout=30,
                     )
+                    response.raise_for_status()
                     info = response.json()
-                except Exception as exc:
-                    weibo_logger.error(f'{self.username} 获取主页微博失败: {exc}')
-                    break
-
+                except Exception:
+                    raise CookieExpiredError("微博爬取数据失败，返回数据无效。")
                 if info.get('ok') == 0 and info.get('msg') == '请求过于频繁':
                     weibo_logger.info(f'{info.get("msg")}')
                     time.sleep(60)
@@ -413,8 +405,7 @@ class WeiboScrapy(BasePlatform):
                 if info.get('ok') == 0 and info.get('msg') == "这里还没有内容":
                     break
                 if info.get('ok') == -100:
-                    weibo_logger.info('需要验证')
-                    break
+                    raise CookieExpiredError('微博爬取数据失败，返回数据无效。')
                 if not ('data' in info and 'list' in info['data']):
                     weibo_logger.warning(f'{self.username} 微博主页接口返回异常: {info}')
                     break

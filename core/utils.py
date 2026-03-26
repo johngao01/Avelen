@@ -1,17 +1,26 @@
 from __future__ import annotations
 import hashlib
+import json
 import os
 from datetime import datetime
 from pathlib import Path
 from time import sleep
+import requests
+from filelock import FileLock
 
 from core.settings import (
     COMMON_HEADERS,
+    DEVELOPER_CHAT_ID,
     ERROR_FILE,
+    ERROR_NOTIFY_LOCK_FILE,
+    ERROR_NOTIFY_STATE_FILE,
+    ERROR_TOKEN,
     SEND_LOG_FILE,
     PLATFORM_JSON_ROOTS,
     PLATFORM_MEDIA_ROOTS,
     RATE_LIMIT_STATE,
+    TELEGRAM_BASE_URL,
+    TELEGRAM_LOCAL_MODE,
 )
 
 
@@ -44,6 +53,95 @@ def read_text_file(path: str | Path, *, encoding: str = 'utf-8') -> str:
     """读取文本文件内容。"""
     with open(path, encoding=encoding) as file_obj:
         return file_obj.read()
+
+
+def _trim_message(message: str, limit: int = 3800) -> str:
+    message = str(message or '').strip()
+    if len(message) <= limit:
+        return message
+    return message[: limit - 3] + '...'
+
+
+def _build_error_bot_url() -> str:
+    if TELEGRAM_LOCAL_MODE:
+        return f'{TELEGRAM_BASE_URL}{ERROR_TOKEN}/sendMessage'
+    return f'https://api.telegram.org/bot{ERROR_TOKEN}/sendMessage'
+
+
+def _load_error_notify_state() -> dict[str, dict[str, str]]:
+    if not ERROR_NOTIFY_STATE_FILE.exists():
+        return {}
+    try:
+        with open(ERROR_NOTIFY_STATE_FILE, encoding='utf-8') as file_obj:
+            data = json.load(file_obj)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_error_notify_state(state: dict[str, dict[str, str]]) -> None:
+    with open(ERROR_NOTIFY_STATE_FILE, 'w', encoding='utf-8') as file_obj:
+        json.dump(state, file_obj, ensure_ascii=False, indent=2)
+
+
+def build_error_notify_key(*, category: str, platform: str, userid: str, username: str) -> str:
+    return f'{category}:{platform}:{userid}:{username}'
+
+
+def clear_error_notification(dedupe_key: str, *, logger=None) -> None:
+    with FileLock(str(ERROR_NOTIFY_LOCK_FILE), timeout=5):
+        state = _load_error_notify_state()
+        if dedupe_key in state:
+            state.pop(dedupe_key, None)
+            _save_error_notify_state(state)
+            if logger:
+                logger.info(f'已清理错误通知去重状态: {dedupe_key}')
+
+
+def send_error_notification(message: str, *, logger=None, dedupe_key: str | None = None) -> bool:
+    """通过错误通知 Bot 把异常信息推送给开发者。"""
+    if not ERROR_TOKEN:
+        if logger:
+            logger.warning('未配置 ERROR_TELEGRAM_BOT_TOKEN，跳过错误通知')
+        return False
+
+    message = _trim_message(message)
+    message_hash = hashlib.md5(message.encode('utf-8')).hexdigest()
+
+    try:
+        with FileLock(str(ERROR_NOTIFY_LOCK_FILE), timeout=5):
+            state = _load_error_notify_state()
+            if dedupe_key:
+                existing = state.get(dedupe_key) or {}
+                if existing.get('message_hash') == message_hash:
+                    if logger:
+                        logger.info(f'重复错误通知已跳过: {dedupe_key}')
+                    return False
+
+            response = requests.post(
+                _build_error_bot_url(),
+                json={
+                    'chat_id': DEVELOPER_CHAT_ID,
+                    'text': message,
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if isinstance(payload, dict) and payload.get('ok') is False:
+                raise RuntimeError(str(payload))
+
+            if dedupe_key:
+                state[dedupe_key] = {
+                    'message_hash': message_hash,
+                    'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                }
+                _save_error_notify_state(state)
+            return True
+    except Exception as exc:
+        if logger:
+            logger.warning(f'错误通知发送失败: {exc}')
+        return False
 
 
 def load_netscape_cookies(path: str | Path) -> dict[str, str]:

@@ -14,11 +14,15 @@ from core.settings import (
     BILIBILI_JSON_ROOT,
     LOGS_DIR,
 )
-from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
+from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger
 from core.scrapy_runner import (
     run_platform_main,
 )
-from core.utils import build_browser_headers, build_platform_json_path, load_netscape_cookies
+from core.utils import (
+    build_browser_headers,
+    build_platform_json_path,
+    load_netscape_cookies,
+)
 from datetime import datetime
 
 DYNAMIC_API_URL = f"{BILIBILI_CONFIG['api_url']}/x/polymer/web-dynamic/v1/feed/space"
@@ -199,14 +203,15 @@ class BilibiliScrapy(BasePlatform):
                     params={'host_mid': self.scraping.userid, 'offset': offset},
                     timeout=30,
                 )
+                response.raise_for_status()
                 payload = response.json()
             except Exception as exc:
                 bilibili_logger.error(f'{self.scraping.username} 获取动态失败: {exc}')
-                break
+                raise CookieExpiredError(f'Bilibili 爬取数据失败，返回数据无效。')
 
             if payload.get('code') != 0:
-                bilibili_logger.error(f'获取UP主动态失败: {payload.get("message")}')
-                break
+                bilibili_logger.error(f'{self.scraping.username} 获取动态失败。')
+                raise CookieExpiredError(f'Bilibili Cookie 已失效, code不为0。')
 
             data = payload.get('data') or {}
             items = data.get('items') or []

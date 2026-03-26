@@ -9,7 +9,7 @@ from random import randint, random, choice
 from re import compile
 from time import time
 from urllib.parse import urlencode, quote
-from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger, RunOptions
+from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger, RunOptions
 from core.settings import (
     DOUYIN_CONFIG,
     DOUYIN_COOKIE_PATH,
@@ -1194,14 +1194,14 @@ class DouyinScrapy(BasePlatform):
                     params=params,
                     timeout=30,
                 )
+            resp.raise_for_status()
             if resp.text == '':
-                douyin_logger.error('爬取失败，空响应')
+                raise CookieExpiredError('抖音爬取失败，空响应')
             try:
                 resp = resp.text.encode('utf-8').decode('utf-8')
                 data_json = json.loads(resp)
             except Exception:
-                douyin_logger.error('爬取失败, 无法json化数据。')
-                continue
+                raise CookieExpiredError('抖音爬取数据失败，返回数据无效。')
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
                 return
             if 'max_cursor' not in data_json:

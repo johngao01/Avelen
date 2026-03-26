@@ -13,7 +13,7 @@ from core.settings import (
     INSTAGRAM_JSON_ROOT,
     LOGS_DIR,
 )
-from core.models import BasePlatform, BasePost, FollowUser, MediaItem, get_platform_logger
+from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger
 from core.scrapy_runner import (
     run_platform_main,
 )
@@ -209,9 +209,11 @@ class InstagramScrapy(BasePlatform):
         if self.fb_dtsg:
             return self.fb_dtsg
         response = self.session.get(INSTAGRAM_HOME_URL, timeout=30)
+        if response.status_code in {401, 403}:
+            raise CookieExpiredError(f'Instagram 首页返回 HTTP {response.status_code}')
         match = re.search(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"}', response.text)
         if not match:
-            raise RuntimeError('fb_dtsg not found')
+            raise CookieExpiredError('Instagram Cookie 已失效，无法获取 fb_dtsg')
         self.fb_dtsg = match.group(1)
         instagram_logger.info(f'fb_dtsg value: {self.fb_dtsg}')
         return self.fb_dtsg
@@ -223,9 +225,8 @@ class InstagramScrapy(BasePlatform):
             response = self.session.post(GRAPHQL_URL, data=payload, timeout=30)
             response.raise_for_status()
             return response.json()
-        except Exception as exc:
-            instagram_logger.error(f'Instagram GraphQL 请求失败: {exc}')
-            return None
+        except Exception:
+            raise CookieExpiredError('Instagram 爬取数据失败，返回数据无效。')
 
     def get_post_from_api(self) -> None:
         """实时请求 Instagram 接口，抓取当前账号的新作品。"""
