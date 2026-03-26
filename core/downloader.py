@@ -6,14 +6,13 @@ import cv2
 import requests
 import os
 import time
-from dataclasses import dataclass
 from threading import local
 from urllib.parse import urlparse
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from yt_dlp import YoutubeDL
 from datetime import datetime
-from core.models import BasePost, MediaItem
+from core.models import BasePost, DownloadedFile, MediaItem, PostData, DownloadTask
 from core.settings import (
     BILIBILI_COOKIE_PATH,
     DOWNLOAD_ROOT,
@@ -85,7 +84,7 @@ class FileDownloadTracker:
             self.total_size = total
             self.progress.update(self.task_id, completed=downloaded, total=total or None)
 
-    def finish(self, final_path: str) -> dict | None:
+    def finish(self, final_path: str) -> DownloadedFile | None:
         """文件最终落地后调用，获取多媒体信息，打印结果并清理进度条，返回组装好的文件信息。"""
         self.end_time = time.time()
 
@@ -103,7 +102,14 @@ class FileDownloadTracker:
                     if bytes2md5(file_obj.read()) in del_file:
                         if self.task_id is not None:
                             self.progress.remove_task(self.task_id)
-                        return {"skipped": True}
+                        return DownloadedFile(
+                            path=final_path,
+                            size=self.total_size,
+                            caption=os.path.basename(final_path),
+                            ext=os.path.splitext(final_path)[1][1:].lower(),
+                            size_str=convert_bytes_to_human_readable(self.total_size),
+                            skipped=True,
+                        )
             except OSError:
                 pass
 
@@ -113,17 +119,15 @@ class FileDownloadTracker:
         media_name = os.path.basename(final_path)
         file_ext = media_name.split('.')[-1].lower()
 
-        file_detail = {
-            'path': final_path,
-            'size': self.total_size,
-            'caption': media_name,
-            'duration': 0,
-            'size_str': human_readable_size,
-            'ext': file_ext
-        }
+        file_detail = DownloadedFile(
+            path=final_path,
+            size=self.total_size,
+            caption=media_name,
+            size_str=human_readable_size,
+            ext=file_ext,
+        )
 
         extra_info = ""
-        is_valid = True
 
         if file_ext in ['jpg', 'png', 'jpeg', 'webp']:
             try:
@@ -135,28 +139,31 @@ class FileDownloadTracker:
                 width, height = map(int, resolution.split('*'))
                 if width + height > MAX_PHOTO_TOTAL_PIXEL:
                     if self.total_size < MAX_DOCUMENT_SIZE:
-                        file_detail.update({'filetype': 'document', 'resolution': resolution})
+                        file_detail.filetype = 'document'
+                        file_detail.resolution = resolution
                     else:
-                        is_valid = False
+                        file_detail.skipped = True
                 elif self.total_size < MAX_PHOTO_SIZE:
-                    file_detail.update({'filetype': 'photo', 'resolution': resolution})
+                    file_detail.filetype = 'photo'
+                    file_detail.resolution = resolution
                 elif MAX_PHOTO_SIZE < self.total_size < MAX_DOCUMENT_SIZE:
-                    file_detail.update({'filetype': 'document', 'resolution': resolution})
+                    file_detail.filetype = 'document'
+                    file_detail.resolution = resolution
             except Exception:
-                extra_info = "unknown"
-                file_detail.update({'filetype': 'photo', 'resolution': 'unknown'})
+                extra_info = "无法读取的图片"
+                file_detail.filetype = 'photo'
+                file_detail.skipped = True
         else:
             duration_str = get_video_duration_hms(final_path)
             extra_info = duration_str
-            if self.total_size < MAX_VIDEO_SIZE:
-                file_detail.update({'filetype': 'video', 'duration': duration_str})
-            else:
-                is_valid = False
+            file_detail.filetype = 'video'
+            if self.total_size > MAX_VIDEO_SIZE:
+                extra_info = "视频太大"
+                file_detail.filetype = 'video'
+                file_detail.skipped = True
 
-        if not is_valid:
-            if self.task_id is not None:
-                self.progress.remove_task(self.task_id)
-            return None
+        if self.task_id is not None:
+            self.progress.remove_task(self.task_id)
 
         # 使用原本 build_file_detail 中的简洁拼接日志样式
         log_msg = ' '.join(["   ", file_index, final_path, extra_info, human_readable_size])
@@ -171,21 +178,6 @@ class FileDownloadTracker:
             self.task_id = None
 
         return file_detail
-
-
-@dataclass(slots=True)
-class DownloadTask:
-    """统一的下载输入描述。"""
-    platform: str
-    url: str
-    save_path: str
-    headers: dict | None = None
-    timeout: int = 30
-    media_type: str = ""
-    filename_hint: str = ""
-    referer: str | None = None
-    ext: str | None = None
-    index: int = 1
 
 
 def format_seconds_to_hms(seconds: float | int | None) -> str:
@@ -277,15 +269,14 @@ class Downloader:
             index=item.index,
         )
 
-    def download(self, post: BasePost) -> dict:
+    def download(self, post: BasePost) -> PostData:
         """下载当前 post 的全部媒体，并返回更新后的 `post.post_data`。"""
         post_data = post.post_data()
         tasks = [self.build_task(post.platform, item) for item in post.build_media_items()]
         total_file_count = len(tasks)
         skip_file_count = 0
 
-        # results 中将直接包含拼装好的 file_detail 字典，或因失败/被跳过返回 None / {"skipped": True}
-        results: list[dict | None] = [None] * len(tasks)
+        results: list[DownloadedFile | None] = [None] * len(tasks)
 
         # 【全局唯一】初始化进度条控制容器
         shared_progress = Progress(
@@ -318,17 +309,17 @@ class Downloader:
                         index = future_map[future]
                         results[index] = future.result()
 
-        files = []
+        files: list[DownloadedFile] = []
         for res in results:
             if not res:
                 continue
-            if res.get("skipped"):
+            if res.skipped:
                 skip_file_count += 1
                 continue
             files.append(res)
 
-        post_data['files'] = files
-        post_data['ok'] = 1 if total_file_count == len(files) + skip_file_count else 0
+        post_data.files = files
+        post_data.ok = total_file_count == len(files) + skip_file_count
         return post_data
 
     def _get_session(self) -> requests.Session:
@@ -341,7 +332,7 @@ class Downloader:
             self._session_local.session = session
         return session
 
-    def _download_media(self, task: DownloadTask, shared_progress: Progress) -> dict | None:
+    def _download_media(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
         """下载单个媒体，并根据 URL/媒体类型选择具体实现。"""
         parsed = urlparse(task.url)
         if task.media_type == "video" and parsed.netloc.endswith("bilibili.com") and "/video/" in parsed.path:
@@ -360,7 +351,7 @@ class Downloader:
             return None
         return total if total > 0 else None
 
-    def _download_http(self, task: DownloadTask, shared_progress: Progress) -> dict | None:
+    def _download_http(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
         """使用普通 HTTP 流式下载文件。"""
         tracker = FileDownloadTracker(task, shared_progress, self.logger)
 
@@ -405,7 +396,7 @@ class Downloader:
                 self.logger.error(f"{task.url} 下载异常：{exc}")
             return None
 
-    def _download_with_yt_dlp(self, task: DownloadTask, shared_progress: Progress) -> dict | None:
+    def _download_with_yt_dlp(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
         """使用 `yt-dlp` 下载 Bilibili 视频并复用统一进度展示。"""
         tracker = FileDownloadTracker(task, shared_progress, self.logger)
 

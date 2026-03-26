@@ -17,6 +17,7 @@ from telegram import Bot, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 from telegram.constants import ChatAction, ParseMode
 
 from core.database import insert_data, get_db_conn, MESSAGES
+from core.models import DownloadedFile, PostData
 from core.settings import TELEGRAM_BASE_FILE_URL, TELEGRAM_BASE_URL, TELEGRAM_LOCAL_MODE
 from filelock import FileLock
 
@@ -82,8 +83,8 @@ def ensure_message_list(messages: telegram.Message | list[telegram.Message] | No
     return [messages]
 
 
-def process_message(message: telegram.Message, data):
-    username = data['nickname'] if data.get('username') == 'favorite' and 'nickname' in data else data['username']
+def process_message(message: telegram.Message, data: PostData):
+    username = data.display_username
     return {
         'MESSAGE_ID': message.message_id,
         'CAPTION': message.caption or '',
@@ -92,18 +93,19 @@ def process_message(message: telegram.Message, data):
         'FORM_USER': message.from_user.id,
         'CHAT': message.chat.id,
         'MEDIA_GROUP_ID': message.media_group_id or '',
-        'TEXT_RAW': data['text_raw'],
-        'URL': data['url'],
-        'USERID': data['userid'],
+        'TEXT_RAW': data.text_raw,
+        'URL': data.url,
+        'USERID': data.userid,
         'USERNAME': username,
-        'CREATE_TIME': data['create_time'],
-        'IDSTR': data['idstr'],
-        'MBLOGID': data['mblogid'],
+        'CREATE_TIME': data.create_time,
+        'IDSTR': data.idstr,
+        'MBLOGID': data.mblogid,
         'MSG_STR': message.to_json(),
     }
 
 
-def persist_messages(messages: telegram.Message | list[telegram.Message] | None, data) -> list[dict[str, Any]]:
+def persist_messages(messages: telegram.Message | list[telegram.Message] | None, data: PostData) -> list[
+    dict[str, Any]]:
     """将 Telegram 返回消息结构落库。"""
     normalized_messages = ensure_message_list(messages)
     if not normalized_messages:
@@ -120,13 +122,13 @@ def persist_messages(messages: telegram.Message | list[telegram.Message] | None,
     return persisted_rows
 
 
-def rearrange_files(file_list):
+def rearrange_files(file_list: list[DownloadedFile]) -> list[list[DownloadedFile]]:
     """将文件切分为符合 Telegram 限制的相册组 (单组最多10个，总大小<=50MB)"""
     result_lists = []
-    current_list = []
+    current_list: list[DownloadedFile] = []
     current_size = 0
     for file in file_list:
-        size = file['size']
+        size = file.size
         if len(current_list) < 10 and current_size + size <= 50 * 1024 * 1024:
             current_list.append(file)
             current_size += size
@@ -143,8 +145,8 @@ def rearrange_files(file_list):
 async def process_and_send_media(
         tg_bot,
         filetype,
-        media_list,
-        data,
+        media_list: list[DownloadedFile],
+        data: PostData,
         persisted_messages: list[dict[str, Any]],
 ):
     """处理同类型媒体并在发送后立即落库。"""
@@ -154,9 +156,9 @@ async def process_and_send_media(
     # 情况1: 单个文件
     if len(media_list) == 1:
         file = media_list[0]
-        path = file['path']
-        caption = file.get('caption')
-        ext = file['ext']
+        path = file.path
+        caption = file.caption
+        ext = file.ext
 
         with open(path, 'rb') as f:
             if filetype == 'document':
@@ -182,8 +184,8 @@ async def process_and_send_media(
             open_files = []  # 追踪已打开的文件指针，保证最终全部关闭
             try:
                 for file in album:
-                    path = file['path']
-                    caption = file.get('caption') or os.path.basename(path)
+                    path = file.path
+                    caption = file.caption or os.path.basename(path)
                     f = open(path, 'rb')
                     open_files.append(f)
                     if filetype == 'video':
@@ -215,13 +217,13 @@ async def process_and_send_media(
                     f.close()
 
 
-async def execute_task(data):
+async def execute_task(data: PostData):
     tg_bot = _build_bot()
-    raw_files = data.get('files')
+    raw_files = data.files
     photos, videos, documents = [], [], []
 
     for file in raw_files:
-        filetype = file.get('filetype')
+        filetype = file.filetype
         if filetype == 'video':
             videos.append(file)
         elif filetype == 'photo':
@@ -237,16 +239,12 @@ async def execute_task(data):
     await process_and_send_media(tg_bot, 'document', documents, data, persisted_messages)
 
     # 最后发送总结/文字信息
-    raw_msg = data.get('text_raw', '')
-    id_str = replace_char(data.get('idstr', ''))
-    if data['username'] == 'favorite' and 'nickname' in data:
-        username = data['nickname']
-    else:
-        username = data['username']
-    cleared_name = clear_name(username)
+    raw_msg = data.text_raw or ''
+    id_str = replace_char(data.idstr or '')
+    cleared_name = clear_name(data.display_username)
     escaped_msg = replace_char(raw_msg)
 
-    text = f"\\#{cleared_name}  [{id_str}]({data.get('url', '')})\n\n{escaped_msg}"
+    text = f"\\#{cleared_name}  [{id_str}]({data.url})\n\n{escaped_msg}"
 
     send_response = await retry_send(
         tg_bot.sendMessage,
@@ -262,14 +260,14 @@ async def execute_task(data):
     return persisted_messages
 
 
-def send_post_payload_to_telegram(data: dict):
+def send_post_payload_to_telegram(data: PostData):
     """发送标准化 payload 到 Telegram，并返回统一结果字典。
 
     入参 `data` 是平台层整理好的标准化 payload，常见字段包括：
     - `username` / `nickname`
     - `url` / `userid` / `idstr` / `mblogid`
     - `create_time` / `text_raw`
-    - `files`: 下载层返回的文件字典列表
+    - `files`: 下载层返回的 `DownloadedFile` 列表
 
     返回值始终是 `dict`，核心字段如下：
     - `ok`: 发送是否成功
@@ -283,6 +281,7 @@ def send_post_payload_to_telegram(data: dict):
             return {
                 'ok': True,
                 'error': None,
+                'post_data': data,
                 'messages': persisted_messages,
             }
         except Exception as e:
@@ -290,5 +289,6 @@ def send_post_payload_to_telegram(data: dict):
             return {
                 'ok': False,
                 'error': str(e),
+                'post_data': data,
                 'messages': [],
             }

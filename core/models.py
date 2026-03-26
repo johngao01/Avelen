@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os.path
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 import sys
 from typing import Any
+from core.settings import DOWNLOAD_ROOT
 
 from loguru import logger as _logger
 from core.database import update_db
@@ -82,6 +84,65 @@ class MediaItem:
     referer: str | None = None
     ext: str | None = None
     index: int = 1
+
+
+@dataclass(slots=True)
+class DownloadTask:
+    """统一的下载输入描述。"""
+    platform: str
+    url: str
+    save_path: str
+    headers: dict | None = None
+    timeout: int = 30
+    media_type: str = ""
+    filename_hint: str = ""
+    referer: str | None = None
+    ext: str | None = None
+    index: int = 1
+
+    @property
+    def rel_path(self):
+        return os.path.relpath(self.save_path, os.path.join(DOWNLOAD_ROOT, self.platform))
+
+
+@dataclass(slots=True)
+class DownloadedFile:
+    """下载完成后的标准化文件描述。"""
+
+    path: str
+    size: int
+    caption: str
+    # 文件类型，telegram发送通过这个判断怎么发送
+    filetype: str = ""
+    # 视频时长
+    duration: str = ""
+    size_str: str = ""
+    ext: str = ""
+    # 像素
+    resolution: str = ""
+    skipped: bool = False
+
+
+@dataclass(slots=True)
+class PostData:
+    """跨平台统一发送 payload。"""
+
+    username: str
+    nickname: str
+    url: str
+    userid: str
+    idstr: str
+    mblogid: str
+    create_time: str
+    text_raw: str
+    files: list[DownloadedFile] = field(default_factory=list)
+    ok: bool = False
+
+    @property
+    def display_username(self) -> str:
+        if self.username == 'favorite' and self.nickname:
+            return self.nickname
+        return self.username
 
 
 class BasePlatform(ABC):
@@ -231,9 +292,6 @@ class BasePost(ABC):
     create_time: datetime
     text_raw: str
 
-    def __init__(self):
-        self._post_data: dict[str, Any] | None = None
-
     def __str__(self) -> str:
         """返回跨平台统一的日志摘要。"""
         return f'{self.username} {self.create_time} {self.url} {self.text_raw.replace("\n", " ")[:50]}'
@@ -255,20 +313,20 @@ class BasePost(ABC):
         """
         raise NotImplementedError
 
-    def post_data(self) -> dict[str, Any]:
+    def post_data(self) -> PostData:
         """构造跨平台共用的发送字段基本信息。
 
         """
-        return {
-            'username': self.username,
-            'nickname': self.nickname,
-            'url': self.url,
-            'userid': self.userid,
-            'idstr': self.idstr,
-            'mblogid': self.mblogid,
-            'create_time': self.create_time_str,
-            'text_raw': self.text_raw,
-        }
+        return PostData(
+            username=self.username,
+            nickname=self.nickname,
+            url=self.url,
+            userid=self.userid,
+            idstr=self.idstr,
+            mblogid=self.mblogid,
+            create_time=self.create_time_str,
+            text_raw=self.text_raw,
+        )
 
     @property
     def create_time_str(self):

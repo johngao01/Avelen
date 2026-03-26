@@ -32,21 +32,24 @@ def send_post_to_telegram(
         options = RunOptions()
 
     downloader = Downloader(logger=logger, show_progress=options.download_progress)
-    payload = downloader.download(post)
-    download_ok = bool(payload.get('ok'))
+    post_data = downloader.download(post)
+    download_ok = post_data.ok
     if not download_ok:
         return {
             'ok': False,
             'error': '所有文件未全部下载完成',
+            'post_data': post_data,
             'messages': [],
         }
     if options.no_send:
         return {
             'ok': True,
             'error': None,
+            'post_data': post_data,
             'messages': [],
         }
-    result = send_post_payload_to_telegram(payload)
+
+    result = send_post_payload_to_telegram(post_data)
     return result
 
 
