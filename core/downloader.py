@@ -58,10 +58,7 @@ class FileDownloadTracker:
     def start(self, total: int | None = None):
         """初始化任务，向主 Progress 注册一个进度条任务"""
         if self.task_id is None:
-            desc = os.path.basename(self.task.save_path)
-            # 文件名过长则截断，保持 UI 整洁
-            desc = (desc[:30] + '..') if len(desc) > 30 else desc
-            self.task_id = self.progress.add_task(f"[cyan]{desc}", total=total or None)
+            self.task_id = self.progress.add_task(f"[cyan]{self.task.rel_path}", total=total or None)
 
     def update(self, completed: int, total: int | None = None):
         """更新下载进度"""
