@@ -77,9 +77,7 @@ class FileDownloadTracker:
             total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
             downloaded = d.get('downloaded_bytes', 0)
             if self.task_id is None:
-                filename = os.path.basename(d.get('filename', self.task.save_path))
-                desc = (filename[:30] + '..') if len(filename) > 30 else filename
-                self.task_id = self.progress.add_task(f"[cyan]{desc}", total=total or None)
+                self.task_id = self.progress.add_task(f"[cyan]{self.task.rel_path}", total=total or None)
 
             self.total_size = total
             self.progress.update(self.task_id, completed=downloaded, total=total or None)
@@ -161,9 +159,6 @@ class FileDownloadTracker:
                 extra_info = "视频太大"
                 file_detail.filetype = 'video'
                 file_detail.skipped = True
-
-        if self.task_id is not None:
-            self.progress.remove_task(self.task_id)
 
         # 使用原本 build_file_detail 中的简洁拼接日志样式
         log_msg = ' '.join(["   ", file_index, final_path, extra_info, human_readable_size])
@@ -392,8 +387,7 @@ class Downloader:
         except Exception as exc:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
-            if self.logger:
-                self.logger.error(f"{task.url} 下载异常：{exc}")
+            self.logger.error(f"{task.rel_path} 下载异常：{exc}")
             return None
 
     def _download_with_yt_dlp(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
@@ -439,7 +433,7 @@ class Downloader:
             return tracker.finish(final_path)
         except Exception as exc:
             if self.logger:
-                self.logger.error(f"{task.url} 下载异常：{exc}")
+                self.logger.error(f"{task.rel_path} 下载异常：{exc}")
             return None
 
     def _move_bilibili_infojson(self, final_path: str):
