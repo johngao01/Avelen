@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from os.path import splitext, basename
 import json
 import os
 import re
@@ -103,7 +103,7 @@ class InstagramPost(BasePost):
         self.owner = node.get('owner') or {}
         self.owner_username = self.owner.get('username') or following.userid
         self.caption = node.get('caption') or {}
-        self.carousel_media = node.get('carousel_media') or []
+        self.carousel_media = node.get('carousel_media')
         self.pin_info = node.get('timeline_pinned_user_ids') or []
         self.platform = 'instagram'
         self.username = following.username
@@ -146,13 +146,6 @@ class InstagramPost(BasePost):
                     largest = media
             return largest
 
-        # URL 里拿不到扩展名时，按媒体类型回退默认后缀。
-        def detect_extension(url: str, media_type: str) -> str:
-            ext = os.path.splitext(urlparse(url).path)[1].lstrip('.')
-            if ext:
-                return ext
-            return 'mp4' if media_type == 'video' else 'jpg'
-
         headers = build_browser_headers(referer=self.url)
         items: list[MediaItem] = []
         raw_nodes = self.carousel_media or [self.node]
@@ -177,8 +170,13 @@ class InstagramPost(BasePost):
             url = media_node.get('url') or ''
             if not url:
                 continue
-            ext = detect_extension(url, media_type)
-            filename = f'{self.shortcode}_{index}.{ext}'
+            filename = basename(urlparse(url).path)
+            if filename.endswith('.mp4'):
+                ext = 'video'
+                name = splitext(basename(urlparse(self.node['image_versions2']['candidates'][0]['url']).path))[0]
+                filename = name + '.mp4'
+            else:
+                ext = 'photo'
             items.append(MediaItem(
                 url=url,
                 media_type=media_type,
@@ -347,7 +345,8 @@ def main():
         'instagram',
         instagram_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_post, options: InstagramScrapy(following, cookie_header).start(sent_post, options),
+        run_one=lambda following, sent_post, options: InstagramScrapy(following, cookie_header).start(sent_post,
+                                                                                                      options),
     )
 
 
