@@ -36,6 +36,7 @@ follow_types = {
     '2': '👤 普通关注'
 }
 PAGE_SIZE = 30
+MANAGE_PLATFORMS = ['douyin', 'weibo', 'instagram', 'bilibili']
 
 
 def clear_name(text):
@@ -54,14 +55,14 @@ def clear_name(text):
 
 async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
     """
-    当输入 /manage 命令时会进入这个函数，返回3个平台的按钮，点击后进入query_datac查找数据
+    当输入 /manage 命令时会进入这个函数，返回平台按钮，点击后进入 query_data 查找数据
     """
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
     keyboard = []
     row = []
-    for platform in ['douyin', 'weibo', 'instagram']:
+    for platform in MANAGE_PLATFORMS:
         btn = InlineKeyboardButton(f"{platform}", callback_data=f"s|{platform}|1")
         row.append(btn)
     keyboard.append(row)
@@ -81,6 +82,8 @@ async def query_user_info(user_id):
             keyboard_button = InlineKeyboardButton("📎 在抖音上查看", url=f"https://www.douyin.com/user/{user_id}")
         elif platform == 'weibo':
             keyboard_button = InlineKeyboardButton("📎 在微博上查看", url=f"https://weibo.com/u/{user_id}")
+        elif platform == 'bilibili':
+            keyboard_button = InlineKeyboardButton("📎 在B站上查看", url=f"https://space.bilibili.com/{user_id}")
         else:
             keyboard_button = InlineKeyboardButton("📎 在Instagram上查看",
                                                    url=f"https://www.instagram.com/{user_id}/")
@@ -148,7 +151,10 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = list(sorted(result, key=lambda x: x[2], reverse=True))
     num = len(result)
     if num == 0:
-        await update.message.reply_text(f"无结果")
+        if query:
+            await query.edit_message_text("无结果")
+        else:
+            await update.message.reply_text("无结果")
         return ConversationHandler.END
     total_pages = num // PAGE_SIZE + 1
     keyboard = []
@@ -321,7 +327,8 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     matches = re.compile(r"(https?://[^\s]+)").findall(update.message.text.strip())
     url = matches[0]
-    if 'v.douyin.com' in url:
+    short_domains = ('v.douyin.com', 'b23.tv', 'bili2233.cn')
+    if any(domain in url for domain in short_domains) or '哔哩哔哩' in url:
         url = extract_url(url)
         print(url)
         if not url:
@@ -333,17 +340,26 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = url[:-1]
     context.user_data["url"] = url.split('?')[0]
     parsed_url = urlparse(url)
-    if 'douyin.com' in parsed_url.hostname:
+    host = parsed_url.hostname or ''
+    if 'douyin.com' in host:
         platform = 'douyin'
-    elif 'weibo' in parsed_url.hostname:
+    elif 'weibo' in host:
         platform = 'weibo'
-    elif 'instagram' in parsed_url.hostname:
+    elif 'instagram' in host:
         platform = 'instagram'
+    elif 'bilibili' in host or host in ('b23.tv', 'bili2233.cn'):
+        platform = 'bilibili'
     else:
         await update.message.reply_text("未知的平台")
         return ConversationHandler.END
-    url_path = parsed_url.path
-    user_id = url_path.split('/')[-1]
+    url_path = parsed_url.path.rstrip('/')
+    segments = [item for item in url_path.split('/') if item]
+    if platform == 'bilibili' and len(segments) >= 1 and segments[0].isdigit():
+        user_id = segments[0]
+    elif segments:
+        user_id = segments[-1]
+    else:
+        user_id = ''
 
     if not user_id:
         await update.message.reply_text("❌ 无法提取到用户id")
