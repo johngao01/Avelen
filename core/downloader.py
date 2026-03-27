@@ -72,13 +72,15 @@ class FileDownloadTracker:
     def yt_dlp_hook(self, d):
         """处理 yt-dlp 的回调状态"""
         if d['status'] == 'downloading':
-            total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+            self.total_size = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
             downloaded = d.get('downloaded_bytes', 0)
-            if self.task_id is None:
-                self.task_id = self.progress.add_task(f"[cyan]{self.task.rel_path}", total=total or None)
 
-            self.total_size = total
-            self.progress.update(self.task_id, completed=downloaded, total=total or None)
+            if self.task_id is None:
+                # 提取纯文件名用于进度条显示
+                filename = os.path.basename(d.get('filename', 'Video'))
+                self.task_id = self.progress.add_task(f"[cyan]{filename}", total=self.total_size)
+
+            self.progress.update(self.task_id, completed=downloaded)
 
     def finish(self, final_path: str) -> DownloadedFile | None:
         """文件最终落地后调用，获取多媒体信息，打印结果并清理进度条，返回组装好的文件信息。"""
@@ -405,11 +407,6 @@ class Downloader:
     def _download_with_yt_dlp(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
         """使用 `yt-dlp` 下载 Bilibili 视频并复用统一进度展示。"""
         tracker = FileDownloadTracker(task, shared_progress, self._next_display_index, self._log_emit_lock, self.logger)
-
-        if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
-            return tracker.finish(task.save_path)
-
-        os.makedirs(os.path.dirname(task.save_path), exist_ok=True)
         try:
             with YoutubeDL({  # type: ignore
                 'logger': self.logger,
