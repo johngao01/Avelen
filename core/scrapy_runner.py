@@ -142,30 +142,32 @@ def run_followings(all_followings: list[Any],
 def build_common_cli_parser():
     """构建各平台共用命令行参数。"""
     parser = argparse.ArgumentParser(description='Scrapy runner options')
-    parser.add_argument('--valid', nargs='+', type=int, default=list((1,)), choices=[-2,-1, 0, 1, 2],
+    parser.add_argument('-v', '--valid', nargs='+', type=int, default=list((1,)), choices=[-2, -1, 0, 1, 2],
                         help='关注类型，可多选：-2这个用户被平台删了 -1不再关注 0取消关注 1特别关注 2普通关注，默认 1')
-    parser.add_argument('--user-id', action='append', dest='user_ids', default=[],
+    parser.add_argument('-id', '--uid', '--user-id', action='append', dest='user_ids', default=[],
                         help='按 user.userid 精确筛选，可重复传参')
-    parser.add_argument('--username', action='append', dest='usernames', default=[],
+    parser.add_argument('--name', '--username', action='append', dest='usernames', default=[],
                         help='按 user.username 精确筛选，可重复传参')
-    parser.add_argument('-u', '--uname', dest='username_like', default=None,
+    parser.add_argument('-rn', '--rename', dest='username_like', default=None,
                         help='按 user.username 模糊筛选，支持输入部分用户名')
-    parser.add_argument('--latest-time-start', default=None,
+    parser.add_argument('--lts', '--latest-time-start', dest='latest_time_start', default=None,
                         help='筛选 latest_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
-    parser.add_argument('--latest-time-end', default=None,
+    parser.add_argument('--lte', '--latest-time-end', dest='latest_time_end', default=None,
                         help='筛选 latest_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
-    parser.add_argument('--scrapy-time-start', default=None,
+    parser.add_argument('--sts', '--scrapy-time-start', dest='scrapy_time_start', default=None,
                         help='筛选 scrapy_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
-    parser.add_argument('--scrapy-time-end', default=None,
+    parser.add_argument('--ste', '--scrapy-time-end', dest='scrapy_time_end', default=None,
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('-s', '--sort', dest='sort_option', type=argparse_sort_option, default='scrapy_time:desc',
                         help='排序字段[:asc|desc]，默认 scrapy_time:desc')
-    parser.add_argument('--no-send', action='store_true',
+    parser.add_argument('-n', '--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
-    parser.add_argument('-dp', '--download-progress', action='store_true', default=True,
-                        help='是否显示下载进度条，默认启用')
-    parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
-    parser.add_argument('--show', action='store_true', help='只展示筛选后的 user 表记录，不执行爬取和发送')
+    parser.add_argument('-p', '--progress', '--download-progress', dest='download_progress',
+                        action='store_true', default=True, help='是否显示下载进度条，默认启用')
+    parser.add_argument('-j', '--json', '--local-json', dest='local_json', action='store_true',
+                        help='从本地 json 目录读取数据，而不是实时抓取')
+    parser.add_argument('-l', '--list', dest='show', action='store_true',
+                        help='只展示筛选后的 user 表记录，不执行爬取和发送')
     return parser
 
 
@@ -245,7 +247,8 @@ def build_link_text(label: str, url: str | None) -> Text:
     return text
 
 
-def render_followings_table(platform: str | None, rows, *, show_platform: bool = False, title: str | None = None) -> None:
+def render_followings_table(platform: str | None, rows, *, show_platform: bool = False,
+                            title: str | None = None) -> None:
     """把筛选后的 user 记录渲染成控制台表格。
 
     - 单平台模式：隐藏平台列

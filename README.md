@@ -310,6 +310,17 @@ python main.py bilibili
 python main.py bili
 ```
 
+推荐使用的简写：
+
+```bash
+python main.py weibo -u 糕 -S
+python main.py -u 糕 -S -s latest_time:asc
+python main.py -i 123456
+python main.py -n favorite
+python main.py -v 1 2
+python main.py -j
+```
+
 只抓取和下载，不发送 Telegram：
 
 ```bash
@@ -332,8 +343,8 @@ python main.py instagram --local-json
 按用户筛选：
 
 ```bash
-python main.py weibo --user-id 123456
-python main.py douyin --username favorite
+python main.py weibo -i 123456
+python main.py douyin -n favorite
 python main.py weibo -u 糕
 python main.py -u 糕
 ```
@@ -341,51 +352,51 @@ python main.py -u 糕
 只查看筛中的用户，不执行爬取和发送：
 
 ```bash
-python main.py weibo --show -u 糕
-python main.py --show -u 糕
-python main.py --show --valid 1 2
+python main.py weibo -S -u 糕
+python main.py -S -u 糕
+python main.py -S -v 1 2
 ```
 
 自定义排序：
 
 ```bash
-python main.py --show -u 糕 --sort latest_time:asc
-python main.py --show --sort username:asc
-python main.py --show --sort valid:desc
+python main.py -S -u 糕 -s latest_time:asc
+python main.py -S -s username:asc
+python main.py -S -s valid:desc
 ```
 
 按关注类型筛选：
 
 ```bash
-python main.py instagram --valid 1
-python main.py bilibili --valid 1 2
+python main.py instagram -v 1
+python main.py bilibili -v 1 2
 ```
 
 按时间窗口筛选：
 
 ```bash
-python main.py weibo --latest-time-start "2026-03-01 00:00:00"
-python main.py weibo --latest-time-end "2026-03-15 23:59:59"
-python main.py douyin --scrapy-time-start "2026-03-01 00:00:00"
+python main.py weibo --lts "2026-03-01 00:00:00"
+python main.py weibo --lte "2026-03-15 23:59:59"
+python main.py douyin --sts "2026-03-01 00:00:00"
 ```
 
 ### 公共 CLI 参数
 
 各平台统一支持以下参数：
 
-- `--valid`
-- `--user-id`
-- `--username`
-- `-u` / `--uname`
-- `--latest-time-start`
-- `--latest-time-end`
-- `--scrapy-time-start`
-- `--scrapy-time-end`
+- `-v` / `--valid`
+- `-i` / `--uid` / `--user-id`
+- `-n` / `--name` / `--username`
+- `-u` / `--user` / `--uname`
+- `--lts` / `--latest-time-start`
+- `--lte` / `--latest-time-end`
+- `--sts` / `--scrapy-time-start`
+- `--ste` / `--scrapy-time-end`
 - `-s` / `--sort`
-- `--show`
-- `--no-send`
-- `--download-progress` / `--no-download-progress`
-- `--local-json`
+- `-S` / `--show`
+- `-N` / `--no-send`
+- `-p` / `--progress` / `--download-progress`
+- `-j` / `--json` / `--local-json`
 
 说明：
 
@@ -393,6 +404,7 @@ python main.py douyin --scrapy-time-start "2026-03-01 00:00:00"
 - 省略 `platform` 时，会先从 `user` 表筛选命中的记录，再按其中的 `platform` 自动分发到对应平台执行
 - `--sort` 格式是 `字段[:asc|desc]`，默认 `scrapy_time:desc`
 - `--show` 只展示筛中的 `user` 记录，不执行爬取、下载、发送和数据库回写
+- 旧参数名仍然可用，短参数只是更推荐的写法
 
 ### `--valid` 取值
 
