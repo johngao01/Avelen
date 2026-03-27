@@ -23,7 +23,6 @@ from core.settings import (
 )
 from core.utils import convert_bytes_to_human_readable, get_platform_json_dir, bytes2md5
 from rich.console import Console
-from rich.table import Column
 from rich.progress import (
     Progress,
     TextColumn,
@@ -160,9 +159,11 @@ class FileDownloadTracker:
         # 使用原本 build_file_detail 中的简洁拼接日志样式
         log_msg = ' '.join(["   ", file_index, final_path, extra_info, human_readable_size])
 
-        # 【核心修正】彻底丢弃 logger 输出，强制只使用 progress.console 以保证不撕裂终端 UI
+        # 控制台仍走 progress.console，避免和进度条互相打架；文件日志单独写入 logger。
         time_prefix = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.progress.console.print(f"{time_prefix} | INFO | {log_msg}")
+        if self.logger is not None:
+            self.logger.bind(file_only=True).info(log_msg)
 
         # 任务完成后，立即从动态面板上抹除该任务，避免 100% 进度条长期霸占屏幕
         if self.task_id is not None:

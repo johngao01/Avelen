@@ -56,6 +56,7 @@ def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 
             sys.stderr,
             format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
             level='INFO',
+            filter=lambda record: not record['extra'].get('file_only', False),
         )
         _STDERR_CONFIGURED = True
 
