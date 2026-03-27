@@ -176,7 +176,7 @@ def build_common_cli_parser():
     parser.add_argument('-n', '--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
     parser.add_argument('-p', '--progress', '--download-progress', dest='download_progress',
-                        action='store_true', default=True, help='是否显示下载进度条，默认启用')
+                        action='store_false', default=True, help='是否显示下载进度条，默认启用')
     parser.add_argument('-j', '--json', '--local-json', dest='local_json', action='store_true',
                         help='从本地 json 目录读取数据，而不是实时抓取')
     parser.add_argument('-l', '--list', dest='show', action='store_true',
