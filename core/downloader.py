@@ -180,7 +180,12 @@ def format_seconds_to_hms(seconds: float | int | None) -> str:
     total_seconds = max(int(round(float(seconds))), 0)
     hour, remainder = divmod(total_seconds, 3600)
     minute, second = divmod(remainder, 60)
-    return f"{hour:02d}:{minute:02d}:{second:02d}"
+    if hour > 0:
+        return f"{hour:02d}:{minute:02d}:{second:02d}"
+    elif minute > 0:
+        return f"{minute:02d}:{second:02d}"
+    else:
+        return f"{second}秒"
 
 
 def get_video_duration_hms(path: str) -> str:
