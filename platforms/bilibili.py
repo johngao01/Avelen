@@ -51,9 +51,9 @@ class BilibiliPost(BasePost):
         self.node = node
         self.dynamic_type = node.get('type', '')
         if self.dynamic_type == 'DYNAMIC_TYPE_AV':
-            self.idstr = node['id_str']
-        else:
             self.idstr = self.video_id
+        else:
+            self.idstr = node['id_str']
         self.basic = node.get('basic') or {}
         self.modules = node.get('modules') or {}
         self.author = self.modules.get('module_author') or {}
