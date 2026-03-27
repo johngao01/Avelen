@@ -49,13 +49,13 @@ class BilibiliPost(BasePost):
         super().__init__()
         self.following = following
         self.node = node
+        self.basic = node.get('basic') or {}
+        self.modules = node.get('modules') or {}
         self.dynamic_type = node.get('type', '')
         if self.dynamic_type == 'DYNAMIC_TYPE_AV':
             self.idstr = self.video_id
         else:
             self.idstr = node['id_str']
-        self.basic = node.get('basic') or {}
-        self.modules = node.get('modules') or {}
         self.author = self.modules.get('module_author') or {}
         self.platform = 'bilibili'
         self.userid = str(node.get('user_id') or following.userid)
