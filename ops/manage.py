@@ -111,9 +111,13 @@ async def query_user_info(user_id):
             (-1, "🗂️ 不再追踪", "retire"),
             (-2, "🚫 无效账号", "invalid"),
         ]
+        upgrade_button = []
         for target_valid, text, action in status_actions:
             if valid != target_valid:
-                keyboard.append([InlineKeyboardButton(text, callback_data=f"{action}|{user_id}")])
+                upgrade_button.append([InlineKeyboardButton(text, callback_data=f"{action}|{user_id}")])
+                if len(upgrade_button) == 2:
+                    keyboard.append(upgrade_button)
+                    upgrade_button = []
         sql = """SELECT u.USERNAME,
                         u.USERID,
                         u.platform,
@@ -127,8 +131,7 @@ async def query_user_info(user_id):
             user_name, num = result[0][0], result[0][-1]
         else:
             user_name, num = user_id, 0
-        platform_icon = platform_icons.get(platform, '❓')
-        info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>平台</b>：{platform_icon}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types.get(str(valid), f'未知类型({valid})')}"
+        info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>平台</b>：{platform}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types.get(str(valid), f'未知类型({valid})')}"
         return exist[0], info, keyboard
     return None
 
@@ -148,7 +151,6 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # 通过输入任意字符串进入，然后使用字符串查找数据
         if update.effective_chat.id != DEVELOPER_CHAT_ID:
-            await echo(update, context)
             return ConversationHandler.END
         search_text = update.message.text
         page = 1
@@ -286,8 +288,7 @@ async def edit_commands(application):
     command = [BotCommand("myfollow", "我的关注"),
                BotCommand("manage", "管理关注"),
                BotCommand("lm", "查看/media文件夹"),
-               BotCommand("cancel", "取消操作"),
-               BotCommand("report", "报告")]
+               BotCommand("cancel", "取消操作")]
     await application.bot.set_my_commands(commands=command)
     await application.bot.send_message(DEVELOPER_CHAT_ID,
                                        text="bot start...")
@@ -322,12 +323,6 @@ async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username = clear_name(username)
             text += f'\#{username}   '
         await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
-
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(update.effective_user.language_code, update.message.chat_id, update.message.id, update.message.date,
-          update.message.text)
-    await update.message.reply_text(update.message.text)
 
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -525,7 +520,6 @@ def main() -> None:
     application.add_handler(manage_follow_handler)
     application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
     application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
-    application.add_handler(MessageHandler(filters.Text(), echo))
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
