@@ -6,7 +6,7 @@ from typing import Callable, Any
 
 from core.downloader import Downloader
 from core.database import get_filtered_following_rows, get_filtered_followings, get_sent_post, normalize_sort_option
-from core.models import BasePost, CookieExpiredError, RunOptions
+from core.models import BasePost, CookieExpiredError, DEFAULT_LATEST_TIME, RunOptions
 from core.settings import BILIBILI_CONFIG, DOUYIN_CONFIG, INSTAGRAM_CONFIG, WEIBO_CONFIG
 from core.sender_dispatcher import send_post_payload_to_telegram
 from core.utils import download_log, log_error, rate_control
@@ -31,6 +31,16 @@ def argparse_sort_option(value: str) -> str:
         return normalize_sort_option(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def argparse_latest_time_override(value: str) -> datetime:
+    """解析 `set-latest-time` 参数；空值时回退到默认最早时间。"""
+    if value == '':
+        return DEFAULT_LATEST_TIME
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError('时间格式无效，应为 YYYY-MM-DD HH:MM:SS') from exc
 
 
 def send_post_to_telegram(
@@ -160,6 +170,9 @@ def build_common_cli_parser():
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('-s', '--sort', dest='sort_option', type=argparse_sort_option, default='scrapy_time:desc',
                         help='排序字段[:asc|desc]，默认 scrapy_time:desc')
+    parser.add_argument('-slt', '--set-latest-time', dest='set_latest_time', nargs='?', default=None,
+                        const=DEFAULT_LATEST_TIME, type=argparse_latest_time_override,
+                        help='覆盖所有用户 latest_time；不传值或传空值时使用 2000-12-12 12:12:12')
     parser.add_argument('-n', '--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
     parser.add_argument('-p', '--progress', '--download-progress', dest='download_progress',
@@ -186,12 +199,29 @@ def build_following_filters(args) -> dict[str, Any]:
     }
 
 
+def apply_latest_time_override(rows, override_latest_time):
+    """统一覆盖筛选结果中的 latest_time，便于强制全量抓取。"""
+    if override_latest_time is None:
+        return rows
+
+    updated_rows = []
+    for row in rows:
+        row_values = list(row)
+        if len(row_values) == 3:
+            row_values[2] = override_latest_time
+        elif len(row_values) >= 5:
+            row_values[4] = override_latest_time
+        updated_rows.append(tuple(row_values))
+    return updated_rows
+
+
 def select_followings(platform: str, args):
     """根据命令行参数统一从 user 表筛选关注列表。"""
-    return get_filtered_followings(
+    rows = get_filtered_followings(
         platform=platform,
         **build_following_filters(args),
     )
+    return apply_latest_time_override(rows, args.set_latest_time)
 
 
 def build_run_options(args: argparse.Namespace) -> RunOptions:
@@ -208,10 +238,11 @@ def select_following_rows(platform: str | None, args):
 
     `platform=None` 时表示跨平台读取，供主入口自动分发和 `--show` 使用。
     """
-    return get_filtered_following_rows(
+    rows = get_filtered_following_rows(
         platform=platform,
         **build_following_filters(args),
     )
+    return apply_latest_time_override(rows, args.set_latest_time)
 
 
 def format_table_value(value) -> str:

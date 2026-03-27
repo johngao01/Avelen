@@ -315,6 +315,8 @@ python main.py bili
 ```bash
 python main.py weibo -u 糕 -S
 python main.py -u 糕 -S -s latest_time:asc
+python main.py weibo -slt
+python main.py weibo -slt "2024-01-01 00:00:00"
 python main.py -i 123456
 python main.py -n favorite
 python main.py -v 1 2
@@ -365,6 +367,14 @@ python main.py -S -s username:asc
 python main.py -S -s valid:desc
 ```
 
+覆盖 `latest_time`，强制多抓历史内容：
+
+```bash
+python main.py weibo -slt
+python main.py weibo -slt "2024-01-01 00:00:00"
+python main.py -S -u 糕 -slt
+```
+
 按关注类型筛选：
 
 ```bash
@@ -393,6 +403,7 @@ python main.py douyin --sts "2026-03-01 00:00:00"
 - `--sts` / `--scrapy-time-start`
 - `--ste` / `--scrapy-time-end`
 - `-s` / `--sort`
+- `-slt` / `--set-latest-time`
 - `-S` / `--show`
 - `-N` / `--no-send`
 - `-p` / `--progress` / `--download-progress`
@@ -403,8 +414,10 @@ python main.py douyin --sts "2026-03-01 00:00:00"
 - `platform` 现在是可选参数
 - 省略 `platform` 时，会先从 `user` 表筛选命中的记录，再按其中的 `platform` 自动分发到对应平台执行
 - `--sort` 格式是 `字段[:asc|desc]`，默认 `scrapy_time:desc`
+- `-slt` / `--set-latest-time` 会临时覆盖本次运行中所有用户的 `latest_time`
 - `--show` 只展示筛中的 `user` 记录，不执行爬取、下载、发送和数据库回写
 - 旧参数名仍然可用，短参数只是更推荐的写法
+- `-slt` 不带值，或传空字符串时，会使用 `2000-12-12 12:12:12`
 
 ### `--valid` 取值
 
