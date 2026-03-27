@@ -335,6 +335,23 @@ python main.py instagram --local-json
 python main.py weibo --user-id 123456
 python main.py douyin --username favorite
 python main.py weibo -u 糕
+python main.py -u 糕
+```
+
+只查看筛中的用户，不执行爬取和发送：
+
+```bash
+python main.py weibo --show -u 糕
+python main.py --show -u 糕
+python main.py --show --valid 1 2
+```
+
+自定义排序：
+
+```bash
+python main.py --show -u 糕 --sort latest_time:asc
+python main.py --show --sort username:asc
+python main.py --show --sort valid:desc
 ```
 
 按关注类型筛选：
@@ -364,9 +381,48 @@ python main.py douyin --scrapy-time-start "2026-03-01 00:00:00"
 - `--latest-time-end`
 - `--scrapy-time-start`
 - `--scrapy-time-end`
+- `-s` / `--sort`
+- `--show`
 - `--no-send`
 - `--download-progress` / `--no-download-progress`
 - `--local-json`
+
+说明：
+
+- `platform` 现在是可选参数
+- 省略 `platform` 时，会先从 `user` 表筛选命中的记录，再按其中的 `platform` 自动分发到对应平台执行
+- `--sort` 格式是 `字段[:asc|desc]`，默认 `scrapy_time:desc`
+- `--show` 只展示筛中的 `user` 记录，不执行爬取、下载、发送和数据库回写
+
+### `--valid` 取值
+
+- `-2`：用户已失效 / 被平台删除
+- `-1`：不再关注
+- `0`：取消关注
+- `1`：特别关注
+- `2`：普通关注
+
+### `--sort` 支持字段
+
+- `scrapy_time`
+- `latest_time`
+- `username`
+- `userid`
+- `platform`
+- `valid`
+
+也兼容这些别名：
+
+- `scrapy-time`
+- `latest-time`
+- `user-id`
+- `user_id`
+
+### `--show` 展示说明
+
+- 单平台 `--show`：展示当前平台筛中的用户
+- 不传 `platform` 的 `--show`：展示跨平台结果，并额外显示平台列
+- 如果终端支持 OSC 8 超链接，表格里的 `用户ID` / `用户名` 可以点击打开主页
 
 ## Telegram 发送说明
 

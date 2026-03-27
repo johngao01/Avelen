@@ -10,6 +10,22 @@ mysql_db = os.getenv('MYSQL_DB', 'nicebot')
 
 MESSAGES = ['MESSAGE_ID', 'CAPTION', 'CHAT_ID', 'DATE_TIME', 'FORM_USER', 'CHAT', 'MEDIA_GROUP_ID', 'TEXT_RAW',
             'URL', 'USERID', 'USERNAME', 'IDSTR', 'MBLOGID', 'MSG_STR']
+SORT_FIELD_ALIASES = {
+    'scrapy_time': 'scrapy_time',
+    'scrapy-time': 'scrapy_time',
+    'latest_time': 'latest_time',
+    'latest-time': 'latest_time',
+    'username': 'username',
+    'userid': 'userid',
+    'user_id': 'userid',
+    'user-id': 'userid',
+    'platform': 'platform',
+    'valid': 'valid',
+}
+SORT_DIRECTION_ALIASES = {
+    'asc': 'asc',
+    'desc': 'desc',
+}
 
 
 def get_db_conn():
@@ -32,29 +48,64 @@ def insert_data(db_conn, table_name, columns, data_dict):
 
 
 def escape_like_pattern(value: str) -> str:
+    """转义 SQL LIKE 通配符，避免部分用户名筛选被 `%` / `_` 干扰。"""
     return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
 
 
-def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=None,
-                            username_like=None,
-                            latest_time_start=None, latest_time_end=None,
-                            scrapy_time_start=None, scrapy_time_end=None):
+def normalize_sort_option(value: str | None) -> str:
+    """把 CLI 排序参数归一化成 `field:direction` 形式。"""
+    if value is None or value == '':
+        return 'scrapy_time:desc'
+
+    raw_value = value.strip().lower()
+    field, separator, direction = raw_value.partition(':')
+    normalized_field = SORT_FIELD_ALIASES.get(field)
+    if normalized_field is None:
+        raise ValueError(
+            '排序字段无效，可选 scrapy_time/latest_time/username/userid/platform/valid'
+        )
+
+    normalized_direction = 'desc' if not separator else SORT_DIRECTION_ALIASES.get(direction.strip())
+    if normalized_direction is None:
+        raise ValueError('排序方向无效，只支持 asc 或 desc')
+
+    return f'{normalized_field}:{normalized_direction}'
+
+
+def parse_sort_option(value: str | None) -> tuple[str, str]:
+    """解析排序参数，返回安全白名单字段和 SQL 方向。"""
+    normalized = normalize_sort_option(value)
+    field, direction = normalized.split(':', 1)
+    return field, direction.upper()
+
+
+def build_filtered_followings_query(columns, platform=None, valid_list=None, user_ids=None, usernames=None,
+                                    username_like=None,
+                                    latest_time_start=None, latest_time_end=None,
+                                    scrapy_time_start=None, scrapy_time_end=None,
+                                    sort_option=None):
+    """构建统一的 user 表筛选 SQL。
+
+    这个函数只负责：
+    - 复用所有 CLI 筛选条件
+    - 支持平台可选，便于跨平台查询
+    - 通过白名单排序字段生成安全的 ORDER BY
     """
-    按条件筛选 user 表关注对象。
-    - valid_list: 关注类型列表，默认 [1]
-    - user_ids/usernames: 可指定单个或多个 id/用户名（精确匹配）
-    - username_like: 按用户名模糊匹配，适合输入部分名字
-    - latest_time_* / scrapy_time_*: 按时间窗口筛选
-    """
+    select_columns = ', '.join(columns)
+    sql = [f"SELECT {select_columns} FROM `user` WHERE 1=1"]
+    params = []
+    sort_field, sort_direction = parse_sort_option(sort_option)
+
+    if platform is not None:
+        sql.append("AND platform=%s")
+        params.append(platform)
+
     if valid_list is None:
         valid_list = [1, 2]
     if user_ids is None:
         user_ids = []
     if usernames is None:
         usernames = []
-
-    sql = ["SELECT userid, username, latest_time FROM `user` WHERE platform=%s"]
-    params = [platform]
 
     if valid_list:
         placeholders = ','.join(['%s'] * len(valid_list))
@@ -84,8 +135,58 @@ def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=
         sql.append("AND scrapy_time <= %s")
         params.append(scrapy_time_end)
 
-    sql.append("ORDER BY scrapy_time DESC;")
-    return exec_sql_get_data(' '.join(sql), tuple(params))
+    sql.append(f"ORDER BY {sort_field} {sort_direction};")
+    return ' '.join(sql), tuple(params)
+
+
+def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=None,
+                            username_like=None,
+                            latest_time_start=None, latest_time_end=None,
+                            scrapy_time_start=None, scrapy_time_end=None,
+                            sort_option=None):
+    """
+    按条件筛选 user 表关注对象。
+    - valid_list: 关注类型列表，默认 [1]
+    - user_ids/usernames: 可指定单个或多个 id/用户名（精确匹配）
+    - username_like: 按用户名模糊匹配，适合输入部分名字
+    - latest_time_* / scrapy_time_*: 按时间窗口筛选
+    """
+    sql, params = build_filtered_followings_query(
+        ('userid', 'username', 'latest_time'),
+        platform=platform,
+        valid_list=valid_list,
+        user_ids=user_ids,
+        usernames=usernames,
+        username_like=username_like,
+        latest_time_start=latest_time_start,
+        latest_time_end=latest_time_end,
+        scrapy_time_start=scrapy_time_start,
+        scrapy_time_end=scrapy_time_end,
+        sort_option=sort_option,
+    )
+    return exec_sql_get_data(sql, params)
+
+
+def get_filtered_following_rows(platform=None, valid_list=None, user_ids=None, usernames=None,
+                                username_like=None,
+                                latest_time_start=None, latest_time_end=None,
+                                scrapy_time_start=None, scrapy_time_end=None,
+                                sort_option=None):
+    """读取展示模式所需的完整 user 表行。"""
+    sql, params = build_filtered_followings_query(
+        ('userid', 'username', 'platform', 'valid', 'latest_time', 'scrapy_time'),
+        platform=platform,
+        valid_list=valid_list,
+        user_ids=user_ids,
+        usernames=usernames,
+        username_like=username_like,
+        latest_time_start=latest_time_start,
+        latest_time_end=latest_time_end,
+        scrapy_time_start=scrapy_time_start,
+        scrapy_time_end=scrapy_time_end,
+        sort_option=sort_option,
+    )
+    return exec_sql_get_data(sql, params)
 
 
 def exec_sql_get_data(sql, data=None):
