@@ -78,7 +78,7 @@ async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     row = []
     for platform in MANAGE_PLATFORMS:
-        btn = InlineKeyboardButton(f"{platform}", callback_data=f"s|{platform}|1")
+        btn = InlineKeyboardButton(f"{platform_icons[platform]} {platform}", callback_data=f"s|{platform}|1")
         row.append(btn)
     keyboard.append(row)
     markup = InlineKeyboardMarkup(keyboard)
