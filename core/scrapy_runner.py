@@ -323,6 +323,39 @@ def render_followings_table(platform: str | None, rows, *, show_platform: bool =
     console.print(table)
 
 
+def build_args_log_summary(args: argparse.Namespace) -> str:
+    """把当前 CLI 参数整理成适合启动日志的简短摘要。"""
+    summary = [
+        f"valid={args.valid}",
+        f"sort={args.sort_option}",
+    ]
+    if args.user_ids:
+        summary.append(f"user_ids={args.user_ids}")
+    if args.usernames:
+        summary.append(f"usernames={args.usernames}")
+    if args.username_like:
+        summary.append(f"username_like={args.username_like}")
+    if args.latest_time_start:
+        summary.append(f"latest_time_start={args.latest_time_start}")
+    if args.latest_time_end:
+        summary.append(f"latest_time_end={args.latest_time_end}")
+    if args.scrapy_time_start:
+        summary.append(f"scrapy_time_start={args.scrapy_time_start}")
+    if args.scrapy_time_end:
+        summary.append(f"scrapy_time_end={args.scrapy_time_end}")
+    if args.set_latest_time is not None:
+        summary.append(f"set_latest_time={format_table_value(args.set_latest_time)}")
+    if args.local_json:
+        summary.append("local_json=True")
+    if args.no_send:
+        summary.append("no_send=True")
+    if not args.download_progress:
+        summary.append("download_progress=False")
+    if args.show:
+        summary.append("show=True")
+    return ', '.join(summary)
+
+
 def run_platform_main(platform: str,
                       logger,
                       build_following: Callable[[Any], Any],
@@ -336,13 +369,30 @@ def run_platform_main(platform: str,
     if argv and argv[0] == platform:
         argv = argv[1:]
     args = parser.parse_args(argv)
+    logger.info(f"{platform} 任务启动")
+    logger.info(f"{platform} 参数: {build_args_log_summary(args)}")
     if args.show:
+        logger.info(f"{platform} 开始筛选用户（show 模式）")
         rows = select_following_rows(platform, args)
+        logger.info(f"{platform} show 模式共筛到 {len(rows)} 个用户")
         render_followings_table(platform, rows)
         return args, rows
+    logger.info(f"{platform} 开始筛选用户")
     all_followings = select_followings(platform, args)
+    logger.info(f"{platform} 筛选完成，共 {len(all_followings)} 个用户")
+    if not all_followings:
+        logger.info(f"{platform} 没有符合条件的用户，本次任务结束")
+        return args, all_followings
     options = build_run_options(args)
+    logger.info(
+        f"{platform} 运行模式: "
+        f"local_json={options.use_local_json}, "
+        f"no_send={options.no_send}, "
+        f"download_progress={options.download_progress}"
+    )
     sent_post = set(get_sent_post(platform))
+    logger.info(f"{platform} 已加载 {len(sent_post)} 条历史已发送记录")
+    logger.info(f"{platform} 开始执行抓取流程")
     run_followings(
         all_followings,
         build_following=build_following,

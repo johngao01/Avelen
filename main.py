@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import sys
 
-from core.scrapy_runner import build_common_cli_parser, render_followings_table, select_following_rows
+from core.models import get_platform_logger
+from core.scrapy_runner import build_args_log_summary, build_common_cli_parser, render_followings_table, select_following_rows
+from core.settings import LOGS_DIR
 from platforms import PLATFORM_REGISTRY, get_platform
+
+main_logger = get_platform_logger('main', LOGS_DIR)
 
 
 def build_parser():
@@ -25,15 +29,20 @@ def build_parser():
 
 def run_selected_platforms(args):
     """在未显式指定平台时，按 user 表中的平台字段自动分发。"""
+    main_logger.info("统一入口开始筛选用户")
     rows = select_following_rows(None, args)
+    main_logger.info(f"统一入口筛选完成，共 {len(rows)} 个用户")
     if args.show:
+        main_logger.info("统一入口进入列表展示模式")
         render_followings_table(None, rows, show_platform=True)
         return args, rows
     if not rows:
+        main_logger.info("统一入口没有符合条件的用户，本次任务结束")
         print("没有符合条件的用户")
         return args, rows
 
     ordered_platforms = list(dict.fromkeys(row[2] for row in rows))
+    main_logger.info(f"统一入口自动分发平台: {ordered_platforms}")
     for platform_name in ordered_platforms:
         platform_cls = get_platform(platform_name)
         platform_cls.run()
@@ -42,13 +51,13 @@ def run_selected_platforms(args):
 
 def main():
     argv = sys.argv[1:]
+    main_logger.info(f"统一入口启动，原始参数: {argv}")
     parser = build_parser()
-    if not argv:
-        parser.print_help()
-        return None
     args = parser.parse_args(argv)
+    main_logger.info(f"统一入口参数: {build_args_log_summary(args)}")
     if args.platform is None:
         return run_selected_platforms(args)
+    main_logger.info(f"统一入口显式指定平台: {args.platform}")
     platform_cls = get_platform(args.platform)
     return platform_cls.run()
 
