@@ -135,7 +135,7 @@ def build_common_cli_parser():
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
-    parser.add_argument('-dp', '--download-progress', action=argparse.BooleanOptionalAction, default=True,
+    parser.add_argument('-dp', '--download-progress', action='store_true', default=True,
                         help='是否显示下载进度条，默认启用')
     parser.add_argument('--local-json', action='store_true', help='从本地 json 目录读取数据，而不是实时抓取')
     return parser
