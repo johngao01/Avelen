@@ -31,9 +31,18 @@ ASK_SAVE_USERNAME, ASK_OPERATION, STORE_DATA = range(3)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
 follow_types = {
+    '-2': '🚫 无效账号',
+    '-1': '🗂️ 不再追踪',
     '0': '❌ 取消追踪',
     '1': '⭐️ 特别关注',
     '2': '👤 普通关注'
+}
+follow_type_icons = {
+    '-2': '🚫',
+    '-1': '🗂️',
+    '0': '❌',
+    '1': '⭐️',
+    '2': '👤'
 }
 PAGE_SIZE = 30
 MANAGE_PLATFORMS = ['douyin', 'weibo', 'instagram', 'bilibili']
@@ -89,15 +98,16 @@ async def query_user_info(user_id):
                                                    url=f"https://www.instagram.com/{user_id}/")
 
         keyboard = [[keyboard_button]]
-        button1 = InlineKeyboardButton("👤 普通关注", callback_data=f"downgrade|{user_id}")
-        button2 = InlineKeyboardButton("⭐️ 特别关注", callback_data=f"upgrade|{user_id}")
-        button3 = InlineKeyboardButton("❌ 取消关注", callback_data=f"delete|{user_id}")
-        if valid == 0:
-            keyboard.extend([[button1], [button2]])
-        elif valid == 1:
-            keyboard.extend([[button3], [button1]])
-        else:
-            keyboard.extend([[button3], [button2]])
+        status_actions = [
+            (1, "⭐️ 特别关注", "upgrade"),
+            (2, "👤 普通关注", "downgrade"),
+            (0, "❌ 取消关注", "delete"),
+            (-1, "🗂️ 不再追踪", "retire"),
+            (-2, "🚫 无效账号", "invalid"),
+        ]
+        for target_valid, text, action in status_actions:
+            if valid != target_valid:
+                keyboard.append([InlineKeyboardButton(text, callback_data=f"{action}|{user_id}")])
         sql = """SELECT u.USERNAME,
                         u.USERID,
                         u.platform,
@@ -111,7 +121,7 @@ async def query_user_info(user_id):
             user_name, num = result[0][0], result[0][-1]
         else:
             user_name, num = user_id, 0
-        info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types[str(valid)]}"
+        info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types.get(str(valid), f'未知类型({valid})')}"
         return exist[0], info, keyboard
     return None
 
@@ -136,11 +146,15 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         search_text = update.message.text
         page = 1
     context.user_data['page'] = page
-    if search_text.isdigit() and int(search_text) < 5:
+    try:
+        valid_type = int(search_text)
+    except ValueError:
+        valid_type = None
+    if valid_type in (-2, -1, 0, 1, 2):
         sql = """SELECT userid, username, latest_time, platform, valid
                  FROM user
                  WHERE valid = %s"""
-        result = exec_sql_get_data(sql, (int(search_text),))
+        result = exec_sql_get_data(sql, (valid_type,))
     else:
         sql = """SELECT userid, username, latest_time, platform, valid
                  FROM user
@@ -162,12 +176,8 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start, end = (page - 1) * PAGE_SIZE, page * PAGE_SIZE
     for user in result[start:end]:
         user_id, username, latest_time, platform, valid = user
-        if valid == 0:
-            username_remark = '❌ ' + username
-        elif valid == 1:
-            username_remark = '⭐️ ' + username
-        else:
-            username_remark = '👤 ' + username
+        icon = follow_type_icons.get(str(valid), '❓')
+        username_remark = f'{icon} {username}'
         follows[user_id] = {
             'username': username,
             'latest_time': latest_time,
@@ -226,13 +236,18 @@ async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = cast(str, query.data)
-    _, user_id = data.split("|", 1)
-    if _ == 'upgrade':
-        valid = 1
-    elif _ == 'downgrade':
-        valid = 2
-    else:
-        valid = 0
+    action, user_id = data.split("|", 1)
+    valid_map = {
+        'upgrade': 1,
+        'downgrade': 2,
+        'delete': 0,
+        'retire': -1,
+        'invalid': -2
+    }
+    valid = valid_map.get(action)
+    if valid is None:
+        await query.edit_message_text("❌ 未知操作")
+        return ConversationHandler.END
     update_user(valid, user_id)
     data = await query_user_info(user_id)
     await query.edit_message_text(f"修改成功\n" + data[1], reply_markup=InlineKeyboardMarkup([data[2][0]]),
@@ -475,7 +490,7 @@ def main() -> None:
             MANAGING_USER: [
                 CommandHandler("manage", start_manage),
                 MessageHandler(filters.Text() & ~filters.COMMAND, query_data),
-                CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade)\|"),
+                CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade|retire|invalid)\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
             ],
         },
@@ -491,7 +506,7 @@ def main() -> None:
             STORE_DATA: [
                 MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url),
                 CallbackQueryHandler(store_data, pattern=r"[0|1|2]"),
-                CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade)\|")
+                CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade|retire|invalid)\|")
             ]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
