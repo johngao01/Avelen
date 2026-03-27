@@ -44,6 +44,12 @@ follow_type_icons = {
     '1': '⭐️',
     '2': '👤'
 }
+platform_icons = {
+    'douyin': '🎵',
+    'weibo': '📣',
+    'instagram': '📸',
+    'bilibili': '📺',
+}
 PAGE_SIZE = 30
 MANAGE_PLATFORMS = ['douyin', 'weibo', 'instagram', 'bilibili']
 
@@ -121,7 +127,8 @@ async def query_user_info(user_id):
             user_name, num = result[0][0], result[0][-1]
         else:
             user_name, num = user_id, 0
-        info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types.get(str(valid), f'未知类型({valid})')}"
+        platform_icon = platform_icons.get(platform, '❓')
+        info = f"<b>#{user_name}</b>\n<b>用户ID</b>：{user_id}\n<b>平台</b>：{platform_icon}\n<b>最新作品</b>：{str(latest_time or '')}\n<b>作品数量：</b>{num}\n<b>关注类型：</b>{follow_types.get(str(valid), f'未知类型({valid})')}"
         return exist[0], info, keyboard
     return None
 
@@ -177,7 +184,8 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for user in result[start:end]:
         user_id, username, latest_time, platform, valid = user
         icon = follow_type_icons.get(str(valid), '❓')
-        username_remark = f'{icon} {username}'
+        platform_icon = platform_icons.get(platform, '❓')
+        username_remark = f'{icon} {platform_icon} {username}'
         follows[user_id] = {
             'username': username,
             'latest_time': latest_time,
