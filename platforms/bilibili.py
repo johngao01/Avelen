@@ -233,7 +233,7 @@ class BilibiliScrapy(BasePlatform):
                 f'一共获取到 {len(self.post)} 个动态'
             )
 
-            if data.get('has_more'):
+            if not data.get('has_more'):
                 break
 
             page += 1
