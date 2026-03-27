@@ -6,7 +6,7 @@ import cv2
 import requests
 import os
 import time
-from threading import local
+from threading import Lock, local
 from urllib.parse import urlparse
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -45,10 +45,12 @@ class FileDownloadTracker:
     它不管理界面的生命周期，只负责汇报进度和打印最终的完成日志。
     """
 
-    def __init__(self, task: DownloadTask, progress: Progress, logger=None):
+    def __init__(self, task: DownloadTask, progress: Progress, display_index_provider, log_emit_lock, logger):
         self.progress = progress
         self.task = task
         self.logger = logger
+        self.display_index_provider = display_index_provider
+        self.log_emit_lock = log_emit_lock
         self.task_id = None
         self.total_size = 0
         self.start_time = time.time()
@@ -108,7 +110,6 @@ class FileDownloadTracker:
                 pass
 
         # 获取和解析媒体信息以供日志展示和数据组装
-        file_index = str(self.task.index)
         human_readable_size = convert_bytes_to_human_readable(self.total_size)
         media_name = os.path.basename(final_path)
         file_ext = media_name.split('.')[-1].lower()
@@ -156,13 +157,13 @@ class FileDownloadTracker:
                 file_detail.filetype = 'video'
                 file_detail.skipped = True
 
-        # 使用原本 build_file_detail 中的简洁拼接日志样式
-        log_msg = ' '.join(["   ", file_index, final_path, extra_info, human_readable_size])
-
-        # 控制台仍走 progress.console，避免和进度条互相打架；文件日志单独写入 logger。
-        time_prefix = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.progress.console.print(f"{time_prefix} | INFO | {log_msg}")
-        if self.logger is not None:
+        with self.log_emit_lock:
+            # 显示序号使用“下载完成顺序”计数（1..n），便于直观看到本次落地文件数量。
+            file_index = str(self.display_index_provider())
+            log_msg = ' '.join(["   ", file_index, final_path, extra_info, human_readable_size])
+            time_prefix = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # 关闭 rich 自动高亮，避免路径前半段/后半段颜色不一致。
+            self.progress.console.print(f"{time_prefix} | INFO | {log_msg}")
             self.logger.bind(file_only=True).info(log_msg)
 
         # 任务完成后，立即从动态面板上抹除该任务，避免 100% 进度条长期霸占屏幕
@@ -222,6 +223,14 @@ class Downloader:
         self.logger = logger
         self._session = session
         self._session_local = local()
+        self._display_index_lock = Lock()
+        self._log_emit_lock = Lock()
+        self._display_index = 0
+
+    def _next_display_index(self) -> int:
+        with self._display_index_lock:
+            self._display_index += 1
+            return self._display_index
 
     @staticmethod
     def _build_session(max_retries: int) -> requests.Session:
@@ -264,6 +273,8 @@ class Downloader:
 
     def download(self, post: BasePost) -> PostData:
         """下载当前 post 的全部媒体，并返回更新后的 `post.post_data`。"""
+        with self._log_emit_lock:
+            self._display_index = 0
         post_data = post.post_data()
         tasks = [self.build_task(post.platform, item) for item in post.build_media_items()]
         total_file_count = len(tasks)
@@ -346,8 +357,7 @@ class Downloader:
 
     def _download_http(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
         """使用普通 HTTP 流式下载文件。"""
-        tracker = FileDownloadTracker(task, shared_progress, self.logger)
-
+        tracker = FileDownloadTracker(task, shared_progress, self._next_display_index, self._log_emit_lock, self.logger)
         if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
             return tracker.finish(task.save_path)
 
@@ -365,8 +375,7 @@ class Downloader:
             )
             status_code = response.status_code
             if status_code != 200:
-                if self.logger:
-                    self.logger.error(f"{task.url} 下载失败：http {status_code}")
+                self.logger.error(f"{task.rel_path} 下载失败：http {status_code}")
                 return None
 
             total_size = self._get_content_length(response)
@@ -390,7 +399,7 @@ class Downloader:
 
     def _download_with_yt_dlp(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
         """使用 `yt-dlp` 下载 Bilibili 视频并复用统一进度展示。"""
-        tracker = FileDownloadTracker(task, shared_progress, self.logger)
+        tracker = FileDownloadTracker(task, shared_progress, self._next_display_index, self._log_emit_lock, self.logger)
 
         if os.path.exists(task.save_path) and os.path.getsize(task.save_path) > 0:
             return tracker.finish(task.save_path)
@@ -413,8 +422,7 @@ class Downloader:
             }) as ydl:
                 video = ydl.extract_info(task.url, download=True)
                 if not video:
-                    if self.logger:
-                        self.logger.error(f"{task.url} 下载失败：yt-dlp download error")
+                    self.logger.error(f"{task.rel_path} 下载失败：yt-dlp download error")
                     return None
 
             final_path = task.save_path
@@ -423,15 +431,13 @@ class Downloader:
                 if prepared_path and os.path.exists(prepared_path):
                     final_path = task.save_path = prepared_path
                 if not final_path or not os.path.exists(final_path):
-                    if self.logger:
-                        self.logger.error(f"{task.url} 下载失败：yt-dlp output missing")
+                    self.logger.error(f"{task.rel_path} 下载失败：yt-dlp output missing")
                     return None
 
             self._move_bilibili_infojson(final_path)
             return tracker.finish(final_path)
         except Exception as exc:
-            if self.logger:
-                self.logger.error(f"{task.rel_path} 下载异常：{exc}")
+            self.logger.error(f"{task.rel_path} 下载异常：{exc}")
             return None
 
     def _move_bilibili_infojson(self, final_path: str):
