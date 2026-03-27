@@ -273,8 +273,8 @@ class Downloader:
         # 【全局唯一】初始化进度条控制容器
         shared_progress = Progress(
             SpinnerColumn("dots"),
-            TextColumn("[bold blue]{task.description}", table_column=Column(ratio=2, min_width=24)),
-            BarColumn(bar_width=24, table_column=Column(ratio=1)),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=24),
             "[progress.percentage]{task.percentage:>3.0f}%",
             DownloadColumn(),
             TransferSpeedColumn(),
