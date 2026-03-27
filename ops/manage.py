@@ -142,6 +142,7 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     query = update.callback_query
     if query:
+        platform_icons_enable = False
         # 通过 callback_query , 数据形如 s/{search_text}/{page}
         await query.answer()
         _, search_text, page = query.data.split("|", 2)
@@ -149,6 +150,7 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['search_text'] = search_text
         await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
     else:
+        platform_icons_enable = True
         # 通过输入任意字符串进入，然后使用字符串查找数据
         if update.effective_chat.id != DEVELOPER_CHAT_ID:
             return ConversationHandler.END
@@ -187,7 +189,10 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id, username, latest_time, platform, valid = user
         icon = follow_type_icons.get(str(valid), '❓')
         platform_icon = platform_icons.get(platform, '❓')
-        username_remark = f'{icon} {platform_icon} {username}'
+        if platform_icons_enable:
+            username_remark = f'{icon} {platform_icon} {username}'
+        else:
+            username_remark = f'{icon} {username}'
         follows[user_id] = {
             'username': username,
             'latest_time': latest_time,
