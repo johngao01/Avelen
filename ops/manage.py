@@ -114,7 +114,7 @@ async def query_user_info(user_id):
         upgrade_button = []
         for target_valid, text, action in status_actions:
             if valid != target_valid:
-                upgrade_button.append([InlineKeyboardButton(text, callback_data=f"{action}|{user_id}")])
+                upgrade_button.append(InlineKeyboardButton(text, callback_data=f"{action}|{user_id}"))
                 if len(upgrade_button) == 2:
                     keyboard.append(upgrade_button)
                     upgrade_button = []
