@@ -31,13 +31,19 @@ def insert_data(db_conn, table_name, columns, data_dict):
     db_conn.commit()
 
 
+def escape_like_pattern(value: str) -> str:
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=None,
+                            username_like=None,
                             latest_time_start=None, latest_time_end=None,
                             scrapy_time_start=None, scrapy_time_end=None):
     """
     按条件筛选 user 表关注对象。
     - valid_list: 关注类型列表，默认 [1]
-    - user_ids/usernames: 可指定单个或多个 id/用户名
+    - user_ids/usernames: 可指定单个或多个 id/用户名（精确匹配）
+    - username_like: 按用户名模糊匹配，适合输入部分名字
     - latest_time_* / scrapy_time_*: 按时间窗口筛选
     """
     if valid_list is None:
@@ -62,6 +68,9 @@ def get_filtered_followings(platform, valid_list=None, user_ids=None, usernames=
         placeholders = ','.join(['%s'] * len(usernames))
         sql.append(f"AND username IN ({placeholders})")
         params.extend(usernames)
+    if username_like:
+        sql.append(r"AND username LIKE %s ESCAPE '\\'")
+        params.append(f"%{escape_like_pattern(username_like)}%")
     if latest_time_start:
         sql.append("AND latest_time >= %s")
         params.append(latest_time_start)

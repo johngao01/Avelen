@@ -125,6 +125,8 @@ def build_common_cli_parser():
                         help='按 user.userid 精确筛选，可重复传参')
     parser.add_argument('--username', action='append', dest='usernames', default=[],
                         help='按 user.username 精确筛选，可重复传参')
+    parser.add_argument('-u', '--uname', dest='username_like', default=None,
+                        help='按 user.username 模糊筛选，支持输入部分用户名')
     parser.add_argument('--latest-time-start', default=None,
                         help='筛选 latest_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
     parser.add_argument('--latest-time-end', default=None,
@@ -148,6 +150,7 @@ def select_followings(platform: str, args):
         valid_list=args.valid,
         user_ids=args.user_ids,
         usernames=args.usernames,
+        username_like=args.username_like,
         latest_time_start=args.latest_time_start,
         latest_time_end=args.latest_time_end,
         scrapy_time_start=args.scrapy_time_start,

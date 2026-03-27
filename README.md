@@ -334,6 +334,7 @@ python main.py instagram --local-json
 ```bash
 python main.py weibo --user-id 123456
 python main.py douyin --username favorite
+python main.py weibo -u 糕
 ```
 
 按关注类型筛选：
@@ -358,6 +359,7 @@ python main.py douyin --scrapy-time-start "2026-03-01 00:00:00"
 - `--valid`
 - `--user-id`
 - `--username`
+- `-u` / `--uname`
 - `--latest-time-start`
 - `--latest-time-end`
 - `--scrapy-time-start`
