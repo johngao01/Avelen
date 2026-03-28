@@ -225,7 +225,7 @@ class BilibiliScrapy(BasePlatform):
             for item in items:
                 item['user_id'] = self.scraping.userid
                 item['username'] = self.scraping.username
-                post = BilibiliPost(self.scraping, item)
+                post = BilibiliPost(self.scraping, item, self)
                 post.save_json()
                 self.post.append(post)
                 if post.create_time <= self.scraping.latest_time and not post.is_top:
@@ -256,7 +256,7 @@ class BilibiliScrapy(BasePlatform):
                     continue
                 if str(data.get('user_id')) != self.scraping.userid:
                     continue
-                self.post.append(BilibiliPost(self.scraping, data))
+                self.post.append(BilibiliPost(self.scraping, data, self))
         bilibili_logger.info(f'{self.scraping.username} 从本地 JSON 获取到 {len(self.post)} 个动态')
 
     def get_opus_desc(self, opus_id: str) -> str:
