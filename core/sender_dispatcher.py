@@ -62,7 +62,7 @@ def replace_char(text):
 
 async def retry_send(fun, **kwargs):
     try:
-        return await fun(**kwargs, read_timeout=42, write_timeout=40, connect_timeout=40, pool_timeout=40)
+        return await fun(**kwargs, read_timeout=600, write_timeout=600, connect_timeout=600, pool_timeout=600)
     except telegram.error.TimedOut:
         print('Get TimeoutError')
     except telegram.error.BadRequest:
