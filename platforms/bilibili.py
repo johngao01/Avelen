@@ -78,7 +78,7 @@ class BilibiliPost(BasePost):
             return f"{BILIBILI_CONFIG['base_url']}/video/{self.video_id}"
         if self.dynamic_type == 'DYNAMIC_TYPE_DRAW':
             return f"{BILIBILI_CONFIG['base_url']}/opus/{self.idstr}"
-        return ''
+        return f"https://t.bilibili.com/{self.idstr}"
 
     @property
     def video_id(self) -> str:
@@ -159,6 +159,8 @@ class BilibiliPost(BasePost):
         if self.dynamic_type == 'DYNAMIC_TYPE_AV':
             return get(self.modules, 'module_dynamic.major.archive.title') or get(self.node, 'describe') or ''
         if self.dynamic_type == 'DYNAMIC_TYPE_DRAW':
+            if self.badge_text == '充电专属':
+                return ''
             desc = get(self.node, 'describe') or ''
             if desc or api is None:
                 return desc
@@ -175,7 +177,7 @@ class BilibiliPost(BasePost):
         if len(text) > limit:
             text = text[:limit]
         text = sub('[\\\\/:*?"<>|\n]', '', text)
-        return text or 'post'
+        return text
 
 
 class BilibiliScrapy(BasePlatform):
@@ -261,13 +263,14 @@ class BilibiliScrapy(BasePlatform):
 
     def get_opus_desc(self, opus_id: str) -> str:
         """读取图文动态页面，补齐正文描述。"""
+        url = f"{BILIBILI_CONFIG['base_url']}/opus/{opus_id}"
         try:
-            response = self.session.get(f"{BILIBILI_CONFIG['base_url']}/opus/{opus_id}", timeout=30)
+            response = self.session.get(url, timeout=30)
         except Exception as exc:
-            bilibili_logger.warning(f'获取 opus {opus_id} 页面失败: {exc}')
+            bilibili_logger.warning(f'获取 {url} 页面失败: {exc}')
             return ''
         if response.status_code != 200:
-            bilibili_logger.warning(f'获取 opus {opus_id} 页面失败: http {response.status_code}')
+            bilibili_logger.warning(f'获取 {url} 页面失败: http {response.status_code}')
             return ''
         tree = etree.HTML(response.text)
         desc_list = tree.xpath('//div[@class="opus-module-content opus-paragraph-children"]//span/text()')
