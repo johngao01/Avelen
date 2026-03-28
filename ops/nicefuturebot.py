@@ -159,7 +159,10 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     reaction_message_id = reaction.message_id
     if emoji == '👎' or emoji == "😁":
+        print(reaction_message_id)
         messages_id = get_message_ids(reaction_message_id)
+        if reaction_message_id not in messages_id:
+            messages_id.append(reaction_message_id)
         print(messages_id)
         await delete_message(context, DEVELOPER_CHAT_ID, messages_id)
     if emoji == "😁":
