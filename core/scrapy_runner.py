@@ -74,7 +74,7 @@ def send_post_to_telegram(
             'post_data': post_data,
             'messages': [],
         }
-    if options.no_send:
+    if options.no_send or len(post_data.files) == 0:
         return {
             'ok': True,
             'error': None,

@@ -287,6 +287,7 @@ class Downloader:
         total_file_count = len(tasks)
         if total_file_count == 0:
             post_data.files = []
+            post_data.ok = True
             return post_data
         skip_file_count = 0
 
