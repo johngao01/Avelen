@@ -7,7 +7,7 @@ from core.scrapy_runner import build_args_log_summary, build_common_cli_parser, 
 from core.settings import LOGS_DIR
 from platforms import PLATFORM_REGISTRY, get_platform
 
-main_logger = get_platform_logger('main', LOGS_DIR)
+main_logger = get_platform_logger('main', LOGS_DIR, file_log=False)
 
 
 def build_parser():

@@ -43,7 +43,7 @@ class FollowUser:
         return cls(userid=userid, username=username, latest_time=parsed)
 
 
-def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 'INFO'):
+def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 'INFO', file_log: bool = True):
     """返回平台专用 logger，并确保公共 sink 只注册一次。"""
     global _STDERR_CONFIGURED
 
@@ -61,7 +61,7 @@ def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 
         _STDERR_CONFIGURED = True
 
     sink_key = (platform_name, str(log_dir.resolve()))
-    if sink_key not in _FILE_SINK_KEYS:
+    if file_log and sink_key not in _FILE_SINK_KEYS:
         _logger.add(
             str(log_dir / f'scrapy_{platform_name}.log'),
             format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
