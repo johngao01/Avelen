@@ -232,7 +232,6 @@ class InstagramScrapy(BasePlatform):
         end_cursor = ''
         page = 1
         keep = True
-        instagram_logger.info(f'开始获取第 {page} 页数据')
         while keep:
             page_data = self.graphql_request({
                 'fb_api_caller_class': 'RelayModern',
@@ -279,7 +278,6 @@ class InstagramScrapy(BasePlatform):
             if not keep or not end_cursor:
                 break
             page += 1
-            instagram_logger.info(f'开始获取第 {page} 页数据')
 
         instagram_logger.info(f'获取 {self.scraping.username} 完成，获取到 {len(self.post)} 个内容')
 
