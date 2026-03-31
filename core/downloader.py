@@ -151,7 +151,7 @@ class FileDownloadTracker:
                 file_detail.filetype = 'photo'
                 file_detail.skipped = True
         else:
-            duration_str = get_video_duration_hms(final_path)
+            duration_str = get_video_info(final_path)
             extra_info = duration_str
             file_detail.filetype = 'video'
             if self.total_size > MAX_VIDEO_SIZE:
@@ -162,7 +162,7 @@ class FileDownloadTracker:
         with self.log_emit_lock:
             # 显示序号使用“下载完成顺序”计数（1..n），便于直观看到本次落地文件数量。
             file_index = str(self.display_index_provider())
-            log_msg = ' '.join(["   ", file_index, final_path, extra_info, human_readable_size])
+            log_msg = ' '.join(["   ", file_index, self.task.rel_path, extra_info, human_readable_size])
             time_prefix = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             # 关闭 rich 自动高亮，避免路径前半段/后半段颜色不一致。
             self.progress.console.print(f"{time_prefix} | INFO | {log_msg}")
@@ -190,20 +190,24 @@ def format_seconds_to_hms(seconds: float | int | None) -> str:
         return f"{second}秒"
 
 
-def get_video_duration_hms(path: str) -> str:
+def get_video_info(path: str) -> str:
     capture = cv2.VideoCapture(path)
     try:
         if not capture.isOpened():
             return ""
+        # 分辨率
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        resolution = f"{width}x{height}"
         fps = capture.get(cv2.CAP_PROP_FPS)
         frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT)
         if fps and fps > 0 and frame_count and frame_count > 0:
-            return format_seconds_to_hms(frame_count / fps)
+            return resolution + " " + format_seconds_to_hms(frame_count / fps)
         capture.set(cv2.CAP_PROP_POS_AVI_RATIO, 1)
         duration_ms = capture.get(cv2.CAP_PROP_POS_MSEC)
         if duration_ms and duration_ms > 0:
-            return format_seconds_to_hms(duration_ms / 1000)
-        return ""
+            return resolution + " " + format_seconds_to_hms(duration_ms / 1000)
+        return resolution + "  "
     finally:
         capture.release()
 
