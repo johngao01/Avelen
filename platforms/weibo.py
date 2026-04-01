@@ -4,7 +4,8 @@ import os
 import requests
 from typing import Any, Dict
 
-from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger, RunOptions
+from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger, \
+    RunOptions
 from datetime import datetime
 from core.settings import (
     COMMON_HEADERS,
@@ -26,6 +27,8 @@ from core.scrapy_runner import (
     send_post_to_telegram,
     run_platform_main,
 )
+from pydash import get
+from bs4 import BeautifulSoup
 
 WEIBO_API_BASE_URL = WEIBO_CONFIG['base_url']
 WEIBO_WEB_BASE_URL = WEIBO_CONFIG['web_base_url']
@@ -106,18 +109,20 @@ class WeiboPost(BasePost):
         self.following = following
         self.data = weibo_data
         self.platform = 'weibo'
-        self.userid = self.data['user']['idstr']
+        self.userid = get(self.data, 'user.idstr') or get(self.data, 'user.id')
         self.username = following.username
         self.nickname = self.data['user']['screen_name']
-        self.idstr = weibo_data.get('idstr', '')
+        self.idstr = get(self.data, 'idstr') or get(self.data, 'id')
         self.id = self.idstr
         self.url = f'{WEIBO_WEB_BASE_URL}/{self.userid}/{self.idstr}'
         self.text_raw = weibo_data.get('text_raw', '')
-        self.mblogid = weibo_data.get('mblogid', '')
+        if not self.text_raw:
+            self.text_raw = BeautifulSoup(get(self.data, 'text'), "html.parser").get_text(" ", True)
+        self.mblogid = get(self.data, 'mblogid') or get(self.data, 'bid')
         self.create_date = self.create_time.strftime("%Y%m%d")
         self.request_headers = {
             **weibo_header,
-            'Referer': f"{WEIBO_WEB_BASE_URL}/{weibo_data['user']['idstr']}/{weibo_data['idstr']}",
+            'Referer': f"{WEIBO_WEB_BASE_URL}/{self.userid}/{self.idstr}",
         }
 
     @property

@@ -5,6 +5,7 @@ description = "Avelen: a personal multi-platform content scraper and Telegram de
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4>=4.14.3",
     "emoji",
     "fasttelethonhelper>=1.0.7",
     "filelock>=3.25.2",
