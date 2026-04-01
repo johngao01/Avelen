@@ -96,6 +96,7 @@ weibo_tg_bot/
 │  ├─ deal_error.py
 │  ├─ chat_download.py
 │  ├─ modify_msg.py
+│  ├─ delete_messages.py
 │  ├─ check_post_delivery.py
 │  └─ package.py
 ├─ cookies/
@@ -871,6 +872,47 @@ python ops/modify_msg.py
 
 - 脚本中硬编码了 SQL 条件，例如固定 `idstr`
 - 这是典型的一次性修复工具，不是通用命令
+
+#### `ops/delete_messages.py`
+
+按 SQL 条件批量删除历史发送记录的运维脚本。
+
+主要用途：
+
+- 从 `messages` 表筛出待处理消息
+- 按 `idstr` 把同一个 post 的多条 Telegram 消息聚合起来
+- 先删 Telegram 消息，再删本地下载文件，最后按需删除数据库记录
+- 以流式方式逐个 post 输出进度，避免先汇总全部结果再开始处理
+
+运行方式：
+
+```bash
+python ops/delete_messages.py --where "USERNAME=%s AND USERID<>%s" --param "奶糖白大兔" --param "2319874553"
+python ops/delete_messages.py --where "IDSTR=%s" --param "1234567890" --execute
+python ops/delete_messages.py --where "IDSTR=%s" --param "1234567890" --delete-db --execute
+```
+
+当前行为：
+
+- 默认只预览，不做实际删除
+- 加 `--execute` 后才真正执行
+- 默认删除 Telegram 和本地文件
+- 只有额外加 `--delete-db` 时才删除 `messages` 表记录
+- 加 `--skip-telegram` 可只删文件/数据库
+- 加 `--skip-files` 可只删 Telegram/数据库
+
+实现细节：
+
+- 只按 `idstr` 识别同一条 post
+- 查询默认只看最近 `56` 小时的消息
+- 其中 `48` 小时对应 Telegram 删除窗口，额外 `8` 小时用于抵消 `messages.DATE_TIME` 以 UTC 入库、服务器时间为东八区的偏移
+- 日志会写入 `logs/delete_messages.log`
+
+注意：
+
+- `--where` 建议优先配合 `--param` 使用，避免引号和转义问题
+- 如果 Telegram 已拒绝删除，脚本仍会继续后续 post，并把失败写到日志
+- 本地文件是按 `CAPTION` 作为文件名在 `DOWNLOAD_ROOT` 下递归查找的，运行前请确认你的落盘命名方式没有偏离当前主流程
 
 #### `ops/check_post_delivery.py`
 
