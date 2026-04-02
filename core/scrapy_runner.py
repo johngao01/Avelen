@@ -67,7 +67,7 @@ def send_post_to_telegram(
     downloader = Downloader(logger=logger, show_progress=options.download_progress)
     post_data = downloader.download(post)
     download_ok = post_data.ok
-    if not download_ok:
+    if not download_ok and not options.send_on_download_failure:
         return {
             'ok': False,
             'error': '所有文件未全部下载完成',
@@ -175,6 +175,8 @@ def build_common_cli_parser():
                         help='覆盖所有用户 latest_time；不传值或传空值时使用 2000-12-12 12:12:12')
     parser.add_argument('-n', '--no-send', action='store_true',
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
+    parser.add_argument('--send-on-download-failure', action='store_true',
+                        help='下载出现失败时仍继续发送，默认关闭')
     parser.add_argument('-p', '--progress', '--download-progress', dest='download_progress',
                         action='store_false', default=True, help='是否显示下载进度条，默认启用')
     parser.add_argument('-j', '--json', '--local-json', dest='local_json', action='store_true',
@@ -230,6 +232,7 @@ def build_run_options(args: argparse.Namespace) -> RunOptions:
         use_local_json=getattr(args, 'local_json', False),
         no_send=getattr(args, 'no_send', False),
         download_progress=getattr(args, 'download_progress', True),
+        send_on_download_failure=getattr(args, 'send_on_download_failure', False),
     )
 
 
@@ -349,6 +352,8 @@ def build_args_log_summary(args: argparse.Namespace) -> str:
         summary.append("local_json=True")
     if args.no_send:
         summary.append("no_send=True")
+    if args.send_on_download_failure:
+        summary.append("send_on_download_failure=True")
     if not args.download_progress:
         summary.append("download_progress=False")
     if args.show:
@@ -388,7 +393,8 @@ def run_platform_main(platform: str,
         f"{platform} 运行模式: "
         f"local_json={options.use_local_json}, "
         f"no_send={options.no_send}, "
-        f"download_progress={options.download_progress}"
+        f"download_progress={options.download_progress}, "
+        f"send_on_download_failure={options.send_on_download_failure}"
     )
     sent_post = set(get_sent_post(platform))
     logger.info(f"{platform} 已加载 {len(sent_post)} 条历史已发送记录")

@@ -392,3 +392,4 @@ class RunOptions:
     use_local_json: bool = False
     no_send: bool = False
     download_progress: bool = True
+    send_on_download_failure: bool = False
