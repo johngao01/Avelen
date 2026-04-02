@@ -16,7 +16,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from core.database import get_db_conn
-from core.settings import LOGS_DIR, DOWNLOAD_ROOT
+from core.settings import LOGS_DIR, DOWNLOAD_ROOT, DEVELOPER_CHAT_ID
 
 DELETE_WINDOW_HOURS = 48
 DB_UTC_OFFSET_HOURS = 8
@@ -76,10 +76,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description='根据 SQL 条件删除 messages 表记录关联的 Telegram 消息和已下载文件。'
     )
-    parser.add_argument(
+    target_group = parser.add_mutually_exclusive_group(required=True)
+    target_group.add_argument(
         '--where',
-        required=True,
         help='附加到 `WHERE 1=1 AND (...)` 的 SQL 条件，例如 `URL=%%s AND USERNAME=%%s`',
+    )
+    target_group.add_argument(
+        '--id-range',
+        nargs=2,
+        type=int,
+        metavar=('START_ID', 'END_ID'),
+        help='直接删除固定聊天里指定范围的 Telegram 消息 ID，例如 `--id-range 12341 12345`',
     )
     parser.add_argument(
         '--param',
@@ -124,6 +131,18 @@ def build_query(args: argparse.Namespace) -> tuple[str, tuple[Any, ...]]:
             MESSAGE_ID
     '''
     return sql, (date_time_start, *args.param)
+
+
+def normalize_id_range(raw_range: list[int] | tuple[int, int]) -> tuple[int, int]:
+    start_id, end_id = raw_range
+    if start_id > end_id:
+        start_id, end_id = end_id, start_id
+    return start_id, end_id
+
+
+def build_range_message_ids(raw_range: list[int] | tuple[int, int]) -> list[int]:
+    start_id, end_id = normalize_id_range(raw_range)
+    return list(range(start_id, end_id + 1))
 
 
 def fetch_rows(args: argparse.Namespace) -> list[MessageRow]:
@@ -207,6 +226,18 @@ async def delete_telegram_for_post(group: PostGroup) -> tuple[list[int], list[tu
         return message_ids, []
     except telegram.error.TelegramError as exc:
         logger.error(f'Telegram 消息删除失败: post={group.post_key}, error={exc}')
+        return [], [(message_id, str(exc)) for message_id in message_ids]
+
+
+async def delete_telegram_by_id_range(message_ids: list[int]) -> tuple[list[int], list[tuple[int, str]]]:
+    bot = build_bot()
+    logger.info(f'开始按消息 ID 范围删除 Telegram 消息: chat_id={DEVELOPER_CHAT_ID}, message_ids={message_ids}')
+    try:
+        await bot.delete_messages(chat_id=DEVELOPER_CHAT_ID, message_ids=message_ids)
+        logger.info(f'按消息 ID 范围删除 Telegram 消息完成: chat_id={DEVELOPER_CHAT_ID}, count={len(message_ids)}')
+        return message_ids, []
+    except telegram.error.TelegramError as exc:
+        logger.error(f'按消息 ID 范围删除 Telegram 消息失败: chat_id={DEVELOPER_CHAT_ID}, error={exc}')
         return [], [(message_id, str(exc)) for message_id in message_ids]
 
 
@@ -299,6 +330,42 @@ def print_execution_summary(
             print(f'  - {path}: {error}')
 
 
+def print_id_range_preview(message_ids: list[int]) -> None:
+    print('-' * 80)
+    print('直接消息删除模式(Id Range)')
+    print(f'聊天(chat_id): {DEVELOPER_CHAT_ID}')
+    print(f'消息范围(message_id_range): {message_ids[0]} - {message_ids[-1]}')
+    print(f'消息数量(message_count): {len(message_ids)}')
+    print(f'消息ID(message_ids): {", ".join(str(message_id) for message_id in message_ids)}')
+    sys.stdout.flush()
+
+
+def process_id_range(args: argparse.Namespace) -> None:
+    message_ids = build_range_message_ids(args.id_range)
+    logger.info(
+        f'命中消息 ID 范围删除模式: chat_id={DEVELOPER_CHAT_ID}, '
+        f'message_id_start={message_ids[0]}, message_id_end={message_ids[-1]}, '
+        f'count={len(message_ids)}, execute={args.execute}'
+    )
+    print_id_range_preview(message_ids)
+
+    if not args.execute:
+        print('')
+        print('当前为预览模式。确认无误后，加上 --execute 进行实际删除。')
+        return
+
+    telegram_deleted, telegram_failed = asyncio.run(delete_telegram_by_id_range(message_ids))
+    print_execution_summary(
+        total_posts=1,
+        total_rows=len(message_ids),
+        telegram_deleted=telegram_deleted,
+        telegram_failed=telegram_failed,
+        file_deleted=[],
+        file_failed=[],
+        db_deleted=0,
+    )
+
+
 def execute_group(group: PostGroup, args: argparse.Namespace) -> tuple[
     list[int], list[tuple[int, str]], list[Path], list[tuple[Path, str]], int]:
     telegram_deleted: list[int] = []
@@ -369,6 +436,10 @@ def process_stream(rows: list[MessageRow], args: argparse.Namespace) -> None:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    if args.id_range:
+        process_id_range(args)
+        return
+
     rows = fetch_rows(args)
     if not rows:
         logger.info('没有匹配到任何 messages 记录。')
