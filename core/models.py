@@ -300,7 +300,7 @@ class BasePlatform(ABC):
             else:
                 failure += 1
         if self.post:
-            latest_post = self.post[-1]
+            latest_post = max(self.post, key=lambda item: item.create_time)
             latest_time = latest_post.create_time_str
         else:
             latest_time = None
