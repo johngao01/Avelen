@@ -133,12 +133,12 @@ def run_followings(all_followings: list[Any],
             logger.info(f"{i}/{following_count} {following.start_msg}")
             run_one(following)
         except CookieExpiredError as exc:
-            error_message = (
-                f"Cookie 已失效，程序退出\n"
-                f"账号: {following.username} ({following.userid})\n"
-                f"错误: {exc}"
-            )
-            logger.error(error_message)
+            # error_message = (
+            #     f"Cookie 已失效，程序退出\n"
+            #     f"账号: {following.username} ({following.userid})\n"
+            #     f"错误: {exc}"
+            # )
+            # logger.error(error_message)
             raise SystemExit(1) from exc
         except Exception:
             logger.error(traceback.format_exc())
