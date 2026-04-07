@@ -59,7 +59,7 @@ class FileDownloadTracker:
     def start(self, total: int | None = None):
         """初始化任务，向主 Progress 注册一个进度条任务"""
         if self.task_id is None:
-            self.task_id = self.progress.add_task(f"[cyan]{self.task.rel_path}", total=total or None)
+            self.task_id = self.progress.add_task(f"[cyan]{self.task.save_path}", total=total or None)
 
     def update(self, completed: int, total: int | None = None):
         """更新下载进度"""
@@ -162,7 +162,7 @@ class FileDownloadTracker:
         with self.log_emit_lock:
             # 显示序号使用“下载完成顺序”计数（1..n），便于直观看到本次落地文件数量。
             file_index = str(self.display_index_provider())
-            log_msg = ' '.join(["   ", file_index, self.task.rel_path, extra_info, human_readable_size])
+            log_msg = ' '.join(["   ", file_index, self.task.save_path, extra_info, human_readable_size])
             time_prefix = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             # 关闭 rich 自动高亮，避免路径前半段/后半段颜色不一致。
             self.progress.console.print(f"{time_prefix} | INFO | {log_msg}")
@@ -390,7 +390,7 @@ class Downloader:
             )
             status_code = response.status_code
             if status_code != 200:
-                self.logger.error(f"{task.rel_path} 下载失败：http {status_code}")
+                self.logger.error(f"{task.save_path} 下载失败：http {status_code}")
                 return None
 
             total_size = self._get_content_length(response)
@@ -409,7 +409,7 @@ class Downloader:
         except Exception as exc:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
-            self.logger.error(f"{task.rel_path} 下载异常：{exc}")
+            self.logger.error(f"{task.save_path} 下载异常：{exc}")
             return None
 
     def _download_with_yt_dlp(self, task: DownloadTask, shared_progress: Progress) -> DownloadedFile | None:
@@ -432,7 +432,7 @@ class Downloader:
             }) as ydl:
                 video = ydl.extract_info(task.url, download=True)
                 if not video:
-                    self.logger.error(f"{task.rel_path} 下载失败：yt-dlp download error")
+                    self.logger.error(f"{task.save_path} 下载失败：yt-dlp download error")
                     return None
 
             final_path = task.save_path
@@ -441,13 +441,13 @@ class Downloader:
                 if prepared_path and os.path.exists(prepared_path):
                     final_path = task.save_path = prepared_path
                 if not final_path or not os.path.exists(final_path):
-                    self.logger.error(f"{task.rel_path} 下载失败：yt-dlp output missing")
+                    self.logger.error(f"{task.save_path} 下载失败：yt-dlp output missing")
                     return None
 
             self._move_bilibili_infojson(final_path)
             return tracker.finish(final_path)
         except Exception as exc:
-            self.logger.error(f"{task.rel_path} 下载异常：{exc}")
+            self.logger.error(f"{task.save_path} 下载异常：{exc}")
             return None
 
     def _move_bilibili_infojson(self, final_path: str):
