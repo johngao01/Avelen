@@ -1107,10 +1107,6 @@ def handler_douyin(aweme, options: RunOptions | None = None):
         return False
     if isinstance(aweme.get('create_time'), datetime):
         pass
-    elif 'create_time' in aweme:
-        aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
-    else:
-        aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
     user = Following(aweme['author']['sec_uid'], 'favorite', '')
     post = Aweme(user, aweme)
     return handle_dispatch_result(
