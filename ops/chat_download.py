@@ -10,12 +10,16 @@ from loguru import logger
 from telethon import TelegramClient, functions
 from FastTelethonhelper import fast_download, human_readable_size  # 异步函数
 
+from core.utils import convert_bytes_to_human_readable
+
 # ========== 配置区 ==========
 api_id = 22203014
 api_hash = '6b373c6531660f41b039d5d85d703f4f'
 download_root_dir = r'H:\medias'
+history_path = "../logs/chat_download_history.json"
+
 # ============================
-with open("chat_download_history.json", "r", encoding="utf-8") as f:
+with open(history_path, "r", encoding="utf-8") as f:
     data = json.load(f)
 media_group_dict = {}
 download_count = 0
@@ -54,9 +58,9 @@ async def download(client: TelegramClient, message, media_group, chat_id, downlo
         else:
             try:
                 if file_size > BIG_FILE:
-                    print(f'开始下载大文件：{file_size}')
+                    print(f'开始下载大文件：{convert_bytes_to_human_readable(file_size)}')
                     # 大文件使用 fast_download（它是异步的）
-                    await fast_download(client, message, None, filepath)
+                    filepath = await fast_download(client, message, None, filepath)
                 else:
                     # 小文件用内置的下载方法（可靠）
                     await client.download_media(message, file=filepath)
@@ -81,8 +85,9 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
     # 日志配置
     logger.remove()
     logger.add(sys.stderr, level="INFO", format="{time} | {message}")
+    logger_path = f"../logs/{chat_id}.log"
     logger.add(
-        f"logs/{chat_id}.log",
+        logger_path,
         filter=lambda record: record["extra"].get("name") == "download",
         format="{time} | {message}"
     )
@@ -112,7 +117,7 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
                 download_logger.info(f"{message.id}\t{message.date.strftime('%Y-%m-%d %H:%M:%S')}\t{message.text}")
                 data[chat_id]['min_id'] = message.id
                 data[chat_id]['title'] = message.text
-                with open("chat_download_history.json", "w", encoding="utf-8") as f:
+                with open(history_path, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=4)
 
             await download(client, message, media_group, chat_id, download_logger)
@@ -151,12 +156,10 @@ async def get_chat_history(client: TelegramClient, chat_id, min_id_start):
 async def main():
     # 使用异步客户端
     # 3指的是 socks.HTTP 代理
-    async with TelegramClient('me', api_id, api_hash, proxy=(3, '127.0.0.1', 10808, True)) as client:
+    async with TelegramClient('me', api_id, api_hash) as client:
         for k, v in data.items():
             await get_chat_history(client, k, v['min_id'])
 
 
 if __name__ == '__main__':
     asyncio.run(main())
-
-
