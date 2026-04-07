@@ -203,7 +203,7 @@ class BasePlatform(ABC):
     def start(
             self,
             sent_post: set[str],
-            options: RunOptions | None = None,
+            options: RunOptions,
     ) -> None:
         """执行单个关注对象的完整处理流程。
 
@@ -267,13 +267,12 @@ class BasePlatform(ABC):
         new_posts = self.filter_new_post(sent_post)
         username = self.scraping.username
         if not new_posts:
-            self.scraping.end_msg = f'{username} 处理结束，没有新{self.content_name}\n'
-            return
-
-        self.logger.info(
-            f'{username} 有 {len(new_posts)} 个新{self.content_name}。 '
-            f'{new_posts[0].create_time}  {new_posts[-1].create_time}'
-        )
+            self.scraping.end_msg = f'{username} 处理结束，获取到 {len(self.post)} 个新{self.content_name}，没有新{self.content_name}\n'
+        else:
+            self.logger.info(
+                f'{username} 获取到 {len(self.post)} 个新{self.content_name}，有 {len(new_posts)} 个新{self.content_name}。 '
+                f'{new_posts[0].create_time}  {new_posts[-1].create_time}'
+            )
 
         success = 0
         failure = 0
@@ -300,24 +299,19 @@ class BasePlatform(ABC):
                 skipped += 1
             else:
                 failure += 1
-
-        if not options.no_send:
-            latest_post = new_posts[-1]
-            latest_time = getattr(latest_post, 'create_time_str', None)
-            if not isinstance(latest_time, str):
-                latest_time = latest_post.create_time.strftime('%Y-%m-%d %H:%M:%S')
-            update_db(
-                self.scraping.userid,
-                self.scraping.username,
-                latest_time,
+        if self.post:
+            latest_post = self.post[-1]
+            latest_time = latest_post.create_time_str
+        else:
+            latest_time = None
+        update_db(self.scraping.userid, self.scraping.username, latest_time, options.no_send)
+        if new_posts:
+            self.scraping.end_msg = (
+                f'{username} 处理结束，'
+                f'新{self.content_name} {len(new_posts)} 个，'
+                f'跳过 {skipped} 个，'
+                f'成功 {success} 个，失败 {failure} 个\n'
             )
-
-        self.scraping.end_msg = (
-            f'{username} 处理结束，'
-            f'新{self.content_name} {len(new_posts)} 个，'
-            f'跳过 {skipped} 个，'
-            f'成功 {success} 个，失败 {failure} 个\n'
-        )
 
 
 class BasePost(ABC):
