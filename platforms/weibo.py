@@ -4,8 +4,7 @@ import os
 import requests
 from typing import Any, Dict
 
-from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger, \
-    RunOptions
+from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger
 from datetime import datetime
 from core.settings import (
     COMMON_HEADERS,
@@ -13,20 +12,14 @@ from core.settings import (
     SCRAPY_FAVORITE_LIMIT,
     WEIBO_CONFIG,
     WEIBO_COOKIE_PATH,
-    WEIBO_JSON_ROOT,
 )
 from core.utils import (
     build_browser_headers,
     build_platform_json_path,
-    find_file_by_name,
     get_platform_json_dir,
-    log_error,
     read_text_file,
 )
-from core.scrapy_runner import (
-    send_post_to_telegram,
-    run_platform_main,
-)
+from core.scrapy_runner import run_platform_main
 from pydash import get
 from bs4 import BeautifulSoup
 
@@ -253,79 +246,6 @@ class WeiboPost(BasePost):
         if any(media_info.get(key) for key in VIDEO_URL_KEYS):
             return True, self.__str__() + ' 视频微博'
         return False, self.__str__() + ' 文字微博'
-
-
-def get_weibo_data(weibo_link):
-    weibo_id = weibo_link.split('/')[-1]
-    try:
-        response = requests.get(f'{WEIBO_API_BASE_URL}/ajax/statuses/show',
-                                params={'id': weibo_id, 'locale': 'zh-CN'},
-                                headers=weibo_header)
-        data = response.json()
-    except Exception as e:
-        weibo_logger.error("获取微博信息失败：" + weibo_link)
-        log_error(weibo_link, '获取微博失败')
-        return False
-    if 'message' in data and (data['message'] == '暂无查看权限' or data['message'] == '该微博不存在'):
-        weibo_logger.error(data['message'] + "\t" + weibo_link)
-        return True
-    elif 'message' in data and (data['message'] == '访问频次过高，请稍后再试'):
-        time.sleep(90)
-    elif data.get('message') == "该内容请至手机客户端查看":
-        print(data['message'])
-        return True
-    data['weibo_url'] = weibo_link
-    return data
-
-
-def build_weibo_post(
-        weibo_url: str,
-        weibo_data: Dict[str, Any] | None = None,
-        userid: str | None = None,
-        username: str | None = None,
-):
-    """构造单条微博 Post，兼容在线获取和本地 JSON 回退。"""
-    if weibo_data is None:
-        weibo_data = get_weibo_data(weibo_url)
-        if weibo_data is False:
-            return False
-        if weibo_data is True:
-            return 'skip'
-
-    if 'user' not in weibo_data:
-        json_path = find_file_by_name(WEIBO_JSON_ROOT, f'{weibo_url.split("/")[-1]}.json')
-        if not json_path:
-            return False
-        with open(json_path, encoding='utf-8') as file_obj:
-            weibo_data = json.load(file_obj)
-
-    following = Following(
-        userid or weibo_data['user']['idstr'],
-        username or weibo_data['user']['screen_name'],
-        None,
-    )
-    return WeiboPost(following, weibo_data)
-
-
-def handle_weibo(
-        weibo_index,
-        weibo_url,
-        weibo_data=None,
-        userid=None,
-        username=None,
-        options: RunOptions | None = None,
-):
-    """兼容旧调用方式，处理单条微博的下载与发送。"""
-    post = build_weibo_post(weibo_url, weibo_data=weibo_data, userid=userid, username=username)
-    if post is False or post == 'skip':
-        return post
-
-    expected_userid = None if username == 'favorite' else userid
-    should_process, start_message = post.start(expected_userid)
-    weibo_logger.info(f"{weibo_index}\t{start_message}")
-    if not should_process:
-        return 'skip'
-    return send_post_to_telegram(post, weibo_logger, options=options)
 
 
 class WeiboScrapy(BasePlatform):
