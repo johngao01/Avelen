@@ -10,8 +10,9 @@ from telegram.ext import (
 )
 
 from core.database import *
-from platforms.weibo import *
-from platforms.douyin import *
+from loguru import logger
+import re
+import json
 
 DEVELOPER_CHAT_ID = 708424141
 
@@ -86,19 +87,6 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return url
 
 
-async def resend(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = await delete(update, context)
-    if url:
-        if 'weibo' in url:
-            handle_weibo('1/1', url)
-        elif 'douyin' in url:
-            link, aweme_id = get_url_id(url)
-            aweme = get_aweme_detail(aweme_id)
-            handler_douyin(aweme)
-        else:
-            pass
-
-
 async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     url = await get_url(update)
@@ -141,7 +129,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def edit_commands(application):
     command = [BotCommand("clear", "清理"),
-               BotCommand("resend", "重发"),
                BotCommand("delete", "删除")]
     await application.bot.set_my_commands(commands=command)
     print("bot start ------------------->")
@@ -166,22 +153,7 @@ async def reaction_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(messages_id)
         await delete_message(context, DEVELOPER_CHAT_ID, messages_id)
     if emoji == "😁":
-        url = get_message_url(reaction_message_id)
-        if url:
-            url = url[0]
-            logger.info("url：" + url)
-            files = get_file(url)
-            await del_files(files)
-            for message_id in messages_id:
-                delete_db_message(message_id)
-            if 'weibo' in url:
-                handle_weibo('1/1', url)
-            elif 'douyin' in url:
-                link, aweme_id = get_url_id(url)
-                aweme = get_aweme_detail(aweme_id)
-                handler_douyin(aweme)
-            else:
-                pass
+        pass
 
 
 def main() -> None:
@@ -195,7 +167,6 @@ def main() -> None:
     builder.local_mode(local_mode=True)
     application = builder.build()
     application.add_handler(MessageReactionHandler(reaction_handler))
-    application.add_handler(CommandHandler("resend", resend))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("clear", clear))
     application.add_handler(MessageHandler(filters.Text(), echo))
@@ -205,5 +176,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-

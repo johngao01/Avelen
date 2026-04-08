@@ -17,8 +17,6 @@ from telegram.constants import ParseMode, ChatAction
 from typing import cast
 from core.database import exec_sql_get_data, add_user, update_user
 from urllib.parse import urlparse
-from platforms.douyin import get_url_id, get_aweme_detail, handler_douyin
-from platforms.weibo import handle_weibo
 from ops.nicefuturebot import delete_message
 
 headers = {
@@ -431,38 +429,6 @@ async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def weibo_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    weibo_link = update.message.text
-    message_id = update.message.message_id
-    r1 = handle_weibo('1/1', weibo_link)
-    if isinstance(r1, dict) and r1.get('ok'):
-        pass
-    elif r1 is not None:
-        print(f"处理微博 {weibo_link} 失败")
-    else:
-        print(f"处理微博 {weibo_link} 失败")
-    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-
-
-async def douyin_scrapy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    link_message = update.message.text
-    message_id = update.message.message_id
-    link, aweme_id = get_url_id(link_message)
-    if aweme_id == '':
-        return
-    print(link)
-    aweme = get_aweme_detail(aweme_id)
-    if aweme is None:
-        print(f"处理抖音 {link} 失败")
-        await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-        return
-    if handler_douyin(aweme):
-        pass
-    else:
-        print(f"处理抖音 {link} 失败")
-    await delete_message(context, DEVELOPER_CHAT_ID, message_id)
-
-
 def main() -> None:
     weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
     douyin_filter = filters.Regex('https://(v.|www.|live.)?(ies)?douyin.*')
@@ -523,8 +489,6 @@ def main() -> None:
     application.add_handler(CommandHandler("lm", ls_media))
     application.add_handler(CommandHandler("myfollow", list_my_follow))
     application.add_handler(manage_follow_handler)
-    application.add_handler(MessageHandler(weibo_filter, weibo_scrapy))
-    application.add_handler(MessageHandler(douyin_filter, douyin_scrapy))
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
