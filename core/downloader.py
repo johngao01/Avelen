@@ -164,9 +164,13 @@ class FileDownloadTracker:
             file_index = str(self.display_index_provider())
             log_msg = ' '.join(["   ", file_index, self.task.save_path, extra_info, human_readable_size])
             time_prefix = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            # 关闭 rich 自动高亮，避免路径前半段/后半段颜色不一致。
-            self.progress.console.print(f"{time_prefix} | INFO | {log_msg}")
-            self.logger.bind(file_only=True).info(log_msg)
+            # 进度条关闭，默认是False，参数-p时为True
+            if self.progress.disable:
+                # 非 TTY（如 1Panel）里避免 Rich/LIVE 刷新干扰日志展示。
+                self.logger.info(log_msg)
+            else:
+                self.progress.console.print(f"{time_prefix} | INFO | {log_msg}")
+                self.logger.bind(file_only=True).info(log_msg)
 
         # 任务完成后，立即从动态面板上抹除该任务，避免 100% 进度条长期霸占屏幕
         if self.task_id is not None:
@@ -310,7 +314,7 @@ class Downloader:
             console=console,
             transient=True,
             expand=True,
-            disable=not self.show_progress,
+            disable=not self.show_progress or console.is_terminal,
         )
 
         with shared_progress:

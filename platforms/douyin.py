@@ -9,24 +9,18 @@ from random import randint, random, choice
 from re import compile
 from time import time
 from urllib.parse import urlencode, quote
-from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger, RunOptions
+from core.models import BasePlatform, BasePost, CookieExpiredError, FollowUser, MediaItem, get_platform_logger
 from core.settings import (
     DOUYIN_CONFIG,
     DOUYIN_COOKIE_PATH,
     DOUYIN_FAVORITE_COOKIE_PATH,
-    DOUYIN_JSON_ROOT,
     LOGS_DIR,
     SCRAPY_FAVORITE_LIMIT,
 )
-from core.scrapy_runner import (
-    handle_dispatch_result,
-    run_platform_main,
-    send_post_to_telegram,
-)
+from core.scrapy_runner import run_platform_main
 from core.utils import (
     build_browser_headers,
     build_platform_json_path,
-    find_file_by_name,
     get_platform_json_dir,
     read_text_file,
 )
@@ -1047,78 +1041,6 @@ class Aweme(BasePost):
             return False, self.__str__() + " 视频过长，跳过处理"
         else:
             return True, self.__str__()
-
-
-def get_url_id(share_info: str):
-    douyin_url_pattern = rf'{re.escape(DOUYIN_CONFIG["base_url"])}/(video|note)/(\d{{19}})/?'
-    if share_info.startswith(DOUYIN_CONFIG['base_url']):
-        url = re.search(douyin_url_pattern, share_info).group(0)
-        aweme_id = url.split('/')[-1]
-    else:
-        link = re.search('https://v.douyin.com/[A-Za-z0-9]+/', share_info)
-        if link is None:
-            url = re.search(r'https://www.iesdouyin.com/share/(video|note)/(\d{19})?', share_info).group(0)
-            url = url.replace(r'https://www.iesdouyin.com/share', DOUYIN_CONFIG['base_url'])
-            aweme_id = url.split('/')[-1]
-        else:
-            link = link.group(0)
-            r = requests.get(url=link, headers=favorite_headers, allow_redirects=False)
-            url = r.headers.get('Location')
-            if url.startswith('https://webcast.amemv.com/douyin/webcast/reflow/'):
-                return url, ''
-            url = re.search(r'https://www.iesdouyin.com/share/(video|note|slides)/(\d{19})?', url).group(0)
-            url = url.replace(r'https://www.iesdouyin.com/share', DOUYIN_CONFIG['base_url'])
-            aweme_id = url.split('/')[-1]
-    return url, aweme_id
-
-
-def get_aweme_detail(aweme_id):
-    params = {'device_platform': 'webapp', 'aid': '6383', 'channel': 'channel_pc_web', 'pc_client_type': 1,
-              'version_code': '190500', 'version_name': '19.5.0', 'cookie_enabled': 'true', 'screen_width': 1920,
-              'screen_height': 1080, 'browser_language': 'zh-CN', 'browser_platform': 'Win32',
-              'browser_name': 'Firefox', 'browser_version': '124.0', 'browser_online': 'true', 'engine_name': 'Gecko',
-              'engine_version': '122.0.0.0', 'os_name': 'Windows', 'os_version': '10', 'cpu_core_num': 12,
-              'device_memory': 8, 'platform': 'PC', 'msToken': '', 'aweme_id': aweme_id}
-    a_bogus = ABogus().ab_model_2_endpoint(params)
-    api_post_url = f'{DOUYIN_DETAIL_API_URL}{urlencode(params)}&a_bogus={a_bogus}'
-    headers = favorite_headers.copy()
-    headers[
-        'User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
-    rs = requests.get(api_post_url, params=params, headers=headers, timeout=5)
-    if rs.text == '':
-        print('空数据')
-        json_path = find_file_by_name(DOUYIN_JSON_ROOT, f'{aweme_id}.json')
-        if json_path:
-            with open(json_path, encoding='utf-8') as f1:
-                return json.load(f1)
-        return None
-    response_json = json.loads(rs.text)
-    if response_json['aweme_detail'] is None:
-        json_path = find_file_by_name(DOUYIN_JSON_ROOT, f'{aweme_id}.json')
-        if json_path:
-            with open(json_path, encoding='utf-8') as f2:
-                return json.load(f2)
-    aweme = response_json['aweme_detail']
-    return aweme
-
-
-def handler_douyin(aweme, options: RunOptions | None = None):
-    if aweme is None:
-        return False
-    if isinstance(aweme.get('create_time'), datetime):
-        pass
-    elif 'create_time' in aweme:
-        aweme['create_time'] = datetime.fromtimestamp(aweme['create_time'])
-    else:
-        aweme['create_time'] = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
-    user = Following(aweme['author']['sec_uid'], 'favorite', '')
-    post = Aweme(user, aweme)
-    return handle_dispatch_result(
-        send_post_to_telegram(post, douyin_logger, options=options),
-        douyin_logger,
-        post.url,
-        options=options,
-    ) == 'success'
 
 
 class DouyinScrapy(BasePlatform):

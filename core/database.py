@@ -209,6 +209,11 @@ def get_sent_post(douyin_weibo):
     return exec_sql_get_data('SELECT DISTINCT idstr FROM messages WHERE url LIKE %s;', (f'%{douyin_weibo}%',))
 
 
+def has_sent_post(idstr):
+    rows = exec_sql_get_data('SELECT 1 FROM messages WHERE idstr=%s LIMIT 1;', (idstr,))
+    return bool(rows)
+
+
 def get_file(url):
     return exec_sql_get_data('SELECT CAPTION FROM messages WHERE url=%s', (url,))
 
@@ -250,6 +255,10 @@ def get_message_ids(message_id):
 
 def get_message_url(message_id):
     return exec_sql_get_data('SELECT url FROM messages WHERE message_id=%s', (message_id,))
+
+
+def get_user_by_userid(user_id):
+    return exec_sql_get_data('select userid,username,latest_time from user where userid=%s', (user_id,))
 
 
 def update_db(user_id, username, latest_time='', no_send=False):
