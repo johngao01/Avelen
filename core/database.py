@@ -257,12 +257,21 @@ def get_message_url(message_id):
     return exec_sql_get_data('SELECT url FROM messages WHERE message_id=%s', (message_id,))
 
 
-def update_db(user_id, username, latest_time):
+def update_db(user_id, username, latest_time='', no_send=False):
+    """
+    默认爬取后会更新用户的scrapy_time，如果不发送 或者 没有最新作品的 latest_time 则不更新 latest_time
+    """
     conn = get_db_conn()
     cursor = conn.cursor()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sql = 'UPDATE `user` SET latest_time=%s, scrapy_time=%s WHERE USERID=%s and username=%s;'
-    cursor.execute(sql, (latest_time, now, user_id, username))
+    sql = 'UPDATE `user` SET scrapy_time=%s'
+    if latest_time and not no_send:
+        sql += ', latest_time=%s WHERE USERID=%s and username=%s;'
+        data = (now, latest_time, user_id, username)
+    else:
+        sql += ' WHERE USERID=%s and username=%s;'
+        data = (now, user_id, username)
+    cursor.execute(sql, data)
     conn.commit()
     cursor.close()
     conn.close()
