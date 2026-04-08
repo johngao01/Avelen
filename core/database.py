@@ -257,6 +257,10 @@ def get_message_url(message_id):
     return exec_sql_get_data('SELECT url FROM messages WHERE message_id=%s', (message_id,))
 
 
+def get_user_by_userid(user_id):
+    return exec_sql_get_data('select userid,username,latest_time from user where userid=%s', (user_id,))
+
+
 def update_db(user_id, username, latest_time='', no_send=False):
     """
     默认爬取后会更新用户的scrapy_time，如果不发送 或者 没有最新作品的 latest_time 则不更新 latest_time
