@@ -43,7 +43,7 @@ class FollowUser:
         return cls(userid=userid, username=username, latest_time=parsed)
 
 
-def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 'INFO', file_log: bool = True):
+def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 'DEBUG', file_log: bool = True):
     """返回平台专用 logger，并确保公共 sink 只注册一次。"""
     global _STDERR_CONFIGURED
 
