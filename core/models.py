@@ -310,7 +310,7 @@ class BasePlatform(ABC):
                 f'{username} 处理结束，'
                 f'新{self.content_name} {len(new_posts)} 个，'
                 f'跳过 {skipped} 个，'
-                f'成功 {success} 个，失败 {failure} 个\n'
+                f'成功 {success} 个，失败 {failure} 个'
             )
 
 

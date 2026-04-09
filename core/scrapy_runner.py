@@ -170,17 +170,15 @@ def run_followings(all_followings: list[Any],
         except Exception:
             logger.error(traceback.format_exc())
         finally:
-            if following.end_msg:
-                logger.info(following.end_msg)
             if not options.use_local_json and wait_max > 0 and i < following_count:
                 wait_seconds = random.randint(wait_min, wait_max)
                 if wait_seconds > 0:
                     resume_time = datetime.now() + timedelta(seconds=wait_seconds)
-                    logger.info(
-                        f"{following.username} 完成，等待 {wait_seconds} 秒，直到 "
-                        f"{resume_time.strftime('%Y-%m-%d %H:%M:%S')} 开始下一个用户"
-                    )
+                    logger.info(following.end_msg)
+                    logger.info(f"等待 {wait_seconds} 秒，直到 {resume_time.strftime('%Y-%m-%d %H:%M:%S')} 开始下一个用户\n")
                     sleep(wait_seconds)
+            else:
+                logger.info(following.end_msg + "\n")
     logger.info(finished_message)
 
 
