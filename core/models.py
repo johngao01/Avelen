@@ -387,3 +387,5 @@ class RunOptions:
     no_send: bool = False
     download_progress: bool = True
     send_on_download_failure: bool = False
+    scrapy_wait_min_seconds: int = 0
+    scrapy_wait_max_seconds: int = 0
