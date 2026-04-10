@@ -67,7 +67,7 @@ def send_post_to_telegram(
         post: BasePost,
         logger,
         *,
-        options: RunOptions | None = None,
+        options: RunOptions
 ):
     """下载单条作品媒体，并返回统一处理结果。
 
@@ -81,9 +81,7 @@ def send_post_to_telegram(
     - `error`: 失败原因，成功时为 `None`
     - `messages`: 已落库的消息记录列表
     """
-    if options is None:
-        options = RunOptions()
-
+    if options is None: options = RunOptions()
     downloader = Downloader(logger=logger, show_progress=options.download_progress)
     post_data = downloader.download(post)
     download_ok = post_data.ok
@@ -113,11 +111,9 @@ def handle_dispatch_result(
         on_success_update=None,
         on_failure_update=None,
         *,
-        options: RunOptions | None = None,
+        options: RunOptions,
 ) -> str:
-    if options is None:
-        options = RunOptions()
-
+    if options is None: options = RunOptions()
     if isinstance(result, dict) and result.get('ok'):
         if not options.no_send:
             download_log(result)
@@ -175,7 +171,8 @@ def run_followings(all_followings: list[Any],
                 if wait_seconds > 0:
                     resume_time = datetime.now() + timedelta(seconds=wait_seconds)
                     logger.info(following.end_msg)
-                    logger.info(f"等待 {wait_seconds} 秒，直到 {resume_time.strftime('%Y-%m-%d %H:%M:%S')} 开始下一个用户\n")
+                    logger.info(
+                        f"等待 {wait_seconds} 秒，直到 {resume_time.strftime('%Y-%m-%d %H:%M:%S')} 开始下一个用户\n")
                     sleep(wait_seconds)
             else:
                 logger.info(following.end_msg + "\n")
