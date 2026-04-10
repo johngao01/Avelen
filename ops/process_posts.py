@@ -512,18 +512,17 @@ class PostBatchProcessor:
             record_error: bool = True
     ) -> Literal["success", "skipped_resolved", "send_failed"]:
         post = result.post
-        logger = get_platform_logger(result.platform, LOGS_DIR)
+        if post is None:
+            self.summary.parse_failed += 1
+            return "send_failed"
         should_process, start_message = post.start()
-        logger.info(
+        process_posts_logger.info(
             f"{index_text}\t{start_message} source={source} data_source={result.data_source} api_error={result.api_error or '-'} local_error={result.local_error or '-'}")
         if not should_process:
             self.summary.skipped_resolved += 1
             return "skipped_resolved"
-        if post is None:
-            self.summary.parse_failed += 1
-            return "send_failed"
-        status = handle_dispatch_result(send_post_to_telegram(post, logger, options=self.options), logger, post.url,
-                                        options=self.options)
+        status = handle_dispatch_result(send_post_to_telegram(post, process_posts_logger, options=self.options),
+                                        process_posts_logger, post.url, options=self.options)
         if status in {"success", "skip"}:
             if status == "success":
                 self.summary.succeeded += 1
