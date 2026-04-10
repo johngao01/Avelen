@@ -22,7 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from core.database import get_user_by_userid, has_sent_post
 from core.models import RunOptions, get_platform_logger, BasePost
 from core.scrapy_runner import handle_dispatch_result, send_post_to_telegram
-from core.settings import BILIBILI_CONFIG, BILIBILI_JSON_ROOT, DOUYIN_JSON_ROOT, ERROR_FILE, INSTAGRAM_COOKIE_PATH, \
+from core.settings import BILIBILI_CONFIG, BILIBILI_JSON_ROOT, DOUYIN_JSON_ROOT, ERROR_FILE, INSTAGRAM_COOKIE_PATHS, \
     INSTAGRAM_JSON_ROOT, LOGS_DIR, WEIBO_JSON_ROOT
 from core.utils import build_browser_headers, find_file_by_name, log_error, read_text_file
 from platforms.bilibili import BilibiliPost, Following as BilibiliFollowing
@@ -313,7 +313,7 @@ def resolve_instagram_post(normalized_url: str, post_id: str) -> ResolveResult:
         raise ValueError("未找到完整的 Instagram 内嵌 JSON 对象")
 
     try:
-        cookie_header = read_text_file(INSTAGRAM_COOKIE_PATH).strip()
+        cookie_header = read_text_file(INSTAGRAM_COOKIE_PATHS[0]).strip()
         headers = build_browser_headers(referer=f"{INSTAGRAM_HOME_URL}/", cookie=cookie_header,
                                         accept="text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
                                         extra={"Cache-Control": "no-cache", "Pragma": "no-cache",
