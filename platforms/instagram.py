@@ -2,14 +2,17 @@ from __future__ import annotations
 from os.path import splitext, basename
 import json
 import os
+import random
 import re
+from dataclasses import dataclass
 from datetime import datetime
+from threading import Lock
 from urllib.parse import urlparse
 
 import requests
 from core.settings import (
     INSTAGRAM_CONFIG,
-    INSTAGRAM_COOKIE_PATH,
+    INSTAGRAM_COOKIE_PATHS,
     INSTAGRAM_JSON_ROOT,
     LOGS_DIR,
 )
@@ -30,9 +33,10 @@ INSTAGRAM_HOME_URL = INSTAGRAM_CONFIG['base_url']
 
 instagram_logger = get_platform_logger('instagram', LOGS_DIR)
 os.makedirs(INSTAGRAM_JSON_ROOT, exist_ok=True)
+DEFAULT_SWITCH_RANGE = (5, 10)
 
 
-def parse_cookie_header(header: str) -> dict[str, str]:
+def parse_cookies(header: str) -> dict[str, str]:
     pattern = re.compile(r'(?:^|;\s*)([^=;\s]+)=(?:"([^"]*)"|([^;]*))')
     cookies: dict[str, str] = {}
     for match in pattern.finditer(header):
@@ -45,7 +49,7 @@ def parse_cookie_header(header: str) -> dict[str, str]:
 
 
 def build_instagram_headers(cookie_header: str) -> dict[str, str]:
-    parsed = parse_cookie_header(cookie_header)
+    parsed = parse_cookies(cookie_header)
     csrftoken = parsed.get('csrftoken', '')
     return build_browser_headers(
         referer=f'{INSTAGRAM_HOME_URL}/',
@@ -76,6 +80,85 @@ def build_instagram_headers(cookie_header: str) -> dict[str, str]:
             'x-root-field-name': 'xdt_api__v1__feed__user_timeline_graphql_connection',
         },
     )
+
+
+def load_instagram_cookies() -> list[str]:
+    """加载 Instagram 多账号 cookie 文本，自动过滤空文件。"""
+    headers: list[str] = []
+    for cookie_path in INSTAGRAM_COOKIE_PATHS:
+        cookie_header = read_text_file(cookie_path).strip()
+        if not cookie_header:
+            instagram_logger.warning(f'Instagram cookie 文件为空，已跳过: {cookie_path}')
+            continue
+        headers.append(cookie_header)
+    return headers
+
+
+def _int_config_value(key: str, default: int) -> int:
+    value = INSTAGRAM_CONFIG.get(key, default)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalized_range(min_value: int, max_value: int, *, default_min: int, default_max: int) -> tuple[int, int]:
+    low = max(0, min_value)
+    high = max(0, max_value)
+    if low == 0 and high == 0:
+        return default_min, default_max
+    if low > high:
+        low, high = high, low
+    return low, high
+
+
+@dataclass
+class CookieRotationPolicy:
+    cookie_count: int
+    switch_min_users: int
+    switch_max_users: int
+    current_index: int = 0
+    remaining_users_on_current: int = 0
+
+    @classmethod
+    def from_config(cls, cookie_count: int) -> 'CookieRotationPolicy':
+        switch_min, switch_max = _normalized_range(
+            _int_config_value('switch_after_users_min', DEFAULT_SWITCH_RANGE[0]),
+            _int_config_value('switch_after_users_max', DEFAULT_SWITCH_RANGE[1]),
+            default_min=DEFAULT_SWITCH_RANGE[0],
+            default_max=DEFAULT_SWITCH_RANGE[1],
+        )
+        policy = cls(
+            cookie_count=cookie_count,
+            switch_min_users=switch_min,
+            switch_max_users=switch_max,
+        )
+        policy.reset_remaining_users()
+        return policy
+
+    def reset_remaining_users(self) -> None:
+        self.remaining_users_on_current = random.randint(self.switch_min_users, self.switch_max_users)
+
+    def choose_cookie_for_next_user(self) -> int:
+        if self.cookie_count <= 0:
+            return 0
+        if self.remaining_users_on_current <= 0:
+            self.current_index = (self.current_index + 1) % self.cookie_count
+            self.reset_remaining_users()
+            instagram_logger.info(
+                f'切换到 cookie[{self.current_index + 1}/{self.cookie_count}]，'
+                f'计划连续抓取 {self.remaining_users_on_current} 个用户后再切换'
+            )
+        self.remaining_users_on_current -= 1
+        return self.current_index
+
+    def move_to_next_cookie(self, *, due_to_failure: bool = False) -> int:
+        if self.cookie_count <= 0:
+            return 0
+        self.current_index = (self.current_index + 1) % self.cookie_count
+        if due_to_failure:
+            self.remaining_users_on_current = max(self.remaining_users_on_current, 0)
+        return self.current_index
 
 
 class Following(FollowUser):
@@ -194,14 +277,57 @@ class InstagramScrapy(BasePlatform):
 
     name = 'instagram'
     content_name = '内容'
+    _rotation_policy: CookieRotationPolicy | None = None
+    _policy_lock = Lock()
 
-    def __init__(self, following: Following, cookie_header: str):
+    def __init__(self, following: Following, cookie_headers: list[str]):
         self.scraping = following
+        self.cookie_headers = cookie_headers
+        self.cookie_index = 0
         self.session = requests.Session()
-        self.session.headers.update(build_instagram_headers(cookie_header))
+        self._ensure_rotation_policy()
+        if self.cookie_headers:
+            self.cookie_index = self._rotation_policy.current_index  # type: ignore[union-attr]
+        self._apply_cookie_header(self._current_cookie_header())
         self.fb_dtsg = ''
         self.logger = instagram_logger
         self.post: list[InstagramPost] = []
+
+    def _ensure_rotation_policy(self) -> None:
+        with self._policy_lock:
+            if (
+                    self._rotation_policy is None
+                    or self._rotation_policy.cookie_count != len(self.cookie_headers)
+            ):
+                self._rotation_policy = CookieRotationPolicy.from_config(len(self.cookie_headers))
+
+    def _choose_cookie_for_user(self) -> None:
+        if not self.cookie_headers:
+            return
+        with self._policy_lock:
+            self.cookie_index = self._rotation_policy.choose_cookie_for_next_user()  # type: ignore[union-attr]
+
+    def _current_cookie_header(self) -> str:
+        if not self.cookie_headers:
+            return ''
+        return self.cookie_headers[self.cookie_index % len(self.cookie_headers)]
+
+    def _apply_cookie_header(self, cookie_header: str) -> None:
+        self.session = requests.Session()
+        self.session.headers.update(build_instagram_headers(cookie_header))
+        self.fb_dtsg = ''
+
+    def _switch_next_cookie(self) -> bool:
+        if len(self.cookie_headers) <= 1:
+            return False
+        with self._policy_lock:
+            self.cookie_index = self._rotation_policy.move_to_next_cookie(
+                due_to_failure=True)  # type: ignore[union-attr]
+        self._apply_cookie_header(self._current_cookie_header())
+        instagram_logger.warning(
+            f'{self.scraping.username} 切换到 cookie[{self.cookie_index + 1}/{len(self.cookie_headers)}]'
+        )
+        return True
 
     def ensure_fb_dtsg(self) -> str:
         if self.fb_dtsg:
@@ -227,59 +353,84 @@ class InstagramScrapy(BasePlatform):
             raise CookieExpiredError('Instagram 爬取数据失败，返回数据无效。')
 
     def get_post_from_api(self) -> None:
-        """实时请求 Instagram 接口，抓取当前账号的新作品。"""
-        self.post = []
-        end_cursor = ''
-        page = 1
-        keep = True
-        while keep:
-            page_data = self.graphql_request({
-                'fb_api_caller_class': 'RelayModern',
-                'fb_api_req_friendly_name': 'PolarisProfilePostsQuery',
-                'variables': json.dumps(self._build_profile_post_variables(end_cursor)),
-                'server_timestamps': 'true',
-                'doc_id': PROFILE_DOC_ID,
-            })
-            if not page_data:
-                break
-            if not page_data['data']:
-                instagram_logger.info(f' {self.scraping.username} 账号可能没了')
+        """API 抓取时按 cookie 池选择可用账号。"""
+        if not self.cookie_headers:
+            raise CookieExpiredError('Instagram cookie 配置为空，请检查')
+
+        tried_indexes: set[int] = set()
+        last_error: CookieExpiredError | None = None
+        while len(tried_indexes) < len(self.cookie_headers):
+            self._apply_cookie_header(self._current_cookie_header())
+            current_index = self.cookie_index
+            current_cookie = self.cookie_headers[current_index]
+            tried_indexes.add(current_index)
+            instagram_logger.debug(
+                f'{self.scraping.username} 使用 cookie[{current_index + 1}/{len(self.cookie_headers)}] 执行抓取'
+            )
+            try:
+                self.post = []
+                end_cursor = ''
+                page = 1
+                keep = True
+                while keep:
+                    page_data = self.graphql_request({
+                        'fb_api_caller_class': 'RelayModern',
+                        'fb_api_req_friendly_name': 'PolarisProfilePostsQuery',
+                        'variables': json.dumps(self._build_profile_post_variables(end_cursor)),
+                        'server_timestamps': 'true',
+                        'doc_id': PROFILE_DOC_ID,
+                    })
+                    if not page_data:
+                        break
+                    if not page_data['data']:
+                        instagram_logger.info(f' {self.scraping.username} 账号可能没了')
+                        return
+                    connection = (
+                            (page_data.get('data') or {}).get(
+                                'xdt_api__v1__feed__user_timeline_graphql_connection') or {}
+                    )
+                    page_posts = connection.get('edges') or []
+                    if not page_posts:
+                        break
+
+                    page_info = connection.get('page_info') or {}
+                    end_cursor = page_info.get('end_cursor') or ''
+                    keep = bool(page_info.get('has_next_page'))
+                    page_added = 0
+
+                    for edge in page_posts:
+                        node = edge.get('node') or {}
+                        if not node:
+                            continue
+                        post = InstagramPost(self.scraping, node)
+                        if post.is_top:
+                            continue
+                        if post.create_time <= self.scraping.latest_time:
+                            keep = False
+                            break
+                        post.save_json()
+                        self.post.append(post)
+                        page_added += 1
+
+                    instagram_logger.info(f'{self.scraping.username} 第 {page} 页完成，获取到 {page_added} 个内容')
+
+                    if not keep or not end_cursor:
+                        break
+                    page += 1
+
+                instagram_logger.info(f'获取 {self.scraping.username} 完成，总共 {len(self.post)} 个内容')
                 return
-            connection = (
-                    (page_data.get('data') or {}).get('xdt_api__v1__feed__user_timeline_graphql_connection') or {}
-            )
-            page_posts = connection.get('edges') or []
-            if not page_posts:
-                break
-
-            page_info = connection.get('page_info') or {}
-            end_cursor = page_info.get('end_cursor') or ''
-            keep = bool(page_info.get('has_next_page'))
-            page_added = 0
-
-            for edge in page_posts:
-                node = edge.get('node') or {}
-                if not node:
-                    continue
-                post = InstagramPost(self.scraping, node)
-                if post.is_top:
-                    continue
-                if post.create_time <= self.scraping.latest_time:
-                    keep = False
+            except CookieExpiredError as exc:
+                last_error = exc
+                instagram_logger.warning(
+                    f'{self.scraping.username} cookie[{current_index + 1}/{len(self.cookie_headers)}] 失效，尝试切换'
+                )
+                if not self._switch_next_cookie():
                     break
-                post.save_json()
-                self.post.append(post)
-                page_added += 1
 
-            instagram_logger.info(
-                f'{self.scraping.username} 第 {page} 页完成，新增 {page_added} 个内容，累计 {len(self.post)} 个内容'
-            )
-
-            if not keep or not end_cursor:
-                break
-            page += 1
-
-        instagram_logger.info(f'获取 {self.scraping.username} 完成，获取到 {len(self.post)} 个内容')
+        raise CookieExpiredError(
+            f'Instagram 所有 cookie 均不可用，最后错误: {last_error}'
+        ) from last_error
 
     def get_post_from_local(self) -> None:
         """从本地 JSON 缓存恢复当前账号的作品列表。"""
@@ -334,17 +485,13 @@ class InstagramScrapy(BasePlatform):
         return main()
 
 
-InstagramPlatform = InstagramScrapy
-
-
 def main():
-    cookie_header = read_text_file(INSTAGRAM_COOKIE_PATH)
+    cookies = load_instagram_cookies()
     return run_platform_main(
         'instagram',
         instagram_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_post, options: InstagramScrapy(following, cookie_header).start(sent_post,
-                                                                                                      options),
+        run_one=lambda following, sent_post, options: InstagramScrapy(following, cookies).start(sent_post, options),
     )
 
 

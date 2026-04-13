@@ -6,14 +6,14 @@ from core.models import BasePlatform
 
 from platforms.bilibili import BilibiliScrapy
 from platforms.douyin import DouyinScrapy
-from platforms.instagram import InstagramPlatform
+from platforms.instagram import InstagramScrapy
 from platforms.weibo import WeiboScrapy
 
 
 PLATFORM_CLASSES: tuple[type[BasePlatform], ...] = (
     WeiboScrapy,
     DouyinScrapy,
-    InstagramPlatform,
+    InstagramScrapy,
     BilibiliScrapy,
 )
 

@@ -807,27 +807,70 @@ python ops/nicefuturebot.py
 - 也写死了 Token 和本地 Bot API 地址
 - 直接联动数据库和 Telegram 删除操作
 
-#### `ops/deal_error.py`
+#### `ops/process_posts.py`
 
-错误日志补偿脚本。
+统一的“单帖 / 批量 URL / 错误文件补偿”脚本。
 
 主要用途：
 
-- 读取错误日志中的微博/抖音 URL
-- 判断该内容是否已经发送过
-- 对未发送成功的内容执行补发
-- 把仍失败的记录重新写回错误文件
+- 直接处理一个或多个 post URL
+- 从文本文件中批量提取并处理 URL
+- 默认处理 `logs/error.txt` 中的失败记录
+- 对单条 URL 自动识别平台并走“API 优先，本地 JSON 回退”的解析链路
+- 输出表格化的汇总统计和一致性检查
+
+当前支持的单帖 URL 形态：
+
+- 微博：`https://weibo.com/<userid>/<mblogid或postid>` 或 `https://www.weibo.com/<userid>/<mblogid或postid>`
+- 抖音：`https://www.douyin.com/video/<id>` / `https://www.douyin.com/note/<id>` 及分享跳转链接
+- Instagram：`https://www.instagram.com/p/<shortcode>/`、`/reel/`、`/tv/`
+- Bilibili：`/video/`、`/opus/`、`/read/`、`https://t.bilibili.com/<id>`
 
 运行方式：
 
 ```bash
-python ops/deal_error.py
+python ops/process_posts.py
+python ops/process_posts.py "https://weibo.com/6700307821/QzO3foQZa"
+python ops/process_posts.py "https://weibo.com/6700307821/QzO3foQZa" "https://www.instagram.com/p/DP94GyDE0np/"
+python ops/process_posts.py --input logs/error.txt
+python ops/process_posts.py --input urls.txt --no-send
 ```
+
+当前行为：
+
+- 不传参数时，默认处理 `logs/error.txt`
+- 传位置参数时，可一次传多个 URL
+- 传 `--input` 时，会从指定文件逐行提取所有可识别 URL
+- 处理完成后会输出中英文字段的汇总表格
+- 汇总中包含处理闭环、解析闭环、来源闭环和一致性检查
+
+`error.txt` 模式的特殊规则：
+
+- 默认读取 `core.settings.ERROR_FILE`，当前是 `logs/error.txt`
+- 每一行处理成功后会立即从文件中删除
+- 失败行会保留在文件中，便于下次继续补偿
+- 使用原子写回方式更新文件，尽量避免中途中断导致进度丢失
+- 在 `error.txt` 模式下不会重复往 `error.txt` 里追加同一批失败记录
+
+输出说明：
+
+- 每条任务都会打印一行进度，如 `处理进度 3/17 (17.6%)`
+- 每条任务完成后都会打印结果状态，如 `success` / `skipped_sent` / `parse_failed`
+- 最后会打印表格化汇总，便于核对：
+  - `total = succeeded + skipped_sent + skipped_resolved + parse_failed + send_failed + exception_failed`
+  - `resolved = succeeded + skipped_resolved + send_failed`
+  - `resolved = api_resolved + local_resolved`
 
 注意：
 
-- 默认读取的是上一级目录的 `../error.txt`
-- 这个路径和现在主流程用的 `logs/error.txt` 不完全一致，运行前请先核对
+- 微博单帖只支持 `weibo.com/<userid>/<mblogid或postid>` 这一种 URL 形式
+- 微博本地 JSON 回退只按 `idstr.json` 查找
+- 处理 `error.txt` 时，一行里如果有多个 URL，只有该行全部成功才会删除这一行
+- 如果数据库中已存在发送记录，会按 `idstr` 直接跳过
+
+#### `ops/deal_error.py`
+
+旧的错误补偿脚本说明保留作历史参考；当前建议优先使用 `ops/process_posts.py` 处理 `logs/error.txt`。
 
 #### `ops/chat_download.py`
 

@@ -17,6 +17,21 @@ api_id = 22203014
 api_hash = '6b373c6531660f41b039d5d85d703f4f'
 download_root_dir = r'H:\medias'
 history_path = "../logs/chat_download_history.json"
+# file content example
+# {
+#     "renqi85": {
+#         "min_id": 33272,
+#         "title": "抖音53W粉 #聂傲娇 微密圈NO.073期\n\n半腿吊带黑丝【18P】"
+#     },
+#     "meimei57777": {
+#         "min_id": 130,
+#         "title": "别问我喜欢什么\n我只喜欢诱惑你🥰"
+#     },
+#     "xiezhen66886": {
+#         "min_id": 2025,
+#         "title": "#可爱多多杨 06-19更新 秘语空间 \n\n清纯少女风【17P】"
+#     }
+# }
 
 # ============================
 with open(history_path, "r", encoding="utf-8") as f:

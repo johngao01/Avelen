@@ -1,7 +1,9 @@
 import argparse
+import random
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
+from time import sleep
 from typing import Callable, Any
 
 from core.downloader import Downloader
@@ -43,11 +45,29 @@ def argparse_latest_time_override(value: str) -> datetime:
         raise argparse.ArgumentTypeError('时间格式无效，应为 YYYY-MM-DD HH:MM:SS') from exc
 
 
+def argparse_rate_limit(values: list[str]) -> tuple[int, int]:
+    """解析 rate-limit 参数，支持固定值或区间值。"""
+    if not values:
+        raise argparse.ArgumentTypeError('rate-limit 至少需要 1 个参数')
+    if len(values) > 2:
+        raise argparse.ArgumentTypeError('rate-limit 仅支持 1 个或 2 个参数')
+    try:
+        seconds = [int(item) for item in values]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError('rate-limit 必须是整数秒') from exc
+    if any(item < 0 for item in seconds):
+        raise argparse.ArgumentTypeError('rate-limit 不能为负数')
+    if len(seconds) == 1:
+        return seconds[0], seconds[0]
+    low, high = sorted(seconds)
+    return low, high
+
+
 def send_post_to_telegram(
         post: BasePost,
         logger,
         *,
-        options: RunOptions | None = None,
+        options: RunOptions
 ):
     """下载单条作品媒体，并返回统一处理结果。
 
@@ -61,9 +81,7 @@ def send_post_to_telegram(
     - `error`: 失败原因，成功时为 `None`
     - `messages`: 已落库的消息记录列表
     """
-    if options is None:
-        options = RunOptions()
-
+    if options is None: options = RunOptions()
     downloader = Downloader(logger=logger, show_progress=options.download_progress)
     post_data = downloader.download(post)
     download_ok = post_data.ok
@@ -93,11 +111,9 @@ def handle_dispatch_result(
         on_success_update=None,
         on_failure_update=None,
         *,
-        options: RunOptions | None = None,
+        options: RunOptions,
 ) -> str:
-    if options is None:
-        options = RunOptions()
-
+    if options is None: options = RunOptions()
     if isinstance(result, dict) and result.get('ok'):
         if not options.no_send:
             download_log(result)
@@ -119,6 +135,7 @@ def run_followings(all_followings: list[Any],
                    build_following: Callable[[Any], Any],
                    run_one: Callable[[Any], None],
                    logger,
+                   options: RunOptions,
                    finished_message: str = "本次任务结束\n"):
     """
     统一抓取入口：
@@ -127,6 +144,12 @@ def run_followings(all_followings: list[Any],
     - logger: 统一异常与结束日志输出
     """
     following_count = len(all_followings)
+    if options is None:
+        options = RunOptions()
+    wait_min = max(0, getattr(options, 'scrapy_wait_min_seconds'))
+    wait_max = max(0, getattr(options, 'scrapy_wait_max_seconds'))
+    if wait_min > wait_max:
+        wait_min, wait_max = wait_max, wait_min
     for i, raw_data in enumerate(all_followings, start=1):
         following = build_following(raw_data)
         try:
@@ -143,10 +166,17 @@ def run_followings(all_followings: list[Any],
         except Exception:
             logger.error(traceback.format_exc())
         finally:
-            if following.end_msg:
-                logger.info(following.end_msg)
-    if finished_message:
-        logger.info(finished_message)
+            if not options.use_local_json and wait_max > 0 and i < following_count:
+                wait_seconds = random.randint(wait_min, wait_max)
+                if wait_seconds > 0:
+                    resume_time = datetime.now() + timedelta(seconds=wait_seconds)
+                    logger.info(following.end_msg)
+                    logger.info(
+                        f"等待 {wait_seconds} 秒，直到 {resume_time.strftime('%Y-%m-%d %H:%M:%S')} 开始下一个用户\n")
+                    sleep(wait_seconds)
+            else:
+                logger.info(following.end_msg + "\n")
+    logger.info(finished_message)
 
 
 def build_common_cli_parser():
@@ -183,6 +213,8 @@ def build_common_cli_parser():
                         help='从本地 json 目录读取数据，而不是实时抓取')
     parser.add_argument('-l', '--list', dest='show', action='store_true',
                         help='只展示筛选后的 user 表记录，不执行爬取和发送')
+    parser.add_argument('-rl', '--rate-limit', dest='rate_limit', nargs='+', default=None,
+                        help='每个用户处理后的等待秒数：传 1 个值表示固定秒数，传 2 个值表示随机区间')
     return parser
 
 
@@ -226,13 +258,20 @@ def select_followings(platform: str, args):
     return apply_latest_time_override(rows, args.set_latest_time)
 
 
-def build_run_options(args: argparse.Namespace) -> RunOptions:
+def build_run_options(platform: str, args: argparse.Namespace) -> RunOptions:
     """从 CLI 参数中提取执行链路需要的运行时参数。"""
+    if args.rate_limit is None:
+        wait_min, wait_max = (30, 80) if platform == 'instagram' else (0, 0)
+    else:
+        wait_min, wait_max = argparse_rate_limit(args.rate_limit)
+
     return RunOptions(
         use_local_json=getattr(args, 'local_json', False),
         no_send=getattr(args, 'no_send', False),
         download_progress=getattr(args, 'download_progress', True),
         send_on_download_failure=getattr(args, 'send_on_download_failure', False),
+        scrapy_wait_min_seconds=max(0, wait_min),
+        scrapy_wait_max_seconds=max(0, wait_max),
     )
 
 
@@ -354,6 +393,8 @@ def build_args_log_summary(args: argparse.Namespace) -> str:
         summary.append("no_send=True")
     if args.send_on_download_failure:
         summary.append("send_on_download_failure=True")
+    if args.rate_limit is not None:
+        summary.append(f"rate_limit={args.rate_limit}")
     if not args.download_progress:
         summary.append("download_progress=False")
     if args.show:
@@ -388,13 +429,14 @@ def run_platform_main(platform: str,
     if not all_followings:
         logger.info(f"{platform} 没有符合条件的用户，本次任务结束")
         return args, all_followings
-    options = build_run_options(args)
+    options = build_run_options(platform, args)
     logger.info(
         f"{platform} 运行模式: "
         f"local_json={options.use_local_json}, "
         f"no_send={options.no_send}, "
         f"download_progress={options.download_progress}, "
-        f"send_on_download_failure={options.send_on_download_failure}"
+        f"send_on_download_failure={options.send_on_download_failure}, "
+        f"scrapy_wait={options.scrapy_wait_min_seconds}-{options.scrapy_wait_max_seconds}s"
     )
     sent_post = set(get_sent_post(platform))
     logger.info(f"{platform} 已加载 {len(sent_post)} 条历史已发送记录")
@@ -404,5 +446,6 @@ def run_platform_main(platform: str,
         build_following=build_following,
         run_one=lambda following: run_one(following, sent_post, options),
         logger=logger,
+        options=options,
     )
     return args, all_followings

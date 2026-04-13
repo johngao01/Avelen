@@ -9,7 +9,7 @@ import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
@@ -22,7 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from core.database import get_user_by_userid, has_sent_post
 from core.models import RunOptions, get_platform_logger, BasePost
 from core.scrapy_runner import handle_dispatch_result, send_post_to_telegram
-from core.settings import BILIBILI_CONFIG, BILIBILI_JSON_ROOT, DOUYIN_JSON_ROOT, ERROR_FILE, INSTAGRAM_COOKIE_PATH, \
+from core.settings import BILIBILI_CONFIG, BILIBILI_JSON_ROOT, DOUYIN_JSON_ROOT, ERROR_FILE, INSTAGRAM_COOKIE_PATHS, \
     INSTAGRAM_JSON_ROOT, LOGS_DIR, WEIBO_JSON_ROOT
 from core.utils import build_browser_headers, find_file_by_name, log_error, read_text_file
 from platforms.bilibili import BilibiliPost, Following as BilibiliFollowing
@@ -237,7 +237,8 @@ def resolve_douyin_post(normalized_url: str, post_id: str) -> ResolveResult:
                   "cpu_core_num": 12, "device_memory": 8, "platform": "PC", "msToken": "", "aweme_id": post_id}
         api_url = f"{DOUYIN_DETAIL_API_URL}{urlencode(params)}&a_bogus={ABogus().ab_model_2_endpoint(params)}"
         headers = favorite_headers.copy()
-        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
+        headers[
+            "User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
         response = requests.get(api_url, params=params, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
@@ -312,7 +313,7 @@ def resolve_instagram_post(normalized_url: str, post_id: str) -> ResolveResult:
         raise ValueError("未找到完整的 Instagram 内嵌 JSON 对象")
 
     try:
-        cookie_header = read_text_file(INSTAGRAM_COOKIE_PATH).strip()
+        cookie_header = read_text_file(INSTAGRAM_COOKIE_PATHS[0]).strip()
         headers = build_browser_headers(referer=f"{INSTAGRAM_HOME_URL}/", cookie=cookie_header,
                                         accept="text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
                                         extra={"Cache-Control": "no-cache", "Pragma": "no-cache",
@@ -435,7 +436,13 @@ class PostBatchProcessor:
         print(f"处理进度 {index}/{total} ({percent:.1f}%) | platform={task.platform} | url={task.normalized_url}",
               flush=True)
 
-    def _build_tasks_from_text(self, text: str, *, source: str, seen: set[str], source_line: int | None = None) -> list[UrlTask]:
+    def _print_task_result(self, index_text: str, task: UrlTask, status: str, detail: str = "") -> None:
+        suffix = f" | {detail}" if detail else ""
+        print(f"处理结果 {index_text} | status={status} | platform={task.platform} | url={task.normalized_url}{suffix}",
+              flush=True)
+
+    def _build_tasks_from_text(self, text: str, *, source: str, seen: set[str], source_line: int | None = None) -> list[
+        UrlTask]:
         candidates = extract_candidate_urls(text)
         if not candidates and source == "cli":
             candidates = [("unknown", text.strip())]
@@ -464,7 +471,8 @@ class PostBatchProcessor:
         tasks: list[UrlTask] = []
         process_posts_logger.info(f"开始扫描文件 path={input_file} total_lines={len(lines)}")
         for line_number, line in enumerate(lines, start=1):
-            tasks.extend(self._build_tasks_from_text(line, source=f"file:{input_file}#{line_number}", seen=seen, source_line=line_number))
+            tasks.extend(self._build_tasks_from_text(line, source=f"file:{input_file}#{line_number}", seen=seen,
+                                                     source_line=line_number))
             if lines and (line_number == len(lines) or line_number % 100 == 0):
                 self._print_scan_progress(line_number, len(lines), self.summary.matched_urls, len(tasks))
         if not lines:
@@ -495,46 +503,56 @@ class PostBatchProcessor:
             if result.api_error:
                 self.summary.api_failed_then_local_resolved += 1
 
-    def process_ready_post(self, result: ResolveResult, source: str, index_text: str, *, record_error: bool = True) -> bool:
+    def process_ready_post(
+            self,
+            result: ResolveResult,
+            source: str,
+            index_text: str,
+            *,
+            record_error: bool = True
+    ) -> Literal["success", "skipped_resolved", "send_failed"]:
         post = result.post
-        logger = get_platform_logger(result.platform, LOGS_DIR)
-        should_process, start_message = post.start()
-        logger.info(
-            f"{index_text}\t{start_message} source={source} data_source={result.data_source} api_error={result.api_error or '-'} local_error={result.local_error or '-'}")
-        process_posts_logger.info(
-            f"{index_text} platform={result.platform} post_id={post.idstr} source={source} data_source={result.data_source} url={post.url} api_error={result.api_error or '-'} local_error={result.local_error or '-'} platform_detail={result.platform_detail or '-'}")
-        if not should_process:
-            self.summary.skipped_resolved += 1
-            return True
         if post is None:
             self.summary.parse_failed += 1
-            return True
-        status = handle_dispatch_result(send_post_to_telegram(post, logger, options=self.options), logger, post.url,
-                                        options=self.options)
+            return "send_failed"
+        should_process, start_message = post.start()
+        process_posts_logger.info(
+            f"{index_text}\t{start_message} source={source} data_source={result.data_source} api_error={result.api_error or '-'} local_error={result.local_error or '-'}")
+        if not should_process:
+            self.summary.skipped_resolved += 1
+            return "skipped_resolved"
+        status = handle_dispatch_result(send_post_to_telegram(post, process_posts_logger, options=self.options),
+                                        process_posts_logger, post.url, options=self.options)
         if status in {"success", "skip"}:
             if status == "success":
                 self.summary.succeeded += 1
                 self.summary.platform_succeeded[result.platform] += 1
+                return "success"
             else:
                 self.summary.skipped_resolved += 1
-            return True
+                return "skipped_resolved"
         self.summary.send_failed += 1
         self.summary.platform_failed[result.platform] += 1
         if record_error:
             log_error(post.url, f"process_posts 发送失败 platform={result.platform}")
-        return False
+        return "send_failed"
 
-    def process_task(self, task: UrlTask, index_text: str, *, record_error: bool = True) -> bool:
+    def process_task(
+            self,
+            task: UrlTask,
+            index_text: str,
+            *,
+            record_error: bool = True
+    ) -> Literal["success", "skipped_sent", "skipped_resolved", "parse_failed", "send_failed", "exception_failed"]:
         self.summary.total += 1
         self.summary.platform_seen[task.platform] += 1
         try:
             can_precheck_sent = not (task.platform == "weibo" and task.post_id and not str(task.post_id).isdigit())
             if self.skip_sent and task.post_id and can_precheck_sent and has_sent_post(task.post_id):
-                print(task.normalized_url, "完成")
                 process_posts_logger.info(
                     f"{index_text} 已跳过，数据库中已有记录 platform={task.platform} url={task.normalized_url} post_id={task.post_id}")
                 self.summary.skipped_sent += 1
-                return True
+                return "skipped_sent"
             result = resolve_single_post(task.normalized_url)
             if result.post is None:
                 self.summary.parse_failed += 1
@@ -548,14 +566,13 @@ class PostBatchProcessor:
                               f"process_posts 解析失败 api={result.api_error or '-'} local={result.local_error or '-'}")
                 process_posts_logger.error(
                     f"{index_text} 解析失败 platform={task.platform} url={task.normalized_url} api_error={result.api_error or '-'} local_error={result.local_error or '-'}")
-                return False
+                return "parse_failed"
             if self.skip_sent and result.post.idstr and result.post.idstr != task.post_id and has_sent_post(
                     result.post.idstr):
-                print(task.normalized_url, "完成")
                 process_posts_logger.info(
                     f"{index_text} 已跳过，数据库中已有记录 platform={task.platform} url={task.normalized_url} original_post_id={task.post_id} resolved_post_id={result.post.idstr}")
                 self.summary.skipped_sent += 1
-                return True
+                return "skipped_sent"
             self._record_resolution_stats(result)
             return self.process_ready_post(result, task.source, index_text, record_error=record_error)
         except Exception:
@@ -565,20 +582,33 @@ class PostBatchProcessor:
                 log_error(task.normalized_url, "process_posts 处理异常")
             process_posts_logger.error(
                 f"{index_text} 处理异常 source={task.source} url={task.normalized_url}\n{traceback.format_exc()}")
-            return False
+            return "exception_failed"
 
     def run(self, tasks: list[UrlTask]) -> ProcessSummary:
         process_posts_logger.info(
             f"开始处理 post total={len(tasks)} no_send={self.options.no_send} send_on_download_failure={self.options.send_on_download_failure} skip_sent={self.skip_sent}")
         for index, task in enumerate(tasks, start=1):
             self._print_process_progress(index, len(tasks), task)
-            self.process_task(task, f"{index}/{len(tasks)}")
+            status = self.process_task(task, f"{index}/{len(tasks)}")
+            self._print_task_result(f"{index}/{len(tasks)}", task, status)
         return self.summary
 
     def run_error_file(self, error_file: Path) -> ProcessSummary:
         lines = error_file.read_text(encoding="utf-8").splitlines()
         self.summary.input_lines += len(lines)
         process_posts_logger.info(f"开始处理错误文件 path={error_file} total_lines={len(lines)}")
+        all_tasks: list[UrlTask] = []
+        for line_number, line in enumerate(lines, start=1):
+            line_seen: set[str] = set()
+            all_tasks.extend(self._build_tasks_from_text(
+                line,
+                source=f"file:{error_file}#{line_number}",
+                seen=line_seen,
+                source_line=line_number,
+            ))
+        self.summary.collected_tasks += len(all_tasks)
+        total_tasks = len(all_tasks)
+        processed_tasks = 0
         for line_number, line in enumerate(list(lines), start=1):
             line_seen: set[str] = set()
             tasks = self._build_tasks_from_text(
@@ -587,13 +617,16 @@ class PostBatchProcessor:
                 seen=line_seen,
                 source_line=line_number,
             )
-            self.summary.collected_tasks += len(tasks)
             if not tasks:
                 continue
             line_success = True
             for task_index, task in enumerate(tasks, start=1):
-                self._print_process_progress(task_index, len(tasks), task)
-                if not self.process_task(task, f"{line_number}.{task_index}/{len(tasks)}", record_error=False):
+                processed_tasks += 1
+                index_text = f"{processed_tasks}/{total_tasks}"
+                self._print_process_progress(processed_tasks, total_tasks, task)
+                status = self.process_task(task, index_text, record_error=False)
+                self._print_task_result(index_text, task, status)
+                if status not in {"success", "skipped_sent", "skipped_resolved"}:
                     line_success = False
             if line_success:
                 lines[line_number - 1] = ""
@@ -641,7 +674,8 @@ def print_summary(summary: ProcessSummary) -> None:
             ["收集任务数 / collected_tasks", summary.collected_tasks, "有效任务"],
             ["重复跳过数 / duplicated", summary.duplicated, "重复 URL"],
             ["无效输入数 / invalid", summary.invalid, "无法识别"],
-            ["输入闭环 / input_balance", invalid_input_total, f"collected_tasks + duplicated + invalid = {summary.collected_tasks} + {summary.duplicated} + {summary.invalid}"],
+            ["输入闭环 / input_balance", invalid_input_total,
+             f"collected_tasks + duplicated + invalid = {summary.collected_tasks} + {summary.duplicated} + {summary.invalid}"],
         ],
     ))
 
@@ -650,8 +684,10 @@ def print_summary(summary: ProcessSummary) -> None:
         ["字段 / Field", "值 / Value", "关系 / Formula"],
         [
             ["处理总数 / total", summary.total, "进入处理流程"],
-            ["成功完成 / completed_total", completed_total, f"succeeded + skipped_sent + skipped_resolved = {summary.succeeded} + {summary.skipped_sent} + {summary.skipped_resolved}"],
-            ["失败总数 / failed_total", failed_total, f"parse_failed + send_failed + exception_failed = {summary.parse_failed} + {summary.send_failed} + {summary.exception_failed}"],
+            ["成功完成 / completed_total", completed_total,
+             f"succeeded + skipped_sent + skipped_resolved = {summary.succeeded} + {summary.skipped_sent} + {summary.skipped_resolved}"],
+            ["失败总数 / failed_total", failed_total,
+             f"parse_failed + send_failed + exception_failed = {summary.parse_failed} + {summary.send_failed} + {summary.exception_failed}"],
             ["发送成功数 / succeeded", summary.succeeded, "发送成功"],
             ["已发送跳过数 / skipped_sent", summary.skipped_sent, "数据库已存在"],
             ["解析后跳过数 / skipped_resolved", summary.skipped_resolved, "规则跳过或发送层 skip"],
@@ -666,14 +702,20 @@ def print_summary(summary: ProcessSummary) -> None:
         ["字段 / Field", "值 / Value", "关系 / Formula"],
         [
             ["解析成功数 / resolved", summary.resolved, "成功构造成 Post"],
-            ["解析结果闭环 / resolved_outcome_total", resolved_outcome_total, f"succeeded + skipped_resolved + send_failed = {summary.succeeded} + {summary.skipped_resolved} + {summary.send_failed}"],
-            ["未解析完成 / unresolved_total", unresolved_total, f"parse_failed + exception_failed = {summary.parse_failed} + {summary.exception_failed}"],
+            ["解析结果闭环 / resolved_outcome_total", resolved_outcome_total,
+             f"succeeded + skipped_resolved + send_failed = {summary.succeeded} + {summary.skipped_resolved} + {summary.send_failed}"],
+            ["未解析完成 / unresolved_total", unresolved_total,
+             f"parse_failed + exception_failed = {summary.parse_failed} + {summary.exception_failed}"],
             ["API 解析成功数 / api_resolved", summary.api_resolved, "直接来自 API"],
             ["本地解析成功数 / local_resolved", summary.local_resolved, "本地 JSON 回退成功"],
-            ["来源合计 / resolution_source_total", resolution_source_total, f"api_resolved + local_resolved = {summary.api_resolved} + {summary.local_resolved}"],
-            ["API失败后本地成功 / api_failed_then_local_resolved", summary.api_failed_then_local_resolved, "API 失败但本地成功"],
-            ["API失败且无回退成功 / api_failed_without_fallback", summary.api_failed_without_fallback, "API 失败且最终失败"],
-            ["API失败闭环 / fallback_total", fallback_total, f"api_failed_then_local_resolved + api_failed_without_fallback = {summary.api_failed_then_local_resolved} + {summary.api_failed_without_fallback}"],
+            ["来源合计 / resolution_source_total", resolution_source_total,
+             f"api_resolved + local_resolved = {summary.api_resolved} + {summary.local_resolved}"],
+            ["API失败后本地成功 / api_failed_then_local_resolved", summary.api_failed_then_local_resolved,
+             "API 失败但本地成功"],
+            ["API失败且无回退成功 / api_failed_without_fallback", summary.api_failed_without_fallback,
+             "API 失败且最终失败"],
+            ["API失败闭环 / fallback_total", fallback_total,
+             f"api_failed_then_local_resolved + api_failed_without_fallback = {summary.api_failed_then_local_resolved} + {summary.api_failed_without_fallback}"],
             ["本地回退失败数 / local_failed", summary.local_failed, "进入本地回退后仍失败"],
         ],
     ))

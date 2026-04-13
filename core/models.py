@@ -43,7 +43,7 @@ class FollowUser:
         return cls(userid=userid, username=username, latest_time=parsed)
 
 
-def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 'INFO', file_log: bool = True):
+def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 'DEBUG', file_log: bool = True):
     """返回平台专用 logger，并确保公共 sink 只注册一次。"""
     global _STDERR_CONFIGURED
 
@@ -310,7 +310,7 @@ class BasePlatform(ABC):
                 f'{username} 处理结束，'
                 f'新{self.content_name} {len(new_posts)} 个，'
                 f'跳过 {skipped} 个，'
-                f'成功 {success} 个，失败 {failure} 个\n'
+                f'成功 {success} 个，失败 {failure} 个'
             )
 
 
@@ -387,3 +387,5 @@ class RunOptions:
     no_send: bool = False
     download_progress: bool = True
     send_on_download_failure: bool = False
+    scrapy_wait_min_seconds: int = 0
+    scrapy_wait_max_seconds: int = 0

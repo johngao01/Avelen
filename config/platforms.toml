@@ -31,7 +31,11 @@ space_url = "https://space.bilibili.com"
 api_url = "https://api.bilibili.com"
 
 [platforms.instagram]
-cookie_file = "neverblock11.txt"
+# 推荐新配置：多个账号轮换抓取，降低单账号风控压力
+cookie_files = ["neverblock11.txt", "deer.17131199.txt"]
+# 同一个 cookie 连续抓取 N 个用户后切换，N 在这个区间随机
+switch_after_users_min = 5
+switch_after_users_max = 10
 base_url = "https://www.instagram.com"
 graphql_url = "https://www.instagram.com/graphql/query"
 profile_doc_id = "9830436980396988"
