@@ -1,6 +1,8 @@
 import re
-import subprocess
+import os
 import emoji
+import json
+import html
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -14,18 +16,33 @@ from telegram.ext import (
     filters
 )
 from telegram.constants import ParseMode, ChatAction
-from typing import cast
-from core.database import exec_sql_get_data, add_user, update_user
+from typing import Any, cast
+from core.database import exec_sql_get_data, add_user, update_user, get_file, delete_db_message, MESSAGES, \
+    get_duplicate_caption, get_message_id
+from core.models import RunOptions, get_platform_logger
+from core.settings import DOWNLOAD_ROOT, LOGS_DIR
+from ops.process_posts import resolve_single_post
 from urllib.parse import urlparse
-from ops.nicefuturebot import delete_message
+from core.downloader import Downloader
+from core.sender_dispatcher import execute_task
+import warnings
+from telegram.warnings import PTBUserWarning
+from telegram import Bot
 
+warnings.filterwarnings("ignore", category=PTBUserWarning)
+logger = get_platform_logger('manage', LOGS_DIR)
 headers = {
     'referer': 'https://www.baidu.com/',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36 Edg/115.0.1901.183'
 }
 DEVELOPER_CHAT_ID = 708424141
+MANAGE_BOT_TOKEN = os.getenv("ERROR_TELEGRAM_BOT_TOKEN", '')
+logger.info("manage bot token is: " + MANAGE_BOT_TOKEN)
+AVELEN_BOT_TOEKN = os.getenv("TELEGRAM_BOT_TOKEN", '')
+logger.info("avelen bot token is: " + MANAGE_BOT_TOKEN, '')
 SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
 ASK_SAVE_USERNAME, ASK_OPERATION, STORE_DATA = range(3)
+POST_PROCESS_ACTION = range(1)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
 follow_types = {
@@ -57,13 +74,27 @@ def clear_name(text):
     result = re.sub(r'[（(【].*?[】)）]', '', text)
     # 去除表情
     result = emoji.demojize(result)
-    result = re.sub(':\S+?:', '', result)
+    result = re.sub(r':\S+?:', '', result)
     # 只保留字母、数字、下划线，其余全部删除
-    result = re.sub(r'[^\w]', '', result)
+    result = re.sub(r'\W', '', result)
     result = result.replace('_', r'\_')
     if result == '':
         return '没有名字'
     return result
+
+
+def parse_url_platform(url):
+    if 'douyin.com' in url:
+        platform = 'douyin'
+    elif 'weibo' in url:
+        platform = 'weibo'
+    elif 'instagram' in url:
+        platform = 'instagram'
+    elif 'bilibili' in url or url in ('b23.tv', 'bili2233.cn'):
+        platform = 'bilibili'
+    else:
+        return None
+    return platform
 
 
 async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
@@ -135,9 +166,6 @@ async def query_user_info(user_id):
 
 
 async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    输入任意字符进入此函数，也可以通过 callback_query 进入（为：^s\|）。通过关键字查找所有的用户并分页展示出来
-    """
     query = update.callback_query
     if query:
         platform_icons_enable = False
@@ -249,6 +277,7 @@ async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = cast(str, query.data)
+    logger.info(data)
     action, user_id = data.split("|", 1)
     valid_map = {
         'upgrade': 1,
@@ -288,44 +317,16 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def edit_commands(application):
-    command = [BotCommand("myfollow", "我的关注"),
-               BotCommand("manage", "管理关注"),
-               BotCommand("lm", "查看/media文件夹"),
+    command = [BotCommand("manage", "管理关注"),
                BotCommand("cancel", "取消操作")]
     await application.bot.set_my_commands(commands=command)
-    await application.bot.send_message(DEVELOPER_CHAT_ID,
-                                       text="bot start...")
+    await application.bot.send_message(DEVELOPER_CHAT_ID, text="bot start...")
     print("bot start ------------------->")
 
 
 async def stop(application):
     await application.bot.send_message(DEVELOPER_CHAT_ID, "Shutting down...")
     print("bot stop ------------------->")
-
-
-async def ls_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id == DEVELOPER_CHAT_ID:
-        result = subprocess.run('ls -lth /media', shell=True, capture_output=True, text=True)
-        msg = ''
-        for i, line in enumerate(result.stdout.splitlines()):
-            if i == 0:
-                text = line
-            else:
-                text = ' '.join(line.split()[4:])
-            msg = msg + text + '\n'
-        await update.message.reply_text(msg)
-        return
-
-
-async def list_my_follow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id == DEVELOPER_CHAT_ID:
-        await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
-        result = exec_sql_get_data("select username from statistic order by num desc")
-        text = ''
-        for username in result:
-            username = clear_name(username)
-            text += f'\#{username}   '
-        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -345,9 +346,27 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
-
     matches = re.compile(r"(https?://[^\s]+)").findall(update.message.text.strip())
     url = matches[0]
+    logger.info(update.message.text)
+    # TODO 提取出url后，先判断是用户主页地址还是post链接
+    try:
+        # 成功的话是post链接处理post
+        resolve_result = resolve_single_post(url)
+        if resolve_result.post is None: return ConversationHandler.END
+        logger.info(resolve_result.post)
+        downloader = Downloader(logger=logger)
+        post_data = downloader.download(resolve_result.post)
+        try:
+            send_result = await execute_task(post_data)
+        except Exception:
+            await update.message.reply_text("发送失败")
+            return ConversationHandler.END
+        else:
+            await update.message.reply_text("发送成功")
+        return ConversationHandler.END
+    except Exception as e:
+        pass
     short_domains = ('v.douyin.com', 'b23.tv', 'bili2233.cn')
     if any(domain in url for domain in short_domains) or '哔哩哔哩' in url:
         url = extract_url(url)
@@ -362,17 +381,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["url"] = url.split('?')[0]
     parsed_url = urlparse(url)
     host = parsed_url.hostname or ''
-    if 'douyin.com' in host:
-        platform = 'douyin'
-    elif 'weibo' in host:
-        platform = 'weibo'
-    elif 'instagram' in host:
-        platform = 'instagram'
-    elif 'bilibili' in host or host in ('b23.tv', 'bili2233.cn'):
-        platform = 'bilibili'
-    else:
-        await update.message.reply_text("未知的平台")
-        return ConversationHandler.END
+    platform = parse_url_platform(host)
+    if platform is None: return ConversationHandler.END
+
     url_path = parsed_url.path.rstrip('/')
     segments = [item for item in url_path.split('/') if item]
     if platform == 'bilibili' and len(segments) >= 1 and segments[0].isdigit():
@@ -429,12 +440,179 @@ async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+async def delete_message(message_id):
+    bot = Bot(token=AVELEN_BOT_TOEKN)
+    logger.info(f"删除消息：{message_id}")
+    try:
+        if isinstance(message_id, list):
+            await bot.delete_messages(DEVELOPER_CHAT_ID, message_id)
+        else:
+            await bot.delete_message(DEVELOPER_CHAT_ID, message_id)
+        logger.info(f"删除消息成功")
+    except Exception as exc:
+        logger.error(f"删除消息失败")
+
+
+def remove_downloaded_files(post_data):
+    for root, dirs, files in os.walk(f"/root/download/{post_data['platform']}/"):
+        for file in files:
+            if file in post_data['files']:
+                path = os.path.join(root, file)
+                logger.info("删除文件：" + path)
+                os.remove(path)
+
+
+def _build_post_data_from_messages(messages: list[Any]) -> dict[str, Any] | None:
+    if not messages:
+        return None
+    message_index = {name: index for index, name in enumerate(MESSAGES)}
+    message_ids = [row[message_index['MESSAGE_ID']] for row in messages if row[message_index['MESSAGE_ID']]]
+    files = [row[message_index['CAPTION']] for row in messages if row[message_index['CAPTION']]]
+    first = messages[0]
+    return {
+        'url': first[message_index['URL']],
+        'idstr': first[message_index['IDSTR']],
+        'userid': first[message_index['USERID']],
+        'username': first[message_index['USERNAME']],
+        'messages_id': message_ids,
+        'files': files,
+        'platform': parse_url_platform(first[message_index['URL']])
+    }
+
+
+def _load_post_data(idstr: str, context: ContextTypes.DEFAULT_TYPE, *, force_refresh: bool = False) -> dict[
+                                                                                                           str, Any] | None:
+    post_cache = context.user_data.setdefault('post_cache', {})
+    cached = None if force_refresh else post_cache.get(idstr)
+    if cached:
+        return cached
+    messages = exec_sql_get_data('select * from messages where idstr=%s', (idstr,))
+    post_data = _build_post_data_from_messages(messages)
+    if post_data:
+        post_cache[idstr] = post_data
+    return post_data
+
+
+async def handle_forwarded_post_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        return ConversationHandler.END
+    message = update.message
+    if not message:
+        return ConversationHandler.END
+    forward_origin = message.forward_origin
+    if not forward_origin or getattr(forward_origin, "sender_user", None) is None:
+        return ConversationHandler.END
+    if forward_origin.sender_user.id != 6572044525:
+        return ConversationHandler.END
+    if message.text:
+        post_idstr = message.text.split("  ")[1].split("\n")[0]
+        messages = exec_sql_get_data('select * from messages where idstr=%s', (post_idstr,))
+    elif message.caption:
+        messages = exec_sql_get_data(
+            "select * from messages where idstr in (select idstr from messages where caption=%s)", (message.caption))
+    else:
+        return ConversationHandler.END
+    post_data = _build_post_data_from_messages(messages)
+    if not post_data:
+        await update.message.reply_text("未查到对应作品记录")
+        return ConversationHandler.END
+    context.user_data.setdefault('post_cache', {})[post_data['idstr']] = post_data
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("删除", callback_data=f"post|delete|{post_data['idstr']}"),
+        InlineKeyboardButton("重发", callback_data=f"post|resend|{post_data['idstr']}"),
+        InlineKeyboardButton("清理", callback_data=f"post|clear|{post_data['idstr']}")
+    ]])
+    text = (
+        f"提取到作品信息：\n"
+        f"<pre>{html.escape(json.dumps(post_data, indent=2, ensure_ascii=False))}</pre>"
+    )
+    await update.message.reply_text(text=text, reply_to_message_id=message.id, reply_markup=keyboard,
+                                    parse_mode=ParseMode.HTML)
+    return POST_PROCESS_ACTION
+
+
+async def handle_post_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return ConversationHandler.END
+    await query.answer()
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await query.edit_message_text("你没有权限执行该操作")
+        return ConversationHandler.END
+
+    data = cast(str, query.data)
+    parts = data.split("|")
+    if len(parts) < 3:
+        await query.edit_message_text("❌ 无效操作")
+        return ConversationHandler.END
+
+    prefix, action, idstr = parts[:3]
+    post_data = _load_post_data(idstr, context)
+
+    if post_data is None:
+        await query.edit_message_text(f"❌ 未找到作品记录: {idstr}")
+        return ConversationHandler.END
+
+    if action == 'delete':
+        logger.info(f'删除 {post_data['url']} 的已发送消息')
+        result = await delete_message(post_data['messages_id'])
+        context.user_data.get('post_cache', {}).pop(idstr, None)
+        await query.edit_message_text(
+            "✅ 删除完成\n"
+            f"idstr: {idstr}\n"
+            f"url: {post_data['url']}\n"
+        )
+        return ConversationHandler.END
+    elif action == 'clear':
+        logger.info("清理 {} 的重复发送内容".format(post_data['url']))
+        duplicate = get_duplicate_caption(post_data['url'])
+        if len(duplicate) > 0:
+            print(f"共有{len(duplicate)}个记录")
+            for url, caption in duplicate:
+                message_ids = get_message_id(caption, url)
+                if len(message_ids) > 0:
+                    delete_messages = message_ids[0:-1]
+                    logger.info(f"消息内容：{caption}, 所有消息：{message_ids}, 待删除的消息：{delete_messages}")
+                    await delete_message(delete_messages)
+                    delete_db_message(delete_messages)
+        logger.info("清理 {} 的重复发送内容完成".format(post_data['url']))
+    if action == 'resend':
+        result = await delete_message(post_data['messages_id'])
+        remove_downloaded_files(post_data)
+        resolve_result = resolve_single_post(post_data['url'])
+        if resolve_result.post is None:
+            await query.edit_message_text(
+                "❌ 重发失败\n"
+                f"idstr: {idstr}\n"
+                f"url: {post_data['url']}\n"
+                f"api_error: {resolve_result.api_error or '未知'}\n"
+                f"local_error: {resolve_result.local_error or '未知'}"
+            )
+            return ConversationHandler.END
+        downloader = Downloader(logger=logger)
+        post_data = downloader.download(resolve_result.post)
+        try:
+            send_result = await execute_task(post_data)
+        except Exception:
+            await query.edit_message_text("发送失败")
+            return ConversationHandler.END
+        else:
+            await query.edit_message_text("发送成功")
+        refreshed_post_data = _load_post_data(idstr, context, force_refresh=True)
+        if refreshed_post_data:
+            refreshed_post_data['messages_id'] = list(dict.fromkeys(refreshed_post_data['messages_id']))
+            refreshed_post_data['files'] = list(dict.fromkeys(refreshed_post_data['files']))
+        await query.edit_message_text("✅ 重发完成\n")
+        return ConversationHandler.END
+
+    await query.edit_message_text("❌ 未知操作")
+    return ConversationHandler.END
+
+
 def main() -> None:
-    weibo_filter = filters.Regex('^https://(m.|www.)?weibo(.cn|.com)?/[0-9]+/*')
-    douyin_filter = filters.Regex('https://(v.|www.|live.)?(ies)?douyin.*')
     builder = Application.builder()
     persistence = PicklePersistence(filepath="arbitrarycallbackdatabot")
-    builder.token('5355419947:AAEHOGlkz7hlOO38XRRZ9vVhtAnVGjwbjKw')
+    builder.token(MANAGE_BOT_TOKEN)
     builder.post_init(edit_commands)
     builder.post_stop(stop)
     builder.http_version('1.1')
@@ -470,24 +648,33 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-    add_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url)],
+    add_follower_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex(r'(https?://[^\s]+)'), handle_url)],
         states={
             ASK_SAVE_USERNAME: [
-                MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url),
+                MessageHandler(filters.Regex(r'(https?://[^\s]+)'), handle_url),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ask_save_username)
             ],
             STORE_DATA: [
-                MessageHandler(filters.Regex('(https?://[^\s]+)'), handle_url),
+                MessageHandler(filters.Regex(r'(https?://[^\s]+)'), handle_url),
                 CallbackQueryHandler(store_data, pattern=r"[0|1|2]"),
                 CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade|retire|invalid)\|")
             ]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-    application.add_handler(add_handler)
-    application.add_handler(CommandHandler("lm", ls_media))
-    application.add_handler(CommandHandler("myfollow", list_my_follow))
+    post_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.FORWARDED, handle_forwarded_post_message)],
+        states={
+            POST_PROCESS_ACTION: [
+                MessageHandler(filters.FORWARDED, handle_forwarded_post_message),
+                CallbackQueryHandler(handle_post_action, pattern=r"^post\|")
+            ]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(add_follower_handler)
+    application.add_handler(post_handler)
     application.add_handler(manage_follow_handler)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

@@ -227,8 +227,14 @@ def get_duplicate_caption(url):
                              'GROUP BY CAPTION HAVING COUNT(*) > 1;', (url,))
 
 
-def delete_db_message(message_id):
-    return exec_sql_get_data('DELETE FROM messages WHERE message_id=%s', (message_id,))
+def delete_db_message(messages_id):
+    if not messages_id:
+        return None
+
+    placeholders = ','.join(['%s'] * len(messages_id))
+    sql = f'DELETE FROM messages WHERE message_id IN ({placeholders})'
+
+    return exec_sql_get_data(sql, tuple(messages_id))
 
 
 def get_duplicate_messages():
