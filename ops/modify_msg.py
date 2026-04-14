@@ -2,13 +2,14 @@ import asyncio
 import re
 from time import sleep
 import emoji
+import os
 from telegram.constants import ParseMode
 
 from core.database import get_db_conn
 from telegram import Bot
 from loguru import logger
-logger.add("ggg.log")
-TOKEN = '6572044525:AAH6eRwxAhmhDQo7R7COrWBrZKtG6TqO1rU'
+logger.add("../logs/modify_msg.log")
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 db = get_db_conn()
 tg_bot = Bot(token=TOKEN)
 MARKDOWN_CHAR = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
@@ -34,7 +35,7 @@ def clear_name(text):
     result = re.sub(r'[（(【].*?[】)）]', '', text)
     # 去除表情
     result = emoji.demojize(result)
-    result = re.sub(':\S+?:', '', result)
+    result = re.sub(r':\S+?:', '', result)
     # 只保留字母、数字、下划线，其余全部删除
     result = re.sub(r'[^\w]', '', result)
     result = result.replace('_', r'\_')
@@ -46,8 +47,8 @@ def clear_name(text):
 async def main():
     conn = get_db_conn()
     cursor = conn.cursor()
-    sql = f"select * from messages where idstr='DUMrBWggMpk'"
-    username = '发糕小姐'
+    sql = f"select * from messages where USERID='MS4wLjABAAAArfggQM-3bXDdSKujh-vCUgR73JANC3U2RdkxNHk8GZwmMPZjgtV3FEnvUPpB8mDF'"
+    username = '鹿瑶'
     logger.info(sql)
     cursor.execute(sql)
     count = 0
@@ -65,7 +66,7 @@ async def main():
                     continue
                 id_str = replace_char(id_str)
                 text = replace_char(text)
-                _ = f'\#{cleared_name}  [{id_str}]({url})\n\n{text}'
+                _ = fr'\#{cleared_name}  [{id_str}]({url})\n\n{text}'
                 try:
                     count += 1
                     result = await tg_bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=_,
