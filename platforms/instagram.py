@@ -183,7 +183,7 @@ class InstagramPost(BasePost):
         self.following = following
         self.node = node
         self.shortcode = node.get('shortcode') or node.get('code') or ''
-        self.owner = node.get('owner') or {}
+        self.owner = node.get('user') or {}
         self.owner_username = self.owner.get('username') or following.userid
         self.caption = node.get('caption') or {}
         self.carousel_media = node.get('carousel_media')
