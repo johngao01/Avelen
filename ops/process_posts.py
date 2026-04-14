@@ -432,16 +432,6 @@ class PostBatchProcessor:
         end = "\n" if current == total else "\r"
         print(f"扫描文件进度 {current}/{total} | 匹配URL {matched} | 有效任务 {collected}", end=end, flush=True)
 
-    def _print_process_progress(self, index: int, total: int, task: UrlTask) -> None:
-        percent = (index / total * 100) if total else 100.0
-        print(f"处理进度 {index}/{total} ({percent:.1f}%) | platform={task.platform} | url={task.normalized_url}",
-              flush=True)
-
-    def _print_task_result(self, index_text: str, task: UrlTask, status: str, detail: str = "") -> None:
-        suffix = f" | {detail}" if detail else ""
-        print(f"处理结果 {index_text} | status={status} | platform={task.platform} | url={task.normalized_url}{suffix}",
-              flush=True)
-
     def _build_tasks_from_text(self, text: str, *, source: str, seen: set[str], source_line: int | None = None) -> list[
         UrlTask]:
         candidates = extract_candidate_urls(text)
@@ -517,8 +507,7 @@ class PostBatchProcessor:
             self.summary.parse_failed += 1
             return "send_failed"
         should_process, start_message = post.start()
-        process_posts_logger.info(
-            f"{index_text}\t{start_message} source={source} data_source={result.data_source} api_error={result.api_error or '-'} local_error={result.local_error or '-'}")
+        process_posts_logger.info(f"{index_text}\t{start_message}")
         if not should_process:
             self.summary.skipped_resolved += 1
             return "skipped_resolved"
@@ -589,9 +578,7 @@ class PostBatchProcessor:
         process_posts_logger.info(
             f"开始处理 post total={len(tasks)} no_send={self.options.no_send} send_on_download_failure={self.options.send_on_download_failure} skip_sent={self.skip_sent}")
         for index, task in enumerate(tasks, start=1):
-            self._print_process_progress(index, len(tasks), task)
             status = self.process_task(task, f"{index}/{len(tasks)}")
-            self._print_task_result(f"{index}/{len(tasks)}", task, status)
         return self.summary
 
     def run_error_file(self, error_file: Path) -> ProcessSummary:
@@ -624,9 +611,7 @@ class PostBatchProcessor:
             for task_index, task in enumerate(tasks, start=1):
                 processed_tasks += 1
                 index_text = f"{processed_tasks}/{total_tasks}"
-                self._print_process_progress(processed_tasks, total_tasks, task)
                 status = self.process_task(task, index_text, record_error=False)
-                self._print_task_result(index_text, task, status)
                 if status not in {"success", "skipped_sent", "skipped_resolved"}:
                     line_success = False
             if line_success:
