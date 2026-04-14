@@ -320,6 +320,7 @@ def resolve_instagram_post(normalized_url: str, post_id: str) -> ResolveResult:
                                                "Upgrade-Insecure-Requests": "1", "sec-fetch-dest": "document",
                                                "sec-fetch-mode": "navigate", "sec-fetch-site": "none",
                                                "sec-fetch-user": "?1"})
+        normalized_url = normalized_url.replace("/reel/", '/p/')
         response = requests.get(normalized_url, headers=headers, timeout=30)
         response.raise_for_status()
         key_index = response.text.find('"xdt_api__v1__media__shortcode__web_info"')
