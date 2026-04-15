@@ -8,8 +8,8 @@ mysql_password = os.getenv('MYSQL_PASSWORD', '')
 mysql_port = int(os.getenv('MYSQL_PORT', 3306))
 mysql_db = os.getenv('MYSQL_DB', 'nicebot')
 
-MESSAGES = ['MESSAGE_ID', 'CAPTION', 'CHAT_ID', 'DATE_TIME', 'FORM_USER', 'CHAT', 'MEDIA_GROUP_ID', 'TEXT_RAW',
-            'URL', 'USERID', 'USERNAME', 'IDSTR', 'MBLOGID', 'MSG_STR']
+MESSAGES = ['MESSAGE_ID', 'CAPTION', 'DATE_TIME', 'MEDIA_GROUP_ID', 'MSG_STR']
+POST = ['IDSTR', 'MBLOGID', 'USERID', 'USERNAME', 'URL', 'CREATE_TIME', 'TEXT_RAW']
 SORT_FIELD_ALIASES = {
     'scrapy_time': 'scrapy_time',
     'scrapy-time': 'scrapy_time',

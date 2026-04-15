@@ -16,7 +16,7 @@ import telegram
 from telegram import Bot, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 from telegram.constants import ChatAction, ParseMode
 
-from core.database import insert_data, get_db_conn, MESSAGES
+from core.database import insert_data, get_db_conn, MESSAGES, POST
 from core.models import DownloadedFile, PostData
 from core.settings import TELEGRAM_BASE_FILE_URL, TELEGRAM_BASE_URL, TELEGRAM_LOCAL_MODE
 from filelock import FileLock
@@ -49,7 +49,7 @@ def clear_name(text):
     result = re.sub(r'[（(【].*?[】)）]', '', text)
     result = emoji.demojize(result)
     result = re.sub(r':\S+?:', '', result)
-    result = re.sub(r'[^\w]', '', result)
+    result = re.sub(r'\W', '', result)
     result = result.replace('_', '\\_')
     return result or '没有名字'
 
@@ -60,7 +60,7 @@ def replace_char(text):
     return text
 
 
-async def retry_send(fun, **kwargs):
+async def retry_send(fun, **kwargs) -> telegram.Message | list[telegram.Message] | None:
     try:
         return await fun(**kwargs, read_timeout=600, write_timeout=600, connect_timeout=600, pool_timeout=600)
     except telegram.error.TimedOut:
@@ -75,28 +75,25 @@ async def retry_send(fun, **kwargs):
     return None
 
 
-def process_message(message: telegram.Message, data: PostData):
-    username = data.display_username
-    return {
-        'MESSAGE_ID': message.message_id,
-        'CAPTION': message.caption or '',
-        'CHAT_ID': message.chat_id or '',
-        'DATE_TIME': datetime.strftime(message.date, '%Y-%m-%d %H:%M:%S'),
-        'FORM_USER': message.from_user.id,
-        'CHAT': message.chat.id,
-        'MEDIA_GROUP_ID': message.media_group_id or '',
-        'TEXT_RAW': data.text_raw,
-        'URL': data.url,
-        'USERID': data.userid,
-        'USERNAME': username,
-        'CREATE_TIME': data.create_time,
+def persist_post(data: PostData):
+    """将 Telegram 返回消息结构落库。"""
+    conn = get_db_conn()
+    post_data = {
         'IDSTR': data.idstr,
         'MBLOGID': data.mblogid,
-        'MSG_STR': message.to_json(),
+        'USERID': data.userid,
+        'USERNAME': data.display_username,
+        'URL': data.url,
+        'CREATE_TIME': data.create_time,
+        'TEXT_RAW': data.text_raw,
     }
+    try:
+        insert_data(conn, 'post', POST, post_data)
+    finally:
+        conn.close()
 
 
-def persist_messages(messages: telegram.Message | list[telegram.Message] | None, data: PostData) -> list[
+def persist_messages(messages: telegram.Message | list[telegram.Message], data: PostData) -> list[
     dict[str, Any]]:
     """将 Telegram 返回消息结构落库。"""
     if isinstance(messages, telegram.Message):
@@ -104,9 +101,15 @@ def persist_messages(messages: telegram.Message | list[telegram.Message] | None,
     persisted_rows: list[dict[str, Any]] = []
     conn = get_db_conn()
     try:
-        for m in messages:
-            if not isinstance(m, telegram.Message): continue
-            send_response_dict = process_message(m, data)
+        for message in messages:
+            if not isinstance(message, telegram.Message): continue
+            send_response_dict = {
+                'MESSAGE_ID': message.message_id,
+                'CAPTION': message.caption or '',
+                'DATE_TIME': datetime.strftime(message.date, '%Y-%m-%d %H:%M:%S'),
+                'MEDIA_GROUP_ID': message.media_group_id or '',
+                'MSG_STR': message.to_json(),
+            }
             insert_data(conn, 'messages', MESSAGES, send_response_dict)
             persisted_rows.append(send_response_dict)
     finally:
@@ -224,7 +227,7 @@ async def execute_task(data: PostData):
             documents.append(file)
 
     persisted_messages: list[dict[str, Any]] = []
-
+    persist_post(data)
     # 按类别分批发送媒体 (图片 -> 视频 -> 文档)
     await process_and_send_media(tg_bot, 'photo', photos, data, persisted_messages)
     await process_and_send_media(tg_bot, 'video', videos, data, persisted_messages)
