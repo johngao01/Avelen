@@ -41,7 +41,7 @@ def insert_data(db_conn, table_name, columns, data_dict):
     cursor = db_conn.cursor()
     columns_str = ', '.join(columns)
     placeholders = ', '.join(['%s'] * len(columns))
-    sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders});"
+    sql = f"REPLACE INTO {table_name} ({columns_str}) VALUES ({placeholders});"
     data = [data_dict[column] for column in columns]
     cursor.execute(sql, data)
     db_conn.commit()
