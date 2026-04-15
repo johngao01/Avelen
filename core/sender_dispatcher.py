@@ -16,7 +16,7 @@ import telegram
 from telegram import Bot, InputMediaDocument, InputMediaPhoto, InputMediaVideo
 from telegram.constants import ChatAction, ParseMode
 
-from core.database import insert_data, get_db_conn, MESSAGES, POST
+from core.database import insert_data, get_db_conn, TGMSG, POST
 from core.models import DownloadedFile, PostData
 from core.settings import TELEGRAM_BASE_FILE_URL, TELEGRAM_BASE_URL, TELEGRAM_LOCAL_MODE
 from filelock import FileLock
@@ -108,9 +108,10 @@ def persist_messages(messages: telegram.Message | list[telegram.Message], data: 
                 'CAPTION': message.caption or '',
                 'DATE_TIME': datetime.strftime(message.date, '%Y-%m-%d %H:%M:%S'),
                 'MEDIA_GROUP_ID': message.media_group_id or '',
+                'IDSTR': data.idstr,
                 'MSG_STR': message.to_json(),
             }
-            insert_data(conn, 'messages', MESSAGES, send_response_dict)
+            insert_data(conn, 'messages', TGMSG, send_response_dict)
             persisted_rows.append(send_response_dict)
     finally:
         conn.close()
