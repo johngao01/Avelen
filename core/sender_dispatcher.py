@@ -106,10 +106,20 @@ def persist_messages(messages: telegram.Message | list[telegram.Message], data: 
             send_response_dict = {
                 'MESSAGE_ID': message.message_id,
                 'CAPTION': message.caption or '',
+                'CHAT_ID': message.chat_id or '',
                 'DATE_TIME': datetime.strftime(message.date, '%Y-%m-%d %H:%M:%S'),
+                'FORM_USER': message.from_user.id,
+                'CHAT': message.chat.id,
                 'MEDIA_GROUP_ID': message.media_group_id or '',
+                'TEXT_RAW': data.text_raw,
+                'URL': data.url,
+                'USERID': data.userid,
+                'USERNAME': data.display_username,
+                'CREATE_TIME': data.create_time,
                 'IDSTR': data.idstr,
+                'MBLOGID': data.mblogid,
                 'MSG_STR': message.to_json(),
+
             }
             insert_data(conn, 'tgmsg', TGMSG, send_response_dict)
             persisted_rows.append(send_response_dict)
