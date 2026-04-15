@@ -630,7 +630,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("url", nargs="*", help="直接处理一个或多个 post URL")
     parser.add_argument("-i", "--input", help="从文本文件中提取并处理所有可用 post URL")
     parser.add_argument("-n", "--no-send", action="store_true", help="仅下载，不发送")
-    parser.add_argument("--send-on-download-failure", action="store_true", help="下载不完整时也继续发送已下载内容")
+    parser.add_argument("-x", "--send-on-download-failure", action="store_false", help="下载不完整时也继续发送已下载内容")
     parser.add_argument("--no-skip-sent", action="store_true", help="即使数据库里已有发送记录也继续处理")
     return parser
 
