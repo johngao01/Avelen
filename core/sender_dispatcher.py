@@ -111,7 +111,7 @@ def persist_messages(messages: telegram.Message | list[telegram.Message], data: 
                 'IDSTR': data.idstr,
                 'MSG_STR': message.to_json(),
             }
-            insert_data(conn, 'messages', TGMSG, send_response_dict)
+            insert_data(conn, 'tgmsg', TGMSG, send_response_dict)
             persisted_rows.append(send_response_dict)
     finally:
         conn.close()
