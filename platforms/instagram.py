@@ -31,7 +31,7 @@ GRAPHQL_URL = INSTAGRAM_CONFIG['graphql_url']
 PROFILE_DOC_ID = INSTAGRAM_CONFIG['profile_doc_id']
 INSTAGRAM_HOME_URL = INSTAGRAM_CONFIG['base_url']
 
-instagram_logger = get_platform_logger('instagram', LOGS_DIR)
+instagram_logger = get_platform_logger('scrapy_instagram', LOGS_DIR)
 os.makedirs(INSTAGRAM_JSON_ROOT, exist_ok=True)
 DEFAULT_SWITCH_RANGE = (5, 10)
 

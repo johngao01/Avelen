@@ -48,7 +48,7 @@ def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 
     global _STDERR_CONFIGURED
 
     log_dir.mkdir(exist_ok=True)
-    logger_name = f'scrapy_{platform_name}'
+    logger_name = f'{platform_name}'
 
     if not _STDERR_CONFIGURED:
         _logger.remove()
@@ -63,7 +63,7 @@ def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 
     sink_key = (platform_name, str(log_dir.resolve()))
     if file_log and sink_key not in _FILE_SINK_KEYS:
         _logger.add(
-            str(log_dir / f'scrapy_{platform_name}.log'),
+            str(log_dir / f'{platform_name}.log'),
             format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
             level=file_level,
             encoding='utf-8',

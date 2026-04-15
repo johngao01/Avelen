@@ -62,7 +62,7 @@ VIDEO_URL_KEYS = (
     "inch_5_mp4_hd",
     "stream_url_hd",
 )
-weibo_logger = get_platform_logger('weibo', LOGS_DIR)
+weibo_logger = get_platform_logger('scrapy_weibo', LOGS_DIR)
 
 
 class Following(FollowUser):
