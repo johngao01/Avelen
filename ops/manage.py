@@ -46,18 +46,18 @@ POST_PROCESS_ACTION = range(1)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
 follow_types = {
-    '-2': '🚫 无效账号',
-    '-1': '🗂️ 不再追踪',
-    '0': '❌ 取消追踪',
-    '1': '⭐️ 特别关注',
-    '2': '👤 普通关注'
+    '-2': '🚫 账号失效',
+    '-1': '💔 不喜欢了',
+    '0': ' ❗很久没更新',
+    '1': '👤 普通关注',
+    '2': '⭐️ 特别关注'
 }
 follow_type_icons = {
-    '-2': '🚫',
-    '-1': '🗂️',
-    '0': '❌',
-    '1': '⭐️',
-    '2': '👤'
+   '-2': '🚫 ',
+    '-1': '💔  ',
+    '0': ' ❗ ',
+    '1': '👤  ',
+    '2': '⭐️  '
 }
 platform_icons = {
     'douyin': '🎵',
@@ -134,11 +134,11 @@ async def query_user_info(user_id):
 
         keyboard = [[keyboard_button]]
         status_actions = [
-            (1, "⭐️ 特别关注", "upgrade"),
-            (2, "👤 普通关注", "downgrade"),
-            (0, "❌ 取消关注", "delete"),
-            (-1, "🗂️ 不再追踪", "retire"),
-            (-2, "🚫 无效账号", "invalid"),
+            (2, "⭐️ 特别关注", "upgrade"),
+            (1, "👤 普通关注", "downgrade"),
+            (0, "❗很久没更新", "delete"),
+            (-1, "💔 不喜欢了", "retire"),
+            (-2, "🚫 账号失效", "invalid"),
         ]
         upgrade_button = []
         for target_valid, text, action in status_actions:
@@ -280,8 +280,8 @@ async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(data)
     action, user_id = data.split("|", 1)
     valid_map = {
-        'upgrade': 1,
-        'downgrade': 2,
+        'upgrade': 2,
+        'downgrade': 1,
         'delete': 0,
         'retire': -1,
         'invalid': -2
