@@ -1,5 +1,4 @@
 import re
-import os
 import emoji
 import json
 import html
@@ -17,10 +16,9 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode, ChatAction
 from typing import Any, cast
-from core.database import exec_sql_get_data, add_user, update_user, get_file, delete_db_message, MESSAGES, \
-    get_duplicate_caption, get_message_id
-from core.models import RunOptions, get_platform_logger
-from core.settings import DOWNLOAD_ROOT, LOGS_DIR
+from core.database import *
+from core.models import get_platform_logger
+from core.settings import LOGS_DIR
 from ops.process_posts import resolve_single_post
 from urllib.parse import urlparse
 from core.downloader import Downloader
@@ -465,18 +463,17 @@ def remove_downloaded_files(post_data):
 def _build_post_data_from_messages(messages: list[Any]) -> dict[str, Any] | None:
     if not messages:
         return None
-    message_index = {name: index for index, name in enumerate(MESSAGES)}
-    message_ids = [row[message_index['MESSAGE_ID']] for row in messages if row[message_index['MESSAGE_ID']]]
-    files = [row[message_index['CAPTION']] for row in messages if row[message_index['CAPTION']]]
+    message_ids = [row[0] for row in messages]
+    files = [row[1] for row in messages if row[1]]
     first = messages[0]
     return {
-        'url': first[message_index['URL']],
-        'idstr': first[message_index['IDSTR']],
-        'userid': first[message_index['USERID']],
-        'username': first[message_index['USERNAME']],
+        'url': first[8],
+        'idstr': first[11],
+        'userid': first[9],
+        'username': first[10],
         'messages_id': message_ids,
         'files': files,
-        'platform': parse_url_platform(first[message_index['URL']])
+        'platform': parse_url_platform(first[8])
     }
 
 
