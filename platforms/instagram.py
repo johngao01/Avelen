@@ -403,14 +403,12 @@ class InstagramScrapy(BasePlatform):
                         if not node:
                             continue
                         post = InstagramPost(self.scraping, node)
-                        if post.is_top:
-                            continue
-                        if post.create_time <= self.scraping.latest_time:
+                        page_added += 1
+                        self.post.append(post)
+                        if not post.is_top and post.create_time <= self.scraping.latest_time:
                             keep = False
                             break
                         post.save_json()
-                        self.post.append(post)
-                        page_added += 1
 
                     instagram_logger.info(f'{self.scraping.username} 第 {page} 页完成，获取到 {page_added} 个内容')
 
