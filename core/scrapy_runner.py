@@ -220,8 +220,9 @@ def build_common_cli_parser():
 
 def build_following_filters(args) -> dict[str, Any]:
     """把 CLI 参数整理成统一的数据库筛选参数。"""
+    has_user_search = bool(args.user_ids or args.usernames or args.username_like)
     return {
-        'valid_list': args.valid,
+        'valid_list': [] if has_user_search else args.valid,
         'user_ids': args.user_ids,
         'usernames': args.usernames,
         'username_like': args.username_like,
@@ -367,8 +368,10 @@ def render_followings_table(platform: str | None, rows, *, show_platform: bool =
 
 def build_args_log_summary(args: argparse.Namespace) -> str:
     """把当前 CLI 参数整理成适合启动日志的简短摘要。"""
+    effective_filters = build_following_filters(args)
+    effective_valid_list = effective_filters['valid_list']
     summary = [
-        f"valid={args.valid}",
+        f"valid={effective_valid_list if effective_valid_list else 'ALL'}",
         f"sort={args.sort_option}",
     ]
     if args.user_ids:
