@@ -351,7 +351,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # 成功的话是post链接处理post
         resolve_result = resolve_single_post(url)
-        if resolve_result.post is None: return ConversationHandler.END
+        if resolve_result.post is None: 
+            logger.info(f"{url} 获取数据失败，处理失败。")
+            return ConversationHandler.END
         logger.info(resolve_result.post)
         downloader = Downloader(logger=logger)
         post_data = downloader.download(resolve_result.post)
