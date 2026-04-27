@@ -374,16 +374,12 @@ def resolve_bilibili_post(normalized_url: str, post_id: str) -> ResolveResult:
     try:
         path_parts = [part for part in urlparse(normalized_url).path.split("/") if part]
         if len(path_parts) >= 2 and path_parts[0] == "video":
-            response = requests.get(f"{BILIBILI_CONFIG['api_url']}/x/web-interface/view/detail",
-                                    params={"bvid": post_id}, timeout=15)
+            response = requests.get(f"{BILIBILI_CONFIG['api_url']}/x/web-interface/view", params={"bvid": post_id}, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
             response.raise_for_status()
             payload = response.json()
             if payload.get("code") != 0:
                 raise ValueError(f"Bilibili 视频 API 返回异常: code={payload.get('code')}")
-            view = (payload.get("data") or {}).get("View") or {}
-            if not view:
-                raise ValueError("Bilibili 视频 API 返回数据缺少 View")
-            post = resolve_following_and_post(_build_bilibili_video_node(view, post_id), "user_id", BilibiliFollowing,
+            post = resolve_following_and_post(_build_bilibili_video_node(payload['data'], post_id), "user_id", BilibiliFollowing,
                                               BilibiliPost)
             if post is None:
                 raise ValueError("Bilibili 视频 API 返回数据缺少 user_id")
