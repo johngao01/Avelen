@@ -205,6 +205,11 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("无结果")
         return ConversationHandler.END
+    if num == 1:
+        user_id, username, latest_time, platform, valid = result[0]
+        data = await query_user_info(user_id)
+        await update.message.reply_text(data[1], reply_markup=InlineKeyboardMarkup(data[2]), parse_mode=ParseMode.HTML)
+        return MANAGING_USER
     total_pages = num // PAGE_SIZE + 1
     keyboard = []
     row = []
@@ -351,7 +356,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # 成功的话是post链接处理post
         resolve_result = resolve_single_post(url)
-        if resolve_result.post is None: 
+        if resolve_result.post is None:
             logger.info(f"{url} 获取数据失败，处理失败。")
             return ConversationHandler.END
         logger.info(resolve_result.post)
