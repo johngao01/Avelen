@@ -146,6 +146,9 @@ class PostData:
     @property
     def display_username(self) -> str:
         if self.username == 'favorite' and self.nickname:
+            user = get_user_by_userid(self.userid)
+            if user:
+                return user[0][1]
             return self.nickname
         return self.username
 
