@@ -418,8 +418,8 @@ async def ask_save_username(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data["username"] = update.message.text
     await update.message.reply_text(
         f"选择关注类型",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"⭐️ 特别关注", callback_data="1")],
-                                           [InlineKeyboardButton(f"👤 普通关注", callback_data="2")]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"⭐️ 特别关注", callback_data="2")],
+                                           [InlineKeyboardButton(f"👤 普通关注", callback_data="1")]])
     )
     return STORE_DATA
 
