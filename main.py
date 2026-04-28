@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import argparse
 import sys
 
 from core.models import get_platform_logger
-from core.scrapy_runner import build_args_log_summary, build_common_cli_parser, render_followings_table, select_following_rows
+from core.scrapy_runner import (
+    build_args_log_summary,
+    build_common_cli_parser,
+    parse_cli_args,
+    render_followings_table,
+    select_following_rows,
+)
 from core.settings import LOGS_DIR
 from platforms import PLATFORM_REGISTRY, get_platform
 
@@ -21,6 +28,7 @@ def build_parser():
         "platform",
         type=str,
         nargs="?",
+        default=argparse.SUPPRESS,
         choices=sorted(PLATFORM_REGISTRY.keys()),
         help="Platform to run; omit to auto-detect from matched users",
     )
@@ -53,7 +61,7 @@ def main():
     argv = sys.argv[1:]
     main_logger.info(f"统一入口启动，原始参数: {argv}")
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parse_cli_args(parser, argv, entry_name='main', include_position_platform=True)
     main_logger.info(f"统一入口参数: {build_args_log_summary(args)}")
     if args.platform is None:
         return run_selected_platforms(args)

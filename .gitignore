@@ -5,7 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
-
+.idea
+.vscode
 # Distribution / packaging
 .Python
 build/
@@ -149,6 +150,8 @@ activemq-data/
 
 # Environments
 .env
+.avelen.conf
+avelen.conf
 .envrc
 .venv
 env/

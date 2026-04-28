@@ -1,15 +1,17 @@
 import argparse
+import configparser
 import random
 import sys
 import traceback
 from datetime import datetime, timedelta
+from pathlib import Path
 from time import sleep
 from typing import Callable, Any
 
 from core.downloader import Downloader
 from core.database import get_filtered_following_rows, get_filtered_followings, get_sent_post, normalize_sort_option
 from core.models import BasePost, CookieExpiredError, DEFAULT_LATEST_TIME, RunOptions
-from core.settings import BILIBILI_CONFIG, DOUYIN_CONFIG, INSTAGRAM_CONFIG, WEIBO_CONFIG
+from core.settings import BILIBILI_CONFIG, DOUYIN_CONFIG, INSTAGRAM_CONFIG, PROJECT_ROOT, WEIBO_CONFIG
 from core.sender_dispatcher import send_post_payload_to_telegram
 from core.utils import download_log, log_error, rate_control
 from rich import box
@@ -25,6 +27,178 @@ VALID_LABELS = {
     -1: '不喜欢了',
     -2: '账号失效',
 }
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / 'config' / 'avelen.conf'
+COMMON_CLI_DEFAULTS = {
+    'config': str(DEFAULT_CONFIG_PATH),
+    'ignore_config': False,
+    'valid': [2],
+    'user_ids': [],
+    'usernames': [],
+    'username_like': None,
+    'latest_time_start': None,
+    'latest_time_end': None,
+    'scrapy_time_start': None,
+    'scrapy_time_end': None,
+    'sort_option': 'scrapy_time:desc',
+    'set_latest_time': None,
+    'no_send': False,
+    'send_on_download_failure': False,
+    'download_progress': True,
+    'local_json': False,
+    'show': False,
+    'rate_limit': None,
+    'platform': None,
+}
+CONFIG_KEY_ALIASES = {
+    'config': 'config',
+    'valid': 'valid',
+    'uid': 'user_ids',
+    'user_id': 'user_ids',
+    'user_ids': 'user_ids',
+    'name': 'usernames',
+    'username': 'usernames',
+    'usernames': 'usernames',
+    'rename': 'username_like',
+    'username_like': 'username_like',
+    'latest_time_start': 'latest_time_start',
+    'latest_time_end': 'latest_time_end',
+    'scrapy_time_start': 'scrapy_time_start',
+    'scrapy_time_end': 'scrapy_time_end',
+    'sort': 'sort_option',
+    'sort_option': 'sort_option',
+    'set_latest_time': 'set_latest_time',
+    'no_send': 'no_send',
+    'send_on_download_failure': 'send_on_download_failure',
+    'download_progress': 'download_progress',
+    'local_json': 'local_json',
+    'show': 'show',
+    'list': 'show',
+    'rate_limit': 'rate_limit',
+}
+
+
+def _split_config_list(value: str) -> list[str]:
+    parts = [item.strip() for item in value.replace(',', '\n').splitlines()]
+    return [item for item in parts if item]
+
+
+def _parse_config_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {'1', 'true', 'yes', 'on'}:
+        return True
+    if normalized in {'0', 'false', 'no', 'off'}:
+        return False
+    raise ValueError(f'无效的布尔值: {value}')
+
+
+def _resolve_config_key(raw_key: str) -> str | None:
+    return CONFIG_KEY_ALIASES.get(raw_key.strip().lower().replace('-', '_'))
+
+
+def _convert_config_value(dest: str, raw_value: str):
+    value = raw_value.strip()
+    if dest == 'valid':
+        return [int(item) for item in _split_config_list(value)]
+    if dest in {'user_ids', 'usernames'}:
+        return _split_config_list(value)
+    if dest == 'sort_option':
+        return argparse_sort_option(value)
+    if dest == 'set_latest_time':
+        return argparse_latest_time_override(value)
+    if dest in {'no_send', 'send_on_download_failure', 'download_progress', 'local_json', 'show'}:
+        return _parse_config_bool(value)
+    if dest == 'rate_limit':
+        return _split_config_list(value)
+    if dest == 'config':
+        return value
+    return value or None
+
+
+def _load_cli_config(config_path: str | Path, sections: list[str]) -> dict[str, Any]:
+    path = _resolve_config_path(config_path)
+    if not path.exists():
+        return {}
+
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(path, encoding='utf-8')
+    loaded: dict[str, Any] = {}
+    for section in sections:
+        if not parser.has_section(section):
+            continue
+        for raw_key, raw_value in parser.items(section):
+            dest = _resolve_config_key(raw_key)
+            if not dest:
+                continue
+            try:
+                loaded[dest] = _convert_config_value(dest, raw_value)
+            except (ValueError, argparse.ArgumentTypeError) as exc:
+                raise ValueError(f'{path} [{section}] {raw_key} 配置无效: {exc}') from exc
+    loaded['config'] = str(path)
+    return loaded
+
+
+def _resolve_config_path(config_path: str | Path) -> Path:
+    path = Path(config_path).expanduser()
+    if not path.is_absolute():
+        path = (PROJECT_ROOT / path).resolve()
+    return path
+
+
+def _build_default_args() -> argparse.Namespace:
+    return argparse.Namespace(**{
+        key: list(value) if isinstance(value, list) else value
+        for key, value in COMMON_CLI_DEFAULTS.items()
+    })
+
+
+def _preparse_common_cli(argv: list[str]) -> argparse.Namespace:
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument('-c', '--config', dest='config')
+    pre_parser.add_argument('--ignore-config', action='store_true')
+    return pre_parser.parse_known_args(argv)[0]
+
+
+def _guess_entry_sections(
+        entry_name: str,
+        *,
+        include_position_platform: bool,
+        platform_name: str | None = None,
+) -> list[str]:
+    sections = ['default']
+    if entry_name != 'default':
+        sections.append(entry_name)
+    if include_position_platform and platform_name:
+        sections.append(platform_name.lower())
+    return list(dict.fromkeys(sections))
+
+
+def parse_cli_args(
+        parser: argparse.ArgumentParser,
+        argv: list[str],
+        *,
+        entry_name: str,
+        include_position_platform: bool = False,
+) -> argparse.Namespace:
+    defaults = vars(_build_default_args())
+    cli_probe = _preparse_common_cli(argv)
+    cli_values = vars(parser.parse_args(argv))
+    config_path = cli_probe.config or defaults['config']
+    sections = _guess_entry_sections(
+        entry_name,
+        include_position_platform=include_position_platform,
+        platform_name=cli_values.get('platform'),
+    )
+
+    config_values: dict[str, Any] = {}
+    if not cli_probe.ignore_config:
+        try:
+            config_values = _load_cli_config(config_path, sections)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+    merged = defaults | config_values | cli_values
+    merged['config'] = str(_resolve_config_path(merged['config']))
+    return argparse.Namespace(**merged)
 
 
 def argparse_sort_option(value: str) -> str:
@@ -182,38 +356,57 @@ def run_followings(all_followings: list[Any],
 def build_common_cli_parser():
     """构建各平台共用命令行参数。"""
     parser = argparse.ArgumentParser(description='Scrapy runner options')
-    parser.add_argument('-v', '--valid', nargs='+', type=int, default=list((2,)), choices=[-2, -1, 0, 1, 2],
+    parser.add_argument('-c', '--config', dest='config', default=argparse.SUPPRESS,
+                        help=f'读取配置文件，默认 {DEFAULT_CONFIG_PATH.name}')
+    parser.add_argument('--ignore-config', action='store_true', default=argparse.SUPPRESS,
+                        help='忽略配置文件，仅使用 CLI 和内置默认值')
+    parser.add_argument('-v', '--valid', nargs='+', type=int, default=argparse.SUPPRESS, choices=[-2, -1, 0, 1, 2],
                         help='关注类型，可多选：2 特别关注 1 普通关注 0 很久没更新 -1 不喜欢了 -2 账号失效，默认 2')
-    parser.add_argument('-id', '--uid', '--user-id', action='append', dest='user_ids', default=[],
+    parser.add_argument('-id', '--uid', '--user-id', action='append', dest='user_ids', default=argparse.SUPPRESS,
                         help='按 user.userid 精确筛选，可重复传参')
-    parser.add_argument('--name', '--username', action='append', dest='usernames', default=[],
+    parser.add_argument('--name', '--username', action='append', dest='usernames', default=argparse.SUPPRESS,
                         help='按 user.username 精确筛选，可重复传参')
-    parser.add_argument('-rn', '--rename', dest='username_like', default=None,
+    parser.add_argument('-rn', '--rename', dest='username_like', default=argparse.SUPPRESS,
                         help='按 user.username 模糊筛选，支持输入部分用户名')
-    parser.add_argument('--lts', '--latest-time-start', dest='latest_time_start', default=None,
+    parser.add_argument('--lts', '--latest-time-start', dest='latest_time_start', default=argparse.SUPPRESS,
                         help='筛选 latest_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
-    parser.add_argument('--lte', '--latest-time-end', dest='latest_time_end', default=None,
+    parser.add_argument('--lte', '--latest-time-end', dest='latest_time_end', default=argparse.SUPPRESS,
                         help='筛选 latest_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
-    parser.add_argument('--sts', '--scrapy-time-start', dest='scrapy_time_start', default=None,
+    parser.add_argument('--sts', '--scrapy-time-start', dest='scrapy_time_start', default=argparse.SUPPRESS,
                         help='筛选 scrapy_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
-    parser.add_argument('--ste', '--scrapy-time-end', dest='scrapy_time_end', default=None,
+    parser.add_argument('--ste', '--scrapy-time-end', dest='scrapy_time_end', default=argparse.SUPPRESS,
                         help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
-    parser.add_argument('-s', '--sort', dest='sort_option', type=argparse_sort_option, default='scrapy_time:desc',
+    parser.add_argument('-s', '--sort', dest='sort_option', type=argparse_sort_option, default=argparse.SUPPRESS,
                         help='排序字段[:asc|desc]，默认 scrapy_time:desc')
-    parser.add_argument('-slt', '--set-latest-time', dest='set_latest_time', nargs='?', default=None,
+    parser.add_argument('-slt', '--set-latest-time', dest='set_latest_time', nargs='?', default=argparse.SUPPRESS,
                         const=DEFAULT_LATEST_TIME, type=argparse_latest_time_override,
                         help='覆盖所有用户 latest_time；不传值或传空值时使用 2000-12-12 12:12:12')
-    parser.add_argument('-n', '--no-send', action='store_true',
+    parser.add_argument('-n', '--no-send', action='store_true', dest='no_send', default=argparse.SUPPRESS,
                         help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
-    parser.add_argument('--send-on-download-failure', action='store_true',
+    parser.add_argument('--send', action='store_false', dest='no_send', default=argparse.SUPPRESS,
+                        help='显式开启发送，可覆盖配置文件中的 no_send=true')
+    parser.add_argument('--send-on-download-failure', action='store_true', dest='send_on_download_failure',
+                        default=argparse.SUPPRESS,
                         help='下载出现失败时仍继续发送，默认关闭')
-    parser.add_argument('-p', '--progress', '--download-progress', dest='download_progress',
-                        action='store_false', default=True, help='是否显示下载进度条，默认启用')
+    parser.add_argument('--no-send-on-download-failure', action='store_false', dest='send_on_download_failure',
+                        default=argparse.SUPPRESS,
+                        help='下载失败时不继续发送，可覆盖配置文件中的 send_on_download_failure=true')
+    parser.add_argument('-p', '--progress', dest='download_progress',
+                        action='store_false', default=argparse.SUPPRESS, help='关闭下载进度条')
+    parser.add_argument('--download-progress', dest='download_progress',
+                        action='store_true', default=argparse.SUPPRESS, help='显式开启下载进度条')
+    parser.add_argument('--no-download-progress', dest='download_progress',
+                        action='store_false', default=argparse.SUPPRESS, help='显式关闭下载进度条')
     parser.add_argument('-j', '--json', '--local-json', dest='local_json', action='store_true',
+                        default=argparse.SUPPRESS,
                         help='从本地 json 目录读取数据，而不是实时抓取')
-    parser.add_argument('-l', '--list', dest='show', action='store_true',
+    parser.add_argument('--no-local-json', dest='local_json', action='store_false', default=argparse.SUPPRESS,
+                        help='显式关闭本地 JSON 模式')
+    parser.add_argument('-l', '--list', dest='show', action='store_true', default=argparse.SUPPRESS,
                         help='只展示筛选后的 user 表记录，不执行爬取和发送')
-    parser.add_argument('-rl', '--rate-limit', dest='rate_limit', nargs='+', default=None,
+    parser.add_argument('--run', dest='show', action='store_false', default=argparse.SUPPRESS,
+                        help='显式执行抓取流程，可覆盖配置文件中的 list=true')
+    parser.add_argument('-rl', '--rate-limit', dest='rate_limit', nargs='+', default=argparse.SUPPRESS,
                         help='每个用户处理后的等待秒数：传 1 个值表示固定秒数，传 2 个值表示随机区间')
     return parser
 
@@ -371,6 +564,7 @@ def build_args_log_summary(args: argparse.Namespace) -> str:
     effective_filters = build_following_filters(args)
     effective_valid_list = effective_filters['valid_list']
     summary = [
+        f"config={args.config}",
         f"valid={effective_valid_list if effective_valid_list else 'ALL'}",
         f"sort={args.sort_option}",
     ]
@@ -417,7 +611,7 @@ def run_platform_main(platform: str,
     argv = sys.argv[1:]
     if argv and argv[0] == platform:
         argv = argv[1:]
-    args = parser.parse_args(argv)
+    args = parse_cli_args(parser, argv, entry_name=platform)
     logger.info(f"{platform} 任务启动")
     logger.info(f"{platform} 参数: {build_args_log_summary(args)}")
     if args.show:

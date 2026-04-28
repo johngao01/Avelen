@@ -1,0 +1,41 @@
+[default]
+# 多值参数支持逗号分隔或换行
+valid = 2
+sort = scrapy_time:desc
+download_progress = False
+local_json = false
+no_send = false
+send_on_download_failure = false
+
+# rate_limit 支持 1 个值（固定秒数）或 2 个值（随机区间）
+# rate_limit = 30,80
+
+# 支持精确用户名 / 用户 ID / 模糊用户名筛选
+# user_ids =
+#   123456
+#   987654
+# usernames = alice,bob
+# username_like = 糕
+
+# 时间格式统一为 YYYY-MM-DD HH:MM:SS
+# latest_time_start = 2026-04-01 00:00:00
+# latest_time_end = 2026-04-30 23:59:59
+# scrapy_time_start =
+# scrapy_time_end =
+# set_latest_time = 2024-01-01 00:00:00
+
+[main]
+# 主入口专属配置；可与 [default] 叠加
+# show = true
+
+[weibo]
+# 平台段会覆盖 [default]，并可被 CLI 再覆盖
+# no_send = true
+
+[douyin]
+
+[instagram]
+# 比如 Instagram 默认加等待
+# rate_limit = 30,80
+
+[bilibili]

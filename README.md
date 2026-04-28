@@ -209,7 +209,59 @@ MYSQL_DB=nicebot
 - B站 Cookie：`cookies/bl.txt`
 - Instagram Cookie：`cookies/neverblock11.txt`
 
-### 5.3 Cookie 文件
+### 5.3 运行参数配置文件
+
+除了 CLI，现在也支持通过项目根目录的 `avelen.conf` 传入运行参数。
+
+推荐做法：
+
+1. 复制 [avelen.conf.example](./avelen.conf.example) 为 `avelen.conf`
+2. 在 `[default]` 里写通用默认参数
+3. 按需在 `[main]`、`[weibo]`、`[douyin]`、`[instagram]`、`[bilibili]` 里写入口专属参数
+
+参数优先级是：
+
+1. 内置默认值
+2. `avelen.conf`
+3. CLI 显式传参
+
+也就是说，命令行参数默认会覆盖配置文件里的同名参数。
+
+示例：
+
+```ini
+[default]
+valid = 2
+sort = scrapy_time:desc
+download_progress = true
+
+[weibo]
+no_send = true
+username_like = 糕
+```
+
+然后：
+
+```bash
+python main.py weibo
+```
+
+会先应用 `[default] + [main] + [weibo]`，如果你再执行：
+
+```bash
+python main.py weibo --send --name 某个用户
+```
+
+则 `--send` 和 `--name` 会覆盖配置文件中的 `no_send` / `username_like`。
+
+补充说明：
+
+- 可用 `-c / --config` 指定别的配置文件路径
+- 可用 `--ignore-config` 完全忽略配置文件
+- 多值参数如 `valid`、`user_ids`、`usernames`、`rate_limit` 支持逗号分隔或换行
+- 时间格式统一为 `YYYY-MM-DD HH:MM:SS`
+
+### 5.4 Cookie 文件
 
 项目强依赖 Cookie。没有 Cookie 或 Cookie 失效时，最常见的表现是：
 
@@ -366,18 +418,36 @@ python main.py -l -s valid:desc
 
 ### 8.2 行为控制参数
 
+- `-c`, `--config`
+  指定运行参数配置文件，默认读取项目根目录 `avelen.conf`
+- `--ignore-config`
+  忽略配置文件，仅使用 CLI 和代码默认值
 - `-s`, `--sort`
   格式：`字段[:asc|desc]`
 - `-slt`, `--set-latest-time`
   临时覆盖本次运行中筛到用户的 `latest_time`
 - `-n`, `--no-send`
   只抓取和下载，不发 Telegram，也不更新 `user.latest_time`
+- `--send`
+  显式开启发送，可覆盖配置文件里的 `no_send=true`
+- `--send-on-download-failure`
+  下载失败时仍继续发送
+- `--no-send-on-download-failure`
+  显式关闭“下载失败仍发送”，可覆盖配置文件
 - `-p`, `--progress`, `--download-progress`
-  注意：这个参数在代码里是“关闭进度条”的开关，传了以后会让 `download_progress=False`
+  注意：`-p / --progress` 当前仍兼容旧行为，表示关闭进度条
+- `--download-progress`
+  显式开启进度条，可覆盖配置文件
+- `--no-download-progress`
+  显式关闭进度条
 - `-j`, `--json`, `--local-json`
   从本地 JSON 读取
+- `--no-local-json`
+  显式关闭本地 JSON 模式，可覆盖配置文件
 - `-l`, `--list`
   只展示筛选到的 `user` 记录
+- `--run`
+  显式执行抓取，可覆盖配置文件里的 `list=true`
 
 ### 8.3 `valid` 取值
 
