@@ -12,6 +12,7 @@ from core.settings import (
     COMMON_HEADERS,
     DEVELOPER_CHAT_ID,
     ERROR_FILE,
+    ERROR_NOTIFY_FAILURE_THRESHOLD,
     ERROR_NOTIFY_LOCK_FILE,
     ERROR_NOTIFY_STATE_FILE,
     ERROR_TOKEN,
@@ -88,6 +89,36 @@ def build_error_notify_key(*, category: str, platform: str, userid: str, usernam
     return f'{category}:{platform}:{userid}:{username}'
 
 
+def mark_error_notification_failure(
+        dedupe_key: str,
+        *,
+        logger=None,
+        threshold: int = ERROR_NOTIFY_FAILURE_THRESHOLD,
+) -> tuple[bool, int]:
+    """记录一次连续失败，并判断当前是否达到通知阈值。"""
+    with FileLock(str(ERROR_NOTIFY_LOCK_FILE), timeout=5):
+        state = _load_error_notify_state()
+        existing = state.get(dedupe_key) or {}
+        failure_count = int(existing.get('failure_count') or 0) + 1
+        has_notified = bool(existing.get('notified'))
+        should_notify = failure_count >= threshold and not has_notified
+
+        state[dedupe_key] = {
+            'failure_count': failure_count,
+            'notified': has_notified or should_notify,
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'last_message_hash': existing.get('last_message_hash', ''),
+        }
+        _save_error_notify_state(state)
+
+    if logger:
+        logger.info(
+            f'错误通知失败计数更新: {dedupe_key}, '
+            f'failure_count={failure_count}, threshold={threshold}, should_notify={should_notify}'
+        )
+    return should_notify, failure_count
+
+
 def clear_error_notification(dedupe_key: str, *, logger=None) -> None:
     with FileLock(str(ERROR_NOTIFY_LOCK_FILE), timeout=5):
         state = _load_error_notify_state()
@@ -111,13 +142,6 @@ def send_error_notification(message: str, *, logger=None, dedupe_key: str | None
     try:
         with FileLock(str(ERROR_NOTIFY_LOCK_FILE), timeout=5):
             state = _load_error_notify_state()
-            if dedupe_key:
-                existing = state.get(dedupe_key) or {}
-                if existing.get('message_hash') == message_hash:
-                    if logger:
-                        logger.info(f'重复错误通知已跳过: {dedupe_key}')
-                    return False
-
             response = requests.post(
                 _build_error_bot_url(),
                 json={
@@ -132,8 +156,11 @@ def send_error_notification(message: str, *, logger=None, dedupe_key: str | None
                 raise RuntimeError(str(payload))
 
             if dedupe_key:
+                existing = state.get(dedupe_key) or {}
                 state[dedupe_key] = {
-                    'message_hash': message_hash,
+                    'failure_count': int(existing.get('failure_count') or 0),
+                    'notified': True,
+                    'last_message_hash': message_hash,
                     'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 }
                 _save_error_notify_state(state)
