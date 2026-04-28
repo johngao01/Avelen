@@ -1,5 +1,4 @@
 import re
-import os
 import emoji
 import json
 import html
@@ -17,10 +16,9 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode, ChatAction
 from typing import Any, cast
-from core.database import exec_sql_get_data, add_user, update_user, get_file, delete_db_message, MESSAGES, \
-    get_duplicate_caption, get_message_id
-from core.models import RunOptions, get_platform_logger
-from core.settings import DOWNLOAD_ROOT, LOGS_DIR
+from core.database import *
+from core.models import get_platform_logger
+from core.settings import LOGS_DIR
 from ops.process_posts import resolve_single_post
 from urllib.parse import urlparse
 from core.downloader import Downloader
@@ -46,18 +44,18 @@ POST_PROCESS_ACTION = range(1)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
 follow_types = {
-    '-2': '🚫 无效账号',
-    '-1': '🗂️ 不再追踪',
-    '0': '❌ 取消追踪',
-    '1': '⭐️ 特别关注',
-    '2': '👤 普通关注'
+    '-2': '🚫 账号失效',
+    '-1': '💔 不喜欢了',
+    '0': ' ❗很久没更新',
+    '1': '👤 普通关注',
+    '2': '⭐️ 特别关注'
 }
 follow_type_icons = {
-    '-2': '🚫',
-    '-1': '🗂️',
-    '0': '❌',
-    '1': '⭐️',
-    '2': '👤'
+   '-2': '🚫 ',
+    '-1': '💔  ',
+    '0': ' ❗ ',
+    '1': '👤  ',
+    '2': '⭐️  '
 }
 platform_icons = {
     'douyin': '🎵',
@@ -134,11 +132,11 @@ async def query_user_info(user_id):
 
         keyboard = [[keyboard_button]]
         status_actions = [
-            (1, "⭐️ 特别关注", "upgrade"),
-            (2, "👤 普通关注", "downgrade"),
-            (0, "❌ 取消关注", "delete"),
-            (-1, "🗂️ 不再追踪", "retire"),
-            (-2, "🚫 无效账号", "invalid"),
+            (2, "⭐️ 特别关注", "upgrade"),
+            (1, "👤 普通关注", "downgrade"),
+            (0, "❗很久没更新", "delete"),
+            (-1, "💔 不喜欢了", "retire"),
+            (-2, "🚫 账号失效", "invalid"),
         ]
         upgrade_button = []
         for target_valid, text, action in status_actions:
@@ -207,6 +205,11 @@ async def query_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("无结果")
         return ConversationHandler.END
+    if num == 1:
+        user_id, username, latest_time, platform, valid = result[0]
+        data = await query_user_info(user_id)
+        await update.message.reply_text(data[1], reply_markup=InlineKeyboardMarkup(data[2]), parse_mode=ParseMode.HTML)
+        return MANAGING_USER
     total_pages = num // PAGE_SIZE + 1
     keyboard = []
     row = []
@@ -280,8 +283,8 @@ async def update_user_valid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(data)
     action, user_id = data.split("|", 1)
     valid_map = {
-        'upgrade': 1,
-        'downgrade': 2,
+        'upgrade': 2,
+        'downgrade': 1,
         'delete': 0,
         'retire': -1,
         'invalid': -2
@@ -353,7 +356,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # 成功的话是post链接处理post
         resolve_result = resolve_single_post(url)
-        if resolve_result.post is None: return ConversationHandler.END
+        if resolve_result.post is None:
+            logger.info(f"{url} 获取数据失败，处理失败。")
+            return ConversationHandler.END
         logger.info(resolve_result.post)
         downloader = Downloader(logger=logger)
         post_data = downloader.download(resolve_result.post)
@@ -418,8 +423,8 @@ async def ask_save_username(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data["username"] = update.message.text
     await update.message.reply_text(
         f"选择关注类型",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"⭐️ 特别关注", callback_data="1")],
-                                           [InlineKeyboardButton(f"👤 普通关注", callback_data="2")]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"⭐️ 特别关注", callback_data="2")],
+                                           [InlineKeyboardButton(f"👤 普通关注", callback_data="1")]])
     )
     return STORE_DATA
 
@@ -465,18 +470,17 @@ def remove_downloaded_files(post_data):
 def _build_post_data_from_messages(messages: list[Any]) -> dict[str, Any] | None:
     if not messages:
         return None
-    message_index = {name: index for index, name in enumerate(MESSAGES)}
-    message_ids = [row[message_index['MESSAGE_ID']] for row in messages if row[message_index['MESSAGE_ID']]]
-    files = [row[message_index['CAPTION']] for row in messages if row[message_index['CAPTION']]]
+    message_ids = [row[0] for row in messages]
+    files = [row[1] for row in messages if row[1]]
     first = messages[0]
     return {
-        'url': first[message_index['URL']],
-        'idstr': first[message_index['IDSTR']],
-        'userid': first[message_index['USERID']],
-        'username': first[message_index['USERNAME']],
+        'url': first[8],
+        'idstr': first[11],
+        'userid': first[9],
+        'username': first[10],
         'messages_id': message_ids,
         'files': files,
-        'platform': parse_url_platform(first[message_index['URL']])
+        'platform': parse_url_platform(first[8])
     }
 
 

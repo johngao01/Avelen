@@ -36,6 +36,7 @@ RATE_LIMIT_STATE = {
     'times': 0,
     'rate': 60,
 }
+ERROR_NOTIFY_FAILURE_THRESHOLD = 5
 
 with open(CONFIG_PATH, 'rb') as file_obj:
     PLATFORM_SETTINGS = tomllib.load(file_obj)

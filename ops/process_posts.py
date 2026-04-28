@@ -320,6 +320,7 @@ def resolve_instagram_post(normalized_url: str, post_id: str) -> ResolveResult:
                                                "Upgrade-Insecure-Requests": "1", "sec-fetch-dest": "document",
                                                "sec-fetch-mode": "navigate", "sec-fetch-site": "none",
                                                "sec-fetch-user": "?1"})
+        normalized_url = normalized_url.replace("/reel/", '/p/')
         response = requests.get(normalized_url, headers=headers, timeout=30)
         response.raise_for_status()
         key_index = response.text.find('"xdt_api__v1__media__shortcode__web_info"')
@@ -373,16 +374,12 @@ def resolve_bilibili_post(normalized_url: str, post_id: str) -> ResolveResult:
     try:
         path_parts = [part for part in urlparse(normalized_url).path.split("/") if part]
         if len(path_parts) >= 2 and path_parts[0] == "video":
-            response = requests.get(f"{BILIBILI_CONFIG['api_url']}/x/web-interface/view/detail",
-                                    params={"bvid": post_id}, timeout=15)
+            response = requests.get(f"{BILIBILI_CONFIG['api_url']}/x/web-interface/view", params={"bvid": post_id}, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
             response.raise_for_status()
             payload = response.json()
             if payload.get("code") != 0:
                 raise ValueError(f"Bilibili 视频 API 返回异常: code={payload.get('code')}")
-            view = (payload.get("data") or {}).get("View") or {}
-            if not view:
-                raise ValueError("Bilibili 视频 API 返回数据缺少 View")
-            post = resolve_following_and_post(_build_bilibili_video_node(view, post_id), "user_id", BilibiliFollowing,
+            post = resolve_following_and_post(_build_bilibili_video_node(payload['data'], post_id), "user_id", BilibiliFollowing,
                                               BilibiliPost)
             if post is None:
                 raise ValueError("Bilibili 视频 API 返回数据缺少 user_id")
@@ -430,16 +427,6 @@ class PostBatchProcessor:
     def _print_scan_progress(self, current: int, total: int, matched: int, collected: int) -> None:
         end = "\n" if current == total else "\r"
         print(f"扫描文件进度 {current}/{total} | 匹配URL {matched} | 有效任务 {collected}", end=end, flush=True)
-
-    def _print_process_progress(self, index: int, total: int, task: UrlTask) -> None:
-        percent = (index / total * 100) if total else 100.0
-        print(f"处理进度 {index}/{total} ({percent:.1f}%) | platform={task.platform} | url={task.normalized_url}",
-              flush=True)
-
-    def _print_task_result(self, index_text: str, task: UrlTask, status: str, detail: str = "") -> None:
-        suffix = f" | {detail}" if detail else ""
-        print(f"处理结果 {index_text} | status={status} | platform={task.platform} | url={task.normalized_url}{suffix}",
-              flush=True)
 
     def _build_tasks_from_text(self, text: str, *, source: str, seen: set[str], source_line: int | None = None) -> list[
         UrlTask]:
@@ -516,8 +503,7 @@ class PostBatchProcessor:
             self.summary.parse_failed += 1
             return "send_failed"
         should_process, start_message = post.start()
-        process_posts_logger.info(
-            f"{index_text}\t{start_message} source={source} data_source={result.data_source} api_error={result.api_error or '-'} local_error={result.local_error or '-'}")
+        process_posts_logger.info(f"{index_text}\t{start_message}")
         if not should_process:
             self.summary.skipped_resolved += 1
             return "skipped_resolved"
@@ -588,9 +574,7 @@ class PostBatchProcessor:
         process_posts_logger.info(
             f"开始处理 post total={len(tasks)} no_send={self.options.no_send} send_on_download_failure={self.options.send_on_download_failure} skip_sent={self.skip_sent}")
         for index, task in enumerate(tasks, start=1):
-            self._print_process_progress(index, len(tasks), task)
             status = self.process_task(task, f"{index}/{len(tasks)}")
-            self._print_task_result(f"{index}/{len(tasks)}", task, status)
         return self.summary
 
     def run_error_file(self, error_file: Path) -> ProcessSummary:
@@ -623,9 +607,7 @@ class PostBatchProcessor:
             for task_index, task in enumerate(tasks, start=1):
                 processed_tasks += 1
                 index_text = f"{processed_tasks}/{total_tasks}"
-                self._print_process_progress(processed_tasks, total_tasks, task)
                 status = self.process_task(task, index_text, record_error=False)
-                self._print_task_result(index_text, task, status)
                 if status not in {"success", "skipped_sent", "skipped_resolved"}:
                     line_success = False
             if line_success:
@@ -644,7 +626,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("url", nargs="*", help="直接处理一个或多个 post URL")
     parser.add_argument("-i", "--input", help="从文本文件中提取并处理所有可用 post URL")
     parser.add_argument("-n", "--no-send", action="store_true", help="仅下载，不发送")
-    parser.add_argument("--send-on-download-failure", action="store_true", help="下载不完整时也继续发送已下载内容")
+    parser.add_argument("-x", "--send-on-download-failure", action="store_false", help="下载不完整时也继续发送已下载内容")
     parser.add_argument("--no-skip-sent", action="store_true", help="即使数据库里已有发送记录也继续处理")
     return parser
 

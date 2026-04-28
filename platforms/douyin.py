@@ -35,7 +35,7 @@ VIDEO_URL = DOUYIN_CONFIG['video_url']
 NOTE_URL = DOUYIN_CONFIG['note_url']
 USER_URL = DOUYIN_CONFIG['user_url']
 
-douyin_logger = get_platform_logger('douyin', LOGS_DIR)
+douyin_logger = get_platform_logger('scrapy_douyin', LOGS_DIR)
 
 cookies = read_text_file(DOUYIN_COOKIE_PATH)
 favorite_cookies = read_text_file(DOUYIN_FAVORITE_COOKIE_PATH)

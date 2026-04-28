@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import sys
 from typing import Any
-from core.settings import DOWNLOAD_ROOT
+from core.settings import DOWNLOAD_ROOT, ERROR_NOTIFY_FAILURE_THRESHOLD
 
 from loguru import logger as _logger
 from core.database import update_db
@@ -48,7 +48,7 @@ def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 
     global _STDERR_CONFIGURED
 
     log_dir.mkdir(exist_ok=True)
-    logger_name = f'scrapy_{platform_name}'
+    logger_name = f'{platform_name}'
 
     if not _STDERR_CONFIGURED:
         _logger.remove()
@@ -63,7 +63,7 @@ def get_platform_logger(platform_name: str, log_dir: Path, *, file_level: str = 
     sink_key = (platform_name, str(log_dir.resolve()))
     if file_log and sink_key not in _FILE_SINK_KEYS:
         _logger.add(
-            str(log_dir / f'scrapy_{platform_name}.log'),
+            str(log_dir / f'{platform_name}.log'),
             format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}',
             level=file_level,
             encoding='utf-8',
@@ -218,6 +218,7 @@ class BasePlatform(ABC):
         from core.utils import (
             build_error_notify_key,
             clear_error_notification,
+            mark_error_notification_failure,
             send_error_notification,
         )
 
@@ -242,11 +243,21 @@ class BasePlatform(ABC):
                     f'错误: {exc}'
                 )
                 self.logger.error(error_message)
-                send_error_notification(
-                    error_message,
+                should_notify, failure_count = mark_error_notification_failure(
+                    dedupe_key,
                     logger=self.logger,
-                    dedupe_key=dedupe_key,
                 )
+                if should_notify:
+                    send_error_notification(
+                        error_message,
+                        logger=self.logger,
+                        dedupe_key=dedupe_key,
+                    )
+                else:
+                    self.logger.info(
+                        f'错误通知暂不发送: {dedupe_key}, '
+                        f'连续失败 {failure_count}/{ERROR_NOTIFY_FAILURE_THRESHOLD}'
+                    )
                 raise
             except Exception as exc:
                 error_message = (
@@ -255,11 +266,21 @@ class BasePlatform(ABC):
                     f'错误: {exc}'
                 )
                 self.logger.error(error_message)
-                send_error_notification(
-                    error_message,
+                should_notify, failure_count = mark_error_notification_failure(
+                    dedupe_key,
                     logger=self.logger,
-                    dedupe_key=dedupe_key,
                 )
+                if should_notify:
+                    send_error_notification(
+                        error_message,
+                        logger=self.logger,
+                        dedupe_key=dedupe_key,
+                    )
+                else:
+                    self.logger.info(
+                        f'错误通知暂不发送: {dedupe_key}, '
+                        f'连续失败 {failure_count}/{ERROR_NOTIFY_FAILURE_THRESHOLD}'
+                    )
                 raise
             else:
                 clear_error_notification(dedupe_key, logger=self.logger)

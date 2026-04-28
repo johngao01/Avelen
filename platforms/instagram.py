@@ -31,7 +31,7 @@ GRAPHQL_URL = INSTAGRAM_CONFIG['graphql_url']
 PROFILE_DOC_ID = INSTAGRAM_CONFIG['profile_doc_id']
 INSTAGRAM_HOME_URL = INSTAGRAM_CONFIG['base_url']
 
-instagram_logger = get_platform_logger('instagram', LOGS_DIR)
+instagram_logger = get_platform_logger('scrapy_instagram', LOGS_DIR)
 os.makedirs(INSTAGRAM_JSON_ROOT, exist_ok=True)
 DEFAULT_SWITCH_RANGE = (5, 10)
 
@@ -183,7 +183,7 @@ class InstagramPost(BasePost):
         self.following = following
         self.node = node
         self.shortcode = node.get('shortcode') or node.get('code') or ''
-        self.owner = node.get('owner') or {}
+        self.owner = node.get('user') or {}
         self.owner_username = self.owner.get('username') or following.userid
         self.caption = node.get('caption') or {}
         self.carousel_media = node.get('carousel_media')
@@ -403,14 +403,12 @@ class InstagramScrapy(BasePlatform):
                         if not node:
                             continue
                         post = InstagramPost(self.scraping, node)
-                        if post.is_top:
-                            continue
-                        if post.create_time <= self.scraping.latest_time:
+                        page_added += 1
+                        self.post.append(post)
+                        if not post.is_top and post.create_time <= self.scraping.latest_time:
                             keep = False
                             break
                         post.save_json()
-                        self.post.append(post)
-                        page_added += 1
 
                     instagram_logger.info(f'{self.scraping.username} 第 {page} 页完成，获取到 {page_added} 个内容')
 

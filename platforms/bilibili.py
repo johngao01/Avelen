@@ -27,7 +27,7 @@ from datetime import datetime
 
 DYNAMIC_API_URL = f"{BILIBILI_CONFIG['api_url']}/x/polymer/web-dynamic/v1/feed/space"
 BILIBILI_HEADERS = build_browser_headers(referer=BILIBILI_CONFIG['base_url'])
-bilibili_logger = get_platform_logger('bilibili', LOGS_DIR, file_level='DEBUG')
+bilibili_logger = get_platform_logger('scrapy_bilibili', LOGS_DIR, file_level='DEBUG')
 os.makedirs(BILIBILI_JSON_ROOT, exist_ok=True)
 
 

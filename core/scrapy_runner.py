@@ -19,11 +19,11 @@ from rich.text import Text
 
 console = Console()
 VALID_LABELS = {
-    0: '取关',
-    1: '特关',
-    2: '普关',
-    -1: '停更',
-    -2: '失效',
+    0: '很久没更新',
+    1: '普通关注',
+    2: '特别关注',
+    -1: '不喜欢了',
+    -2: '账号失效',
 }
 
 
@@ -182,8 +182,8 @@ def run_followings(all_followings: list[Any],
 def build_common_cli_parser():
     """构建各平台共用命令行参数。"""
     parser = argparse.ArgumentParser(description='Scrapy runner options')
-    parser.add_argument('-v', '--valid', nargs='+', type=int, default=list((1,)), choices=[-2, -1, 0, 1, 2],
-                        help='关注类型，可多选：-2这个用户被平台删了 -1不再关注 0取消关注 1特别关注 2普通关注，默认 1')
+    parser.add_argument('-v', '--valid', nargs='+', type=int, default=list((2,)), choices=[-2, -1, 0, 1, 2],
+                        help='关注类型，可多选：2 特别关注 1 普通关注 0 很久没更新 -1 不喜欢了 -2 账号失效，默认 2')
     parser.add_argument('-id', '--uid', '--user-id', action='append', dest='user_ids', default=[],
                         help='按 user.userid 精确筛选，可重复传参')
     parser.add_argument('--name', '--username', action='append', dest='usernames', default=[],
@@ -220,8 +220,9 @@ def build_common_cli_parser():
 
 def build_following_filters(args) -> dict[str, Any]:
     """把 CLI 参数整理成统一的数据库筛选参数。"""
+    has_user_search = bool(args.user_ids or args.usernames or args.username_like)
     return {
-        'valid_list': args.valid,
+        'valid_list': [] if has_user_search else args.valid,
         'user_ids': args.user_ids,
         'usernames': args.usernames,
         'username_like': args.username_like,
@@ -367,8 +368,10 @@ def render_followings_table(platform: str | None, rows, *, show_platform: bool =
 
 def build_args_log_summary(args: argparse.Namespace) -> str:
     """把当前 CLI 参数整理成适合启动日志的简短摘要。"""
+    effective_filters = build_following_filters(args)
+    effective_valid_list = effective_filters['valid_list']
     summary = [
-        f"valid={args.valid}",
+        f"valid={effective_valid_list if effective_valid_list else 'ALL'}",
         f"sort={args.sort_option}",
     ]
     if args.user_ids:
