@@ -901,8 +901,7 @@ class Aweme(BasePost):
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, mode='w', encoding='utf8') as json_write:
             data = self._node.copy()
-            del data['create_time']
-            json.dump(data, json_write, ensure_ascii=False, indent=4)
+            json.dump(data, json_write, ensure_ascii=False, indent=4, sort_keys=True)
 
     @property
     def url(self):
@@ -1173,12 +1172,12 @@ class DouyinScrapy(BasePlatform):
             if aweme.get('create_time_str'):
                 aweme_create_time = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
             else:
-                douyin_logger.warning(f'本地抖音 JSON 缺少时间字段: {json_path}')
-                continue
+                aweme_create_time = datetime.now()
+     
 
             aweme['username'] = self.username
             aweme['user_sec_uid'] = self.user_sec_uid
-            aweme['create_time'] = aweme_create_time
+            aweme['create_time'] = aweme_create_time.timestamp()
             aweme['create_time_str'] = aweme_create_time.strftime("%Y-%m-%d %H:%M:%S")
             loaded_post.append(Aweme(self.scraping, aweme))
 
