@@ -10,7 +10,7 @@ from typing import Any
 from core.settings import DOWNLOAD_ROOT, ERROR_NOTIFY_FAILURE_THRESHOLD
 
 from loguru import logger as _logger
-from core.database import update_db
+from core.database import update_db, get_user_by_userid
 
 DEFAULT_LATEST_TIME = datetime(2000, 12, 12, 12, 12, 12)
 _STDERR_CONFIGURED = False
