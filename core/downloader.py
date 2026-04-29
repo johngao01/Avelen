@@ -314,7 +314,7 @@ class Downloader:
             console=console,
             transient=True,
             expand=True,
-            disable=not self.show_progress or console.is_terminal,
+            disable=not self.show_progress or not console.is_terminal,
         )
 
         with shared_progress:
