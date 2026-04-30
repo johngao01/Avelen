@@ -33,7 +33,8 @@ def get_db_conn():
                            user=mysql_user,
                            port=mysql_port,
                            password=mysql_password,
-                           database=mysql_db)
+                           database=mysql_db,
+                           autocommit=True)
     return conn
 
 
