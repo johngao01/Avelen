@@ -4,9 +4,10 @@ import argparse
 import os
 import sys
 import time
-import zipfile
+from zipfile import ZipFile
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -184,6 +185,7 @@ def format_bytes(size: int) -> str:
 
 def process_folder(
         folder: str,
+        zip_file: ZipFile | None,
         output_path: str,
         sent_captions: set[str],
         sent_idstrs: set[str],
@@ -195,8 +197,8 @@ def process_folder(
         logger,
         detail_logger,
 ):
-    output_realpath = os.path.realpath(output_path)
     stats = PackageStats()
+    output_realpath = os.path.realpath(output_path)
 
     for root, _, files in os.walk(folder):
         for file_name in files:
@@ -234,11 +236,11 @@ def process_folder(
                 continue
 
             try:
-                write_mode = "a" if os.path.exists(output_path) else "w"
-                with zipfile.ZipFile(output_path, write_mode, compression=zipfile.ZIP_DEFLATED) as zip_file:
-                    zip_file.write(file_path, relative_path)
-                    zip_info = zip_file.getinfo(relative_path)
-                    stats.compressed_bytes += zip_info.compress_size
+                if zip_file is None:
+                    raise RuntimeError("压缩包未打开")
+                zip_file.write(file_path, relative_path)
+                zip_info = zip_file.getinfo(relative_path)
+                stats.compressed_bytes += zip_info.compress_size
                 os.remove(file_path)
                 stats.deleted += 1
             except FileNotFoundError:
@@ -284,20 +286,38 @@ def main():
     except Exception as exc:
         logger.exception(f"获取已发送标记失败: {exc}")
         return 1
-
+    stats = PackageStats()
     try:
-        stats = process_folder(
-            folder,
-            package_path,
-            sent_captions,
-            sent_idstrs,
-            sent_mblogids,
-            args.include,
-            args.exclude,
-            dry_run=args.dry_run,
-            logger=logger,
-            detail_logger=detail_logger,
-        )
+        if args.dry_run:
+            stats = process_folder(
+                folder,
+                None,
+                package_path,
+                sent_captions,
+                sent_idstrs,
+                sent_mblogids,
+                args.include,
+                args.exclude,
+                dry_run=True,
+                logger=logger,
+                detail_logger=detail_logger,
+            )
+        else:
+            write_mode: Literal["a", "w"] = "a" if os.path.exists(package_path) else "w"
+            with ZipFile(package_path, write_mode) as zip_file:
+                stats = process_folder(
+                    folder,
+                    zip_file,
+                    package_path,
+                    sent_captions,
+                    sent_idstrs,
+                    sent_mblogids,
+                    args.include,
+                    args.exclude,
+                    dry_run=False,
+                    logger=logger,
+                    detail_logger=detail_logger,
+                )
     except KeyboardInterrupt:
         logger.warning("检测到 Ctrl+C，程序已停止。已经成功保存并删除的文件不会回滚，未处理文件保留在原目录。")
         return 130
