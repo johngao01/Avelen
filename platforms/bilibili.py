@@ -287,7 +287,7 @@ def main():
         'bilibili',
         bilibili_logger,
         build_following=lambda raw: Following(*raw),
-        run_one=lambda following, sent_post, options: BilibiliScrapy(following, cookies).start(sent_post, options),
+        run_one=lambda following, sent_post, context: BilibiliScrapy(following, cookies).start(sent_post, context),
     )
 
 

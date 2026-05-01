@@ -293,6 +293,7 @@ class Downloader:
         post_data = post.post_data()
         tasks = [self.build_task(post.platform, item) for item in post.build_media_items()]
         total_file_count = len(tasks)
+        post_data.total_file_count = total_file_count
         if total_file_count == 0:
             post_data.files = []
             post_data.ok = True
@@ -342,6 +343,7 @@ class Downloader:
             files.append(res)
 
         post_data.files = files
+        post_data.skipped_file_count = skip_file_count
         post_data.ok = total_file_count == len(files) + skip_file_count
         return post_data
 

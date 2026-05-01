@@ -142,6 +142,8 @@ class PostData:
     text_raw: str
     files: list[DownloadedFile] = field(default_factory=list)
     ok: bool = False
+    total_file_count: int = 0
+    skipped_file_count: int = 0
 
     @property
     def display_username(self) -> str:
@@ -151,6 +153,59 @@ class PostData:
                 return user[0][1]
             return self.nickname
         return self.username
+
+
+@dataclass(slots=True)
+class RunStats:
+    """单次平台执行的累计统计。"""
+
+    platform: str
+    matched_users: int = 0
+    fetched_posts: int = 0
+    new_posts: int = 0
+    started_posts: int = 0
+    skipped_posts: int = 0
+    success_posts: int = 0
+    failed_posts: int = 0
+    planned_files: int = 0
+    downloaded_files: int = 0
+    skipped_files: int = 0
+
+    def format_summary(self) -> str:
+        return (
+            f'{self.platform} 本次执行统计: '
+            f'用户 {self.matched_users} 个, '
+            f'爬取到 post {self.fetched_posts} 个, '
+            f'待处理新 post {self.new_posts} 个, '
+            f'进入处理 {self.started_posts} 个, '
+            f'成功 {self.success_posts} 个, '
+            f'跳过 {self.skipped_posts} 个, '
+            f'失败 {self.failed_posts} 个, '
+            f'待下载文件 {self.planned_files} 个, '
+            f'成功下载 {self.downloaded_files} 个, '
+            f'下载后跳过 {self.skipped_files} 个'
+        )
+
+
+@dataclass(slots=True, frozen=True)
+class RunOptions:
+    """抓取执行链路共享的运行配置。"""
+
+    use_local_json: bool = False
+    no_send: bool = False
+    download_progress: bool = True
+    send_on_download_failure: bool = False
+    scrapy_wait_min_seconds: int = 0
+    scrapy_wait_max_seconds: int = 0
+
+
+@dataclass(slots=True)
+class RunContext:
+    """单次平台执行的运行时上下文。"""
+
+    platform: str
+    options: RunOptions
+    stats: RunStats
 
 
 class BasePlatform(ABC):
@@ -209,7 +264,7 @@ class BasePlatform(ABC):
     def start(
             self,
             sent_post: set[str],
-            options: RunOptions,
+            context: RunContext,
     ) -> None:
         """执行单个关注对象的完整处理流程。
 
@@ -228,8 +283,7 @@ class BasePlatform(ABC):
             send_error_notification,
         )
 
-        if options is None:
-            options = RunOptions()
+        options = context.options
 
         if options.use_local_json:
             self.get_post_from_local()
@@ -292,6 +346,9 @@ class BasePlatform(ABC):
                 clear_error_notification(dedupe_key, logger=self.logger)
 
         new_posts = self.filter_new_post(sent_post)
+        stats = context.stats
+        stats.fetched_posts += len(self.post)
+        stats.new_posts += len(new_posts)
         username = self.scraping.username
         if not new_posts:
             self.scraping.end_msg = f'{username} 处理结束，获取到 {len(self.post)} 个新{self.content_name}，没有新{self.content_name}\n'
@@ -309,25 +366,36 @@ class BasePlatform(ABC):
             self.logger.info(f"{index}/{len(new_posts)} {start_message}")
             if not should_process:
                 skipped += 1
+                stats.skipped_posts += 1
                 continue
+            stats.started_posts += 1
+            dispatch_result = send_post_to_telegram(
+                post,
+                self.logger,
+                context=context,
+            )
+            post_data = dispatch_result.get('post_data')
+            if isinstance(post_data, PostData):
+                stats.planned_files += post_data.total_file_count
+                stats.downloaded_files += len(post_data.files)
+                stats.skipped_files += post_data.skipped_file_count
             status = handle_dispatch_result(
-                send_post_to_telegram(
-                    post,
-                    self.logger,
-                    options=options,
-                ),
+                dispatch_result,
                 self.logger,
                 post.url,
-                options=options,
+                context=context,
             )
             if status == 'success':
                 success += 1
+                stats.success_posts += 1
                 if post.idstr:
                     sent_post.add(post.idstr)
             elif status == 'skip':
                 skipped += 1
+                stats.skipped_posts += 1
             else:
                 failure += 1
+                stats.failed_posts += 1
         if self.post:
             latest_post = max(self.post, key=lambda item: item.create_time)
             latest_time = latest_post.create_time_str
@@ -406,15 +474,3 @@ class BasePost(ABC):
     @abstractmethod
     def is_top(self):
         raise NotImplementedError
-
-
-@dataclass(slots=True, frozen=True)
-class RunOptions:
-    """抓取执行链路共享的运行时参数。"""
-
-    use_local_json: bool = False
-    no_send: bool = False
-    download_progress: bool = True
-    send_on_download_failure: bool = False
-    scrapy_wait_min_seconds: int = 0
-    scrapy_wait_max_seconds: int = 0

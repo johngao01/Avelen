@@ -10,7 +10,7 @@ from typing import Callable, Any
 
 from core.downloader import Downloader
 from core.database import get_filtered_following_rows, get_filtered_followings, get_sent_post, normalize_sort_option
-from core.models import BasePost, CookieExpiredError, DEFAULT_LATEST_TIME, RunOptions
+from core.models import BasePost, CookieExpiredError, DEFAULT_LATEST_TIME, RunContext, RunOptions, RunStats
 from core.settings import BILIBILI_CONFIG, DOUYIN_CONFIG, INSTAGRAM_CONFIG, PROJECT_ROOT, WEIBO_CONFIG
 from core.sender_dispatcher import send_post_payload_to_telegram
 from core.utils import download_log, log_error, rate_control
@@ -241,7 +241,7 @@ def send_post_to_telegram(
         post: BasePost,
         logger,
         *,
-        options: RunOptions
+        context: RunContext
 ):
     """下载单条作品媒体，并返回统一处理结果。
 
@@ -255,7 +255,7 @@ def send_post_to_telegram(
     - `error`: 失败原因，成功时为 `None`
     - `messages`: 已落库的消息记录列表
     """
-    if options is None: options = RunOptions()
+    options = context.options
     downloader = Downloader(logger=logger, show_progress=options.download_progress)
     post_data = downloader.download(post)
     download_ok = post_data.ok
@@ -285,9 +285,9 @@ def handle_dispatch_result(
         on_success_update=None,
         on_failure_update=None,
         *,
-        options: RunOptions,
+        context: RunContext,
 ) -> str:
-    if options is None: options = RunOptions()
+    options = context.options
     if isinstance(result, dict) and result.get('ok'):
         if not options.no_send:
             download_log(result)
@@ -309,7 +309,7 @@ def run_followings(all_followings: list[Any],
                    build_following: Callable[[Any], Any],
                    run_one: Callable[[Any], None],
                    logger,
-                   options: RunOptions,
+                   context: RunContext,
                    finished_message: str = "本次任务结束\n"):
     """
     统一抓取入口：
@@ -318,8 +318,7 @@ def run_followings(all_followings: list[Any],
     - logger: 统一异常与结束日志输出
     """
     following_count = len(all_followings)
-    if options is None:
-        options = RunOptions()
+    options = context.options
     wait_min = max(0, getattr(options, 'scrapy_wait_min_seconds'))
     wait_max = max(0, getattr(options, 'scrapy_wait_max_seconds'))
     if wait_min > wait_max:
@@ -469,6 +468,15 @@ def build_run_options(platform: str, args: argparse.Namespace) -> RunOptions:
     )
 
 
+def build_run_context(platform: str, args: argparse.Namespace) -> RunContext:
+    """构建单次执行所需的运行时上下文。"""
+    return RunContext(
+        platform=platform,
+        options=build_run_options(platform, args),
+        stats=RunStats(platform=platform),
+    )
+
+
 def select_following_rows(platform: str | None, args):
     """根据命令行参数读取用于展示的 user 表记录。
 
@@ -602,7 +610,7 @@ def build_args_log_summary(args: argparse.Namespace) -> str:
 def run_platform_main(platform: str,
                       logger,
                       build_following: Callable[[Any], Any],
-                      run_one: Callable[[Any, set[str], RunOptions], None]):
+                      run_one: Callable[[Any, set[str], RunContext], None]):
     """运行平台命令行入口的公共壳层。
 
     当传入 `--show` 时，只展示筛选结果，不进入抓取链路。
@@ -623,10 +631,13 @@ def run_platform_main(platform: str,
     logger.info(f"{platform} 开始筛选用户")
     all_followings = select_followings(platform, args)
     logger.info(f"{platform} 筛选完成，共 {len(all_followings)} 个用户")
+    context = build_run_context(platform, args)
+    context.stats.matched_users = len(all_followings)
     if not all_followings:
         logger.info(f"{platform} 没有符合条件的用户，本次任务结束")
+        logger.info(context.stats.format_summary())
         return args, all_followings
-    options = build_run_options(platform, args)
+    options = context.options
     logger.info(
         f"{platform} 运行模式: "
         f"local_json={options.use_local_json}, "
@@ -641,8 +652,9 @@ def run_platform_main(platform: str,
     run_followings(
         all_followings,
         build_following=build_following,
-        run_one=lambda following: run_one(following, sent_post, options),
+        run_one=lambda following: run_one(following, sent_post, context),
         logger=logger,
-        options=options,
+        context=context,
     )
+    logger.info(context.stats.format_summary())
     return args, all_followings
