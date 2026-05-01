@@ -189,16 +189,19 @@ class BasePlatform(ABC):
 
         过滤顺序：
         - 先按 `sent_post` 去重
+        - 再按本轮运行内已见过的 `idstr` 去重
         - 再按 `latest_time` 做增量过滤
         - 最后按平台配置决定是否按发布时间排序
         """
         new_posts = []
+        seen_post_ids = set(sent_post)
         for post in self.post:
-            if post.idstr in sent_post:
+            if post.idstr in seen_post_ids:
                 continue
             if self.scraping.username != 'favorite' and post.create_time < self.scraping.latest_time:
                 continue
             new_posts.append(post)
+            seen_post_ids.add(post.idstr)
         if self.scraping.username != 'favorite':
             new_posts.sort(key=lambda item: item.create_time)
         return new_posts
@@ -319,6 +322,8 @@ class BasePlatform(ABC):
             )
             if status == 'success':
                 success += 1
+                if post.idstr:
+                    sent_post.add(post.idstr)
             elif status == 'skip':
                 skipped += 1
             else:
