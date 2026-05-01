@@ -633,7 +633,7 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"删除数据库数据，message_id: {delete_messages}")
                 delete_db_message(delete_messages)
                 await delete_message(delete_messages)
-
+    await update.message.reply_text(text=f"清理任务完成")
 
 def main() -> None:
     builder = Application.builder()

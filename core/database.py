@@ -239,7 +239,7 @@ def delete_db_message(messages_id):
 
 
 def get_duplicate_messages():
-    hours_ago = datetime.datetime.now() - datetime.timedelta(hours=48)
+    hours_ago = datetime.datetime.now() - datetime.timedelta(hours=56)
     hours_ago = hours_ago.strftime('%Y-%m-%d %H:%M:%S')
     sql = '''SELECT DISTINCT b.url, b.caption
              FROM (SELECT CAPTION, url
