@@ -233,7 +233,7 @@ def delete_db_message(messages_id):
         return None
 
     placeholders = ','.join(['%s'] * len(messages_id))
-    sql = f'DELETE FROM messages WHERE message_id IN ({placeholders})'
+    sql = f'DELETE FROM tgmsg WHERE message_id IN ({placeholders})'
 
     return exec_sql_get_data(sql, tuple(messages_id))
 

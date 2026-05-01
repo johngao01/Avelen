@@ -321,7 +321,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def edit_commands(application):
     command = [BotCommand("manage", "管理关注"),
-               BotCommand("cancel", "取消操作")]
+               BotCommand("cancel", "取消操作"),
+               BotCommand("clear", "清理"),]
     await application.bot.set_my_commands(commands=command)
     await application.bot.send_message(DEVELOPER_CHAT_ID, text="bot start...")
     print("bot start ------------------->")
@@ -613,6 +614,27 @@ async def handle_post_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ConversationHandler.END
 
 
+async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        return None
+    message_id = update.message.message_id
+    duplicate = get_duplicate_messages()
+    total = len(duplicate)
+    index = 0
+    if total > 0:
+        logger.info(f"共有{total}个记录")
+        await update.message.reply_text(text=f"共有{total}个记录")
+        for url, caption in duplicate:
+            index += 1
+            message_ids = get_message_id(caption, url)
+            if len(message_ids) >= 2:
+                delete_messages = message_ids[0:-1]
+                logger.info(f'{index}/{total}  {url}  {caption}  {message_ids}  {delete_messages}')
+                logger.info(f"删除数据库数据，message_id: {delete_messages}")
+                delete_db_message(delete_messages)
+                await delete_message(delete_messages)
+
+
 def main() -> None:
     builder = Application.builder()
     persistence = PicklePersistence(filepath="arbitrarycallbackdatabot")
@@ -680,6 +702,7 @@ def main() -> None:
     application.add_handler(add_follower_handler)
     application.add_handler(post_handler)
     application.add_handler(manage_follow_handler)
+    application.add_handler(CommandHandler("clear", clear))
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
