@@ -20,7 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.database import get_user_by_userid, has_sent_post
-from core.models import RunOptions, get_platform_logger, BasePost
+from core.models import BasePost, RunContext, RunOptions, RunStats, get_platform_logger
 from core.scrapy_runner import handle_dispatch_result, send_post_to_telegram
 from core.settings import BILIBILI_CONFIG, BILIBILI_JSON_ROOT, DOUYIN_JSON_ROOT, ERROR_FILE, INSTAGRAM_COOKIE_PATHS, \
     INSTAGRAM_JSON_ROOT, LOGS_DIR, WEIBO_JSON_ROOT
@@ -423,6 +423,11 @@ class PostBatchProcessor:
         self.options = options
         self.skip_sent = skip_sent
         self.summary = ProcessSummary()
+        self.context = RunContext(
+            platform="process_posts",
+            options=options,
+            stats=RunStats(platform="process_posts"),
+        )
 
     def _print_scan_progress(self, current: int, total: int, matched: int, collected: int) -> None:
         end = "\n" if current == total else "\r"
@@ -507,8 +512,17 @@ class PostBatchProcessor:
         if not should_process:
             self.summary.skipped_resolved += 1
             return "skipped_resolved"
-        status = handle_dispatch_result(send_post_to_telegram(post, process_posts_logger, options=self.options),
-                                        process_posts_logger, post.url, options=self.options)
+        dispatch_result = send_post_to_telegram(
+            post,
+            process_posts_logger,
+            context=self.context,
+        )
+        status = handle_dispatch_result(
+            dispatch_result,
+            process_posts_logger,
+            post.url,
+            context=self.context,
+        )
         if status in {"success", "skip"}:
             if status == "success":
                 self.summary.succeeded += 1
@@ -637,124 +651,39 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
 
 
 def print_summary(summary: ProcessSummary) -> None:
-    print("处理结果汇总 / Processing Summary")
-
     completed_total = summary.succeeded + summary.skipped_sent + summary.skipped_resolved
     failed_total = summary.parse_failed + summary.send_failed + summary.exception_failed
-    resolved_outcome_total = summary.succeeded + summary.skipped_resolved + summary.send_failed
-    unresolved_total = summary.parse_failed + summary.exception_failed
-    fallback_total = summary.api_failed_then_local_resolved + summary.api_failed_without_fallback
-    invalid_input_total = summary.collected_tasks + summary.invalid + summary.duplicated
-    resolution_source_total = summary.api_resolved + summary.local_resolved
 
-    print("\n输入统计 / Input Stats")
-    print(_format_simple_table(
-        ["字段 / Field", "值 / Value", "关系 / Formula"],
-        [
-            ["输入行数 / input_lines", summary.input_lines, "-"],
-            ["匹配 URL 数 / matched_urls", summary.matched_urls, "-"],
-            ["收集任务数 / collected_tasks", summary.collected_tasks, "有效任务"],
-            ["重复跳过数 / duplicated", summary.duplicated, "重复 URL"],
-            ["无效输入数 / invalid", summary.invalid, "无法识别"],
-            ["输入闭环 / input_balance", invalid_input_total,
-             f"collected_tasks + duplicated + invalid = {summary.collected_tasks} + {summary.duplicated} + {summary.invalid}"],
-        ],
-    ))
+    print("处理结果汇总")
+    print(
+        f"总计 {summary.total} | 完成 {completed_total} | 失败 {failed_total} | "
+        f"发送成功 {summary.succeeded} | 已发送跳过 {summary.skipped_sent} | 规则跳过 {summary.skipped_resolved}"
+    )
 
-    print("\n处理闭环 / Processing Balance")
-    print(_format_simple_table(
-        ["字段 / Field", "值 / Value", "关系 / Formula"],
-        [
-            ["处理总数 / total", summary.total, "进入处理流程"],
-            ["成功完成 / completed_total", completed_total,
-             f"succeeded + skipped_sent + skipped_resolved = {summary.succeeded} + {summary.skipped_sent} + {summary.skipped_resolved}"],
-            ["失败总数 / failed_total", failed_total,
-             f"parse_failed + send_failed + exception_failed = {summary.parse_failed} + {summary.send_failed} + {summary.exception_failed}"],
-            ["发送成功数 / succeeded", summary.succeeded, "发送成功"],
-            ["已发送跳过数 / skipped_sent", summary.skipped_sent, "数据库已存在"],
-            ["解析后跳过数 / skipped_resolved", summary.skipped_resolved, "规则跳过或发送层 skip"],
-            ["解析失败数 / parse_failed", summary.parse_failed, "未拿到可用 Post"],
-            ["发送失败数 / send_failed", summary.send_failed, "已解析但发送失败"],
-            ["异常失败数 / exception_failed", summary.exception_failed, "未预期异常"],
-        ],
-    ))
+    if summary.input_lines or summary.matched_urls or summary.collected_tasks or summary.invalid or summary.duplicated:
+        print(
+            f"输入: 行 {summary.input_lines} | 匹配URL {summary.matched_urls} | 有效任务 {summary.collected_tasks} | "
+            f"重复 {summary.duplicated} | 无效 {summary.invalid}"
+        )
 
-    print("\n解析统计 / Resolution Stats")
-    print(_format_simple_table(
-        ["字段 / Field", "值 / Value", "关系 / Formula"],
-        [
-            ["解析成功数 / resolved", summary.resolved, "成功构造成 Post"],
-            ["解析结果闭环 / resolved_outcome_total", resolved_outcome_total,
-             f"succeeded + skipped_resolved + send_failed = {summary.succeeded} + {summary.skipped_resolved} + {summary.send_failed}"],
-            ["未解析完成 / unresolved_total", unresolved_total,
-             f"parse_failed + exception_failed = {summary.parse_failed} + {summary.exception_failed}"],
-            ["API 解析成功数 / api_resolved", summary.api_resolved, "直接来自 API"],
-            ["本地解析成功数 / local_resolved", summary.local_resolved, "本地 JSON 回退成功"],
-            ["来源合计 / resolution_source_total", resolution_source_total,
-             f"api_resolved + local_resolved = {summary.api_resolved} + {summary.local_resolved}"],
-            ["API失败后本地成功 / api_failed_then_local_resolved", summary.api_failed_then_local_resolved,
-             "API 失败但本地成功"],
-            ["API失败且无回退成功 / api_failed_without_fallback", summary.api_failed_without_fallback,
-             "API 失败且最终失败"],
-            ["API失败闭环 / fallback_total", fallback_total,
-             f"api_failed_then_local_resolved + api_failed_without_fallback = {summary.api_failed_then_local_resolved} + {summary.api_failed_without_fallback}"],
-            ["本地回退失败数 / local_failed", summary.local_failed, "进入本地回退后仍失败"],
-        ],
-    ))
+    print(
+        f"解析: 成功 {summary.resolved} | API {summary.api_resolved} | 本地回退 {summary.local_resolved} | "
+        f"解析失败 {summary.parse_failed} | 发送失败 {summary.send_failed} | 异常 {summary.exception_failed}"
+    )
+
+    if summary.api_failed_then_local_resolved or summary.api_failed_without_fallback or summary.local_failed:
+        print(
+            f"回退: API失败后本地成功 {summary.api_failed_then_local_resolved} | "
+            f"API失败且最终失败 {summary.api_failed_without_fallback} | 本地回退失败 {summary.local_failed}"
+        )
 
     if summary.platform_seen:
-        print("\n平台统计 / Platform Stats")
-        print(_format_simple_table(
-            ["平台 / Platform", "处理数 / Seen", "解析成功 / Resolved", "发送成功 / Succeeded", "失败 / Failed"],
-            [
-                [
-                    platform,
-                    summary.platform_seen[platform],
-                    summary.platform_resolved[platform],
-                    summary.platform_succeeded[platform],
-                    summary.platform_failed[platform],
-                ]
-                for platform in sorted(summary.platform_seen)
-            ],
-        ))
-    if summary.source_seen:
-        print("\n来源统计 / Source Stats")
-        print(_format_simple_table(
-            ["来源 / Source", "数量 / Count"],
-            [[source_name, summary.source_seen[source_name]] for source_name in sorted(summary.source_seen)],
-        ))
-
-    print("\n一致性检查 / Consistency Checks")
-    print(_format_simple_table(
-        ["检查项 / Check", "结果 / Result", "说明 / Detail"],
-        [
-            [
-                "处理总数守恒 / total balance",
-                _bool_text(summary.total == completed_total + failed_total),
-                f"total == completed_total + failed_total -> {summary.total} == {completed_total} + {failed_total}",
-            ],
-            [
-                "解析成功守恒 / resolved balance",
-                _bool_text(summary.resolved == resolved_outcome_total),
-                f"resolved == succeeded + skipped_resolved + send_failed -> {summary.resolved} == {summary.succeeded} + {summary.skipped_resolved} + {summary.send_failed}",
-            ],
-            [
-                "解析总量守恒 / resolution total balance",
-                _bool_text(summary.total == summary.resolved + unresolved_total + summary.skipped_sent),
-                f"total == resolved + skipped_sent + parse_failed + exception_failed -> {summary.total} == {summary.resolved} + {summary.skipped_sent} + {summary.parse_failed} + {summary.exception_failed}",
-            ],
-            [
-                "解析来源守恒 / source balance",
-                _bool_text(summary.resolved == resolution_source_total),
-                f"resolved == api_resolved + local_resolved -> {summary.resolved} == {summary.api_resolved} + {summary.local_resolved}",
-            ],
-            [
-                "输入闭环提示 / input note",
-                "INFO",
-                f"collected_tasks + duplicated + invalid = {summary.collected_tasks} + {summary.duplicated} + {summary.invalid}",
-            ],
-        ],
-    ))
+        platform_parts = []
+        for platform in sorted(summary.platform_seen):
+            platform_parts.append(
+                f"{platform}={summary.platform_seen[platform]}/{summary.platform_succeeded[platform]}/{summary.platform_failed[platform]}"
+            )
+        print("平台: " + " | ".join(platform_parts))
 
 
 def main() -> int:
