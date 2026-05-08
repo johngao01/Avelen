@@ -33,11 +33,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from telethon import TelegramClient
 
 from core.database import get_db_conn
+from core.models import get_platform_logger
+from core.settings import LOGS_DIR
 
 api_id = int(os.getenv('TELEGRAM_API_ID', 0))
 api_hash = os.getenv('TELEGRAM_API_HASH')
-
-print(api_id, api_hash)
+logger = get_platform_logger("sync_johnmsg", LOGS_DIR)
 DEFAULT_CHAT = "nicejohnbot"
 DEFAULT_REFRESH_SQL = """
 message REGEXP '^#([^[:space:]].*)[[:space:]]{2}([^[:space:]]+)nn(.*)$'
@@ -189,8 +190,8 @@ async def sync_chat(client, chat_id):
     entity = await client.get_entity(chat_id)
     last_msg_id = get_last_msg_id(chat_id)
 
-    print(f"开始同步：{chat_id}")
-    print(f"上次同步到 msg_id = {last_msg_id}")
+    logger.info(f"开始同步：{chat_id}")
+    logger.info(f"上次同步到 msg_id = {last_msg_id}")
 
     max_msg_id = last_msg_id
     count = 0
@@ -205,21 +206,22 @@ async def sync_chat(client, chat_id):
             if msg.id > max_msg_id:
                 max_msg_id = msg.id
             count += 1
-            print(f"已保存消息 {msg.id}")
+            raw_text = (msg.raw_text or "").replace("\n", " ")
+            logger.info(f"已保存消息 {msg.id} {msg.date} {raw_text}")
         except Exception as exc:
-            print("保存失败:", msg.id, exc)
+            logger.exception(f"保存失败: {msg.id} {exc}")
 
     update_sync_state(chat_id, max_msg_id)
 
-    print("-" * 50)
-    print("同步完成")
-    print("新增消息数:", count)
-    print("最新 msg_id:", max_msg_id)
+    logger.info("-" * 50)
+    logger.info("同步完成")
+    logger.info(f"新增消息数: {count}")
+    logger.info(f"最新 msg_id: {max_msg_id}")
 
 
 def get_rows_for_refresh(sql):
     sql = "select chat_id,msg_id from johnmsg where " + sql
-    print(sql)
+    logger.info(f"执行回刷 SQL: {sql}")
     with db.cursor() as cur:
         cur.execute(sql)
         return cur.fetchall()
@@ -229,7 +231,7 @@ async def refresh_messages(client, sql):
     rows = get_rows_for_refresh(sql)
     total = len(rows)
 
-    print(f"待回刷消息数: {total}")
+    logger.info(f"待回刷消息数: {total}")
     if total == 0:
         return
 
@@ -237,13 +239,14 @@ async def refresh_messages(client, sql):
         try:
             msg = await client.get_messages(row_chat_id, ids=msg_id)
             if not msg:
-                print("消息不存在，跳过:", row_chat_id, msg_id)
+                logger.warning(f"消息不存在，跳过: {row_chat_id} {msg_id}")
                 continue
 
             persist_message(row_chat_id, msg)
-            print(f"已回刷 {index}/{total}: {row_chat_id} {msg_id}")
+            raw_text = (msg.raw_text or "").replace("\n", " ")
+            logger.info(f"已回刷 {index}/{total}: {msg.id} {msg.date} {raw_text}")
         except Exception as exc:
-            print("回刷失败:", row_chat_id, msg_id, exc)
+            logger.exception(f"回刷失败: {row_chat_id} {msg_id} {exc}")
 
 
 def parse_args():
@@ -277,7 +280,9 @@ async def main():
     args = parse_args()
     init_db()
     if api_id == 0 or api_hash is None:
+        logger.error("api_id and api_hash are required.")
         raise SystemExit('api_id and api_hash are required.')
+    logger.info(f"启动命令: {args.command}")
     async with TelegramClient("me", api_id, api_hash) as client:
         if args.command == "sync":
             await sync_chat(client, args.chat)
@@ -286,4 +291,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception:
+        logger.exception("johnmsg_sync 执行失败")
+        raise
