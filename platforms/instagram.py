@@ -6,6 +6,7 @@ import random
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from threading import Lock
 from urllib.parse import urlparse
 
@@ -34,6 +35,16 @@ INSTAGRAM_HOME_URL = INSTAGRAM_CONFIG['base_url']
 instagram_logger = get_platform_logger('scrapy_instagram', LOGS_DIR)
 os.makedirs(INSTAGRAM_JSON_ROOT, exist_ok=True)
 DEFAULT_SWITCH_RANGE = (5, 10)
+
+
+@dataclass(frozen=True)
+class InstagramCookie:
+    path: Path
+    header: str
+
+    @property
+    def label(self) -> str:
+        return self.path.name
 
 
 def parse_cookies(header: str) -> dict[str, str]:
@@ -82,16 +93,16 @@ def build_instagram_headers(cookie_header: str) -> dict[str, str]:
     )
 
 
-def load_instagram_cookies() -> list[str]:
+def load_instagram_cookies() -> list[InstagramCookie]:
     """加载 Instagram 多账号 cookie 文本，自动过滤空文件。"""
-    headers: list[str] = []
+    cookies: list[InstagramCookie] = []
     for cookie_path in INSTAGRAM_COOKIE_PATHS:
         cookie_header = read_text_file(cookie_path).strip()
         if not cookie_header:
             instagram_logger.warning(f'Instagram cookie 文件为空，已跳过: {cookie_path}')
             continue
-        headers.append(cookie_header)
-    return headers
+        cookies.append(InstagramCookie(path=cookie_path, header=cookie_header))
+    return cookies
 
 
 def _int_config_value(key: str, default: int) -> int:
@@ -119,6 +130,7 @@ class CookieRotationPolicy:
     switch_max_users: int
     current_index: int = 0
     remaining_users_on_current: int = 0
+    active_indexes: list[int] | None = None
 
     @classmethod
     def from_config(cls, cookie_count: int) -> 'CookieRotationPolicy':
@@ -133,32 +145,50 @@ class CookieRotationPolicy:
             switch_min_users=switch_min,
             switch_max_users=switch_max,
         )
+        policy.active_indexes = list(range(cookie_count))
         policy.reset_remaining_users()
         return policy
 
     def reset_remaining_users(self) -> None:
         self.remaining_users_on_current = random.randint(self.switch_min_users, self.switch_max_users)
 
-    def choose_cookie_for_next_user(self) -> int:
-        if self.cookie_count <= 0:
-            return 0
-        if self.remaining_users_on_current <= 0:
-            self.current_index = (self.current_index + 1) % self.cookie_count
-            self.reset_remaining_users()
-            instagram_logger.info(
-                f'切换到 cookie[{self.current_index + 1}/{self.cookie_count}]，'
-                f'计划连续抓取 {self.remaining_users_on_current} 个用户后再切换'
-            )
-        self.remaining_users_on_current -= 1
-        return self.current_index
+    def active_cookie_count(self) -> int:
+        return len(self.active_indexes or [])
 
-    def move_to_next_cookie(self, *, due_to_failure: bool = False) -> int:
-        if self.cookie_count <= 0:
+    def has_available_cookie(self) -> bool:
+        return self.active_cookie_count() > 0
+
+    def current_cookie_index(self) -> int:
+        active_indexes = self.active_indexes or []
+        if not active_indexes:
             return 0
-        self.current_index = (self.current_index + 1) % self.cookie_count
-        if due_to_failure:
-            self.remaining_users_on_current = max(self.remaining_users_on_current, 0)
-        return self.current_index
+        self.current_index %= len(active_indexes)
+        return active_indexes[self.current_index]
+
+    def choose_cookie_for_next_user(self) -> tuple[int, bool]:
+        if not self.has_available_cookie():
+            return 0, False
+        switched = False
+        if self.remaining_users_on_current <= 0 and self.active_cookie_count() > 1:
+            self.current_index = (self.current_index + 1) % self.active_cookie_count()
+            self.reset_remaining_users()
+            switched = True
+        self.remaining_users_on_current -= 1
+        return self.current_cookie_index(), switched
+
+    def mark_current_cookie_invalid(self) -> int | None:
+        active_indexes = self.active_indexes or []
+        if not active_indexes:
+            return None
+        active_indexes.pop(self.current_index % len(active_indexes))
+        if not active_indexes:
+            self.current_index = 0
+            self.remaining_users_on_current = 0
+            return None
+        if self.current_index >= len(active_indexes):
+            self.current_index = 0
+        self.reset_remaining_users()
+        return active_indexes[self.current_index]
 
 
 class Following(FollowUser):
@@ -280,15 +310,15 @@ class InstagramScrapy(BasePlatform):
     _rotation_policy: CookieRotationPolicy | None = None
     _policy_lock = Lock()
 
-    def __init__(self, following: Following, cookie_headers: list[str]):
+    def __init__(self, following: Following, cookies: list[InstagramCookie]):
         self.scraping = following
-        self.cookie_headers = cookie_headers
+        self.cookies = cookies
         self.cookie_index = 0
         self.session = requests.Session()
         self._ensure_rotation_policy()
-        if self.cookie_headers:
-            self.cookie_index = self._rotation_policy.current_index  # type: ignore[union-attr]
-        self._apply_cookie_header(self._current_cookie_header())
+        if self.cookies:
+            self.cookie_index = self._rotation_policy.current_cookie_index()  # type: ignore[union-attr]
+        self._apply_cookie(self._current_cookie())
         self.fb_dtsg = ''
         self.logger = instagram_logger
         self.post: list[InstagramPost] = []
@@ -297,35 +327,47 @@ class InstagramScrapy(BasePlatform):
         with self._policy_lock:
             if (
                     self._rotation_policy is None
-                    or self._rotation_policy.cookie_count != len(self.cookie_headers)
+                    or self._rotation_policy.cookie_count != len(self.cookies)
             ):
-                self._rotation_policy = CookieRotationPolicy.from_config(len(self.cookie_headers))
+                self._rotation_policy = CookieRotationPolicy.from_config(len(self.cookies))
 
     def _choose_cookie_for_user(self) -> None:
-        if not self.cookie_headers:
+        if not self.cookies:
             return
         with self._policy_lock:
-            self.cookie_index = self._rotation_policy.choose_cookie_for_next_user()  # type: ignore[union-attr]
+            self.cookie_index, switched = self._rotation_policy.choose_cookie_for_next_user()  # type: ignore[union-attr]
+            remaining_users = self._rotation_policy.remaining_users_on_current  # type: ignore[union-attr]
+            active_count = self._rotation_policy.active_cookie_count()  # type: ignore[union-attr]
+        if switched:
+            cookie = self._current_cookie()
+            instagram_logger.info(
+                f'{self.scraping.username} 主动切换到 cookie[{cookie.label}] '
+                f'({active_count}/{len(self.cookies)} 可用)，'
+                f'计划连续抓取 {remaining_users + 1} 个用户后再切换'
+            )
 
-    def _current_cookie_header(self) -> str:
-        if not self.cookie_headers:
-            return ''
-        return self.cookie_headers[self.cookie_index % len(self.cookie_headers)]
+    def _current_cookie(self) -> InstagramCookie | None:
+        if not self.cookies:
+            return None
+        return self.cookies[self.cookie_index % len(self.cookies)]
 
-    def _apply_cookie_header(self, cookie_header: str) -> None:
+    def _apply_cookie(self, cookie: InstagramCookie | None) -> None:
         self.session = requests.Session()
-        self.session.headers.update(build_instagram_headers(cookie_header))
+        self.session.headers.update(build_instagram_headers(cookie.header if cookie else ''))
         self.fb_dtsg = ''
 
     def _switch_next_cookie(self) -> bool:
-        if len(self.cookie_headers) <= 1:
-            return False
         with self._policy_lock:
-            self.cookie_index = self._rotation_policy.move_to_next_cookie(
-                due_to_failure=True)  # type: ignore[union-attr]
-        self._apply_cookie_header(self._current_cookie_header())
+            next_index = self._rotation_policy.mark_current_cookie_invalid()  # type: ignore[union-attr]
+            active_count = self._rotation_policy.active_cookie_count()  # type: ignore[union-attr]
+        if next_index is None:
+            return False
+        self.cookie_index = next_index
+        next_cookie = self._current_cookie()
+        self._apply_cookie(next_cookie)
         instagram_logger.warning(
-            f'{self.scraping.username} 切换到 cookie[{self.cookie_index + 1}/{len(self.cookie_headers)}]'
+            f'{self.scraping.username} 切换到 cookie[{next_cookie.label}] '
+            f'({active_count}/{len(self.cookies)} 可用)'
         )
         return True
 
@@ -354,18 +396,20 @@ class InstagramScrapy(BasePlatform):
 
     def get_post_from_api(self) -> None:
         """API 抓取时按 cookie 池选择可用账号。"""
-        if not self.cookie_headers:
+        if not self.cookies:
             raise CookieExpiredError('Instagram cookie 配置为空，请检查')
 
         tried_indexes: set[int] = set()
         last_error: CookieExpiredError | None = None
-        while len(tried_indexes) < len(self.cookie_headers):
-            self._apply_cookie_header(self._current_cookie_header())
+        while len(tried_indexes) < len(self.cookies):
+            current_cookie = self._current_cookie()
+            if current_cookie is None:
+                break
+            self._apply_cookie(current_cookie)
             current_index = self.cookie_index
-            current_cookie = self.cookie_headers[current_index]
             tried_indexes.add(current_index)
             instagram_logger.debug(
-                f'{self.scraping.username} 使用 cookie[{current_index + 1}/{len(self.cookie_headers)}] 执行抓取'
+                f'{self.scraping.username} 使用 cookie[{current_cookie.label}] 执行抓取'
             )
             try:
                 self.post = []
@@ -421,7 +465,7 @@ class InstagramScrapy(BasePlatform):
             except CookieExpiredError as exc:
                 last_error = exc
                 instagram_logger.warning(
-                    f'{self.scraping.username} cookie[{current_index + 1}/{len(self.cookie_headers)}] 失效，尝试切换'
+                    f'{self.scraping.username} cookie[{current_cookie.label}] 失效，尝试切换'
                 )
                 if not self._switch_next_cookie():
                     break
@@ -477,6 +521,11 @@ class InstagramScrapy(BasePlatform):
                 'last': 'null',
             })
         return variables
+
+    def start(self, sent_post: set[str], context) -> None:
+        if not context.options.use_local_json:
+            self._choose_cookie_for_user()
+        super().start(sent_post, context)
 
     @classmethod
     def run(cls):
