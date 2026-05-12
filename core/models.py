@@ -180,7 +180,7 @@ class RunStats:
             f'进入处理 {self.started_posts} 个, '
             f'成功 {self.success_posts} 个, '
             f'跳过 {self.skipped_posts} 个, '
-            f'失败 {self.failed_posts} 个, '
+            f'失败 {self.failed_posts} 个。\n'
             f'待下载文件 {self.planned_files} 个, '
             f'成功下载 {self.downloaded_files} 个, '
             f'下载后跳过 {self.skipped_files} 个'
