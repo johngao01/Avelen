@@ -427,7 +427,7 @@ python main.py -l -s valid:desc
 - `-slt`, `--set-latest-time`
   临时覆盖本次运行中筛到用户的 `latest_time`
 - `-n`, `--no-send`
-  只抓取和下载，不发 Telegram，也不更新 `user.latest_time`
+  只抓取和下载，不发 Telegram；仍会更新 `user.latest_time` 和 `user.scrapy_time`
 - `--send`
   显式开启发送，可覆盖配置文件里的 `no_send=true`
 - `--send-on-download-failure`

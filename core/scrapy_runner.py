@@ -381,7 +381,7 @@ def build_common_cli_parser():
                         const=DEFAULT_LATEST_TIME, type=argparse_latest_time_override,
                         help='覆盖所有用户 latest_time；不传值或传空值时使用 2000-12-12 12:12:12')
     parser.add_argument('-n', '--no-send', action='store_true', dest='no_send', default=argparse.SUPPRESS,
-                        help='仅爬取和下载，不发送 Telegram，也不更新用户 latest_time')
+                        help='仅爬取和下载，不发送 Telegram；仍会更新用户 latest_time 和 scrapy_time')
     parser.add_argument('--send', action='store_false', dest='no_send', default=argparse.SUPPRESS,
                         help='显式开启发送，可覆盖配置文件中的 no_send=true')
     parser.add_argument('--send-on-download-failure', action='store_true', dest='send_on_download_failure',

@@ -270,13 +270,14 @@ def get_user_by_userid(user_id):
 
 def update_db(user_id, username, latest_time='', no_send=False):
     """
-    默认爬取后会更新用户的scrapy_time，如果不发送 或者 没有最新作品的 latest_time 则不更新 latest_time
+    默认爬取后会更新用户的 scrapy_time；只要本次识别到最新作品时间，就同步更新 latest_time。
+    `no_send` 仅影响发送流程，不再阻止 latest_time 回写，避免 dry-run 后重复抓取同一批内容。
     """
     conn = get_db_conn()
     cursor = conn.cursor()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sql = 'UPDATE `user` SET scrapy_time=%s'
-    if latest_time and not no_send:
+    if latest_time:
         sql += ', latest_time=%s WHERE USERID=%s and username=%s;'
         data = (now, latest_time, user_id, username)
     else:
