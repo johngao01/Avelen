@@ -36,7 +36,7 @@ headers = {
 DEVELOPER_CHAT_ID = 708424141
 MANAGE_BOT_TOKEN = os.getenv("ERROR_TELEGRAM_BOT_TOKEN", '')
 logger.info("manage bot token is: " + MANAGE_BOT_TOKEN)
-AVELEN_BOT_TOEKN = os.getenv("TELEGRAM_BOT_TOKEN", '')
+AVELEN_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", '')
 logger.info("avelen bot token is: " + MANAGE_BOT_TOKEN, '')
 SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
 ASK_SAVE_USERNAME, ASK_OPERATION, STORE_DATA = range(3)
@@ -51,7 +51,7 @@ follow_types = {
     '2': '⭐️ 特别关注'
 }
 follow_type_icons = {
-   '-2': '🚫 ',
+    '-2': '🚫 ',
     '-1': '💔  ',
     '0': ' ❗ ',
     '1': '👤  ',
@@ -79,6 +79,17 @@ def clear_name(text):
     if result == '':
         return '没有名字'
     return result
+
+
+class LinkPreviewMessageFilter(filters.BaseFilter):
+    def filter(self, message) -> bool:
+        if message.text:
+            if re.fullmatch(r'https?://[^\s]+', message.text):
+                return True
+        if message.link_preview_options is not None:
+            if re.fullmatch(r'https?://[^\s]+', message.link_preview_options.url):
+                return True
+        return False
 
 
 def parse_url_platform(url):
@@ -322,7 +333,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def edit_commands(application):
     command = [BotCommand("manage", "管理关注"),
                BotCommand("cancel", "取消操作"),
-               BotCommand("clear", "清理"),]
+               BotCommand("clear", "清理")]
     await application.bot.set_my_commands(commands=command)
     await application.bot.send_message(DEVELOPER_CHAT_ID, text="bot start...")
     print("bot start ------------------->")
@@ -350,9 +361,13 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
-    matches = re.compile(r"(https?://[^\s]+)").findall(update.message.text.strip())
+    if update.message.link_preview_options is not None:
+        text = update.message.link_preview_options.url
+    else:
+        text = update.message.text
+    matches = re.compile(r"(https?://[^\s]+)").findall(text)
     url = matches[0]
-    logger.info(update.message.text)
+    logger.info(text)
     # TODO 提取出url后，先判断是用户主页地址还是post链接
     try:
         # 成功的话是post链接处理post
@@ -447,7 +462,7 @@ async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def delete_message(message_id):
-    bot = Bot(token=AVELEN_BOT_TOEKN)
+    bot = Bot(token=AVELEN_BOT_TOKEN)
     logger.info(f"删除消息：{message_id}")
     try:
         if isinstance(message_id, list):
@@ -635,6 +650,7 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await delete_message(delete_messages)
     await update.message.reply_text(text=f"清理任务完成")
 
+
 def main() -> None:
     builder = Application.builder()
     persistence = PicklePersistence(filepath="arbitrarycallbackdatabot")
@@ -651,7 +667,7 @@ def main() -> None:
     application = builder.build()
     manage_follow_handler = ConversationHandler(
         entry_points=[CommandHandler("manage", start_manage),
-                      MessageHandler(filters.Text() & ~filters.COMMAND, query_data)],
+                      MessageHandler(filters.Text() & ~filters.COMMAND & ~LinkPreviewMessageFilter(), query_data)],
         states={
             SELECTING_PLATFORM: [
                 CommandHandler("manage", start_manage),
@@ -675,7 +691,7 @@ def main() -> None:
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     add_follower_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex(r'(https?://[^\s]+)'), handle_url)],
+        entry_points=[MessageHandler(LinkPreviewMessageFilter(), handle_url)],
         states={
             ASK_SAVE_USERNAME: [
                 MessageHandler(filters.Regex(r'(https?://[^\s]+)'), handle_url),
@@ -699,8 +715,8 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-    application.add_handler(add_follower_handler)
     application.add_handler(post_handler)
+    application.add_handler(add_follower_handler)
     application.add_handler(manage_follow_handler)
     application.add_handler(CommandHandler("clear", clear))
     application.run_polling(allowed_updates=Update.ALL_TYPES)
