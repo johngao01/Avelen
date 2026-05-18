@@ -65,7 +65,7 @@ platform_icons = {
 }
 PAGE_SIZE = 30
 MANAGE_PLATFORMS = ['douyin', 'weibo', 'instagram', 'bilibili']
-
+url_pattern = r"https?://[^\s]+"
 
 def clear_name(text):
     # 去除中英文小括号及其内容
@@ -81,14 +81,16 @@ def clear_name(text):
     return result
 
 
-class LinkPreviewMessageFilter(filters.BaseFilter):
+class LinkPreviewMessageFilter(filters.MessageFilter):
+    def __init__(self, keyword: str = '过滤含有url的消息'):
+        self.keyword = keyword
+        # 设置 name 以便调试时识别
+        super().__init__(name=keyword)
+
     def filter(self, message) -> bool:
-        if message.text:
-            if re.fullmatch(r'https?://[^\s]+', message.text):
-                return True
-        if message.link_preview_options is not None:
-            if re.fullmatch(r'https?://[^\s]+', message.link_preview_options.url):
-                return True
+        if message.text_markdown:
+            urls = re.findall(url_pattern, message.text_markdown)
+            return bool(urls)
         return False
 
 
@@ -361,13 +363,10 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
-    if update.message.link_preview_options is not None:
-        text = update.message.link_preview_options.url
-    else:
-        text = update.message.text
-    matches = re.compile(r"(https?://[^\s]+)").findall(text)
-    url = matches[0]
-    logger.info(text)
+    urls = re.findall(url_pattern, update.message.text_markdown)
+    logger.info(urls)
+    url = urls[0]
+    logger.info(url)
     # TODO 提取出url后，先判断是用户主页地址还是post链接
     try:
         # 成功的话是post链接处理post
@@ -456,8 +455,8 @@ async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     valid = cast(str, query.data)
     if context.user_data["type"] == 'new':
         add_user(user_id, username, platform, valid)
-        await query.edit_message_text(f"✅ 新增 {follow_types[str(valid)]} [{username}]({url}) 成功",
-                                      parse_mode=ParseMode.MARKDOWN_V2)
+        await query.edit_message_text(f"✅ 新增 {valid_str} <a href=\"{safe_url}\">{safe_username}</a> 成功",
+                                      parse_mode=ParseMode.HTML)
     return ConversationHandler.END
 
 
@@ -665,18 +664,20 @@ def main() -> None:
     builder.persistence(persistence)
     builder.arbitrary_callback_data(True)
     application = builder.build()
+    link_message = LinkPreviewMessageFilter()
+    pure_text_message = filters.Text() & ~filters.COMMAND & ~link_message
     manage_follow_handler = ConversationHandler(
         entry_points=[CommandHandler("manage", start_manage),
-                      MessageHandler(filters.Text() & ~filters.COMMAND & ~LinkPreviewMessageFilter(), query_data)],
+                      MessageHandler(pure_text_message, query_data)],
         states={
             SELECTING_PLATFORM: [
                 CommandHandler("manage", start_manage),
-                MessageHandler(filters.Text() & ~filters.COMMAND, query_data),
+                MessageHandler(pure_text_message, query_data),
                 CallbackQueryHandler(query_data, pattern=r"^s\|")
             ],
             SELECTING_USER: [
                 CommandHandler("manage", start_manage),
-                MessageHandler(filters.Text() & ~filters.COMMAND, query_data),
+                MessageHandler(pure_text_message, query_data),
                 CallbackQueryHandler(query_data, pattern=r"^s\|"),
                 CallbackQueryHandler(handle_user_selected, pattern=r"^user\|"),
                 CallbackQueryHandler(handle_back, pattern=r"^back\|")
@@ -691,14 +692,14 @@ def main() -> None:
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     add_follower_handler = ConversationHandler(
-        entry_points=[MessageHandler(LinkPreviewMessageFilter(), handle_url)],
+        entry_points=[MessageHandler(link_message, handle_url)],
         states={
             ASK_SAVE_USERNAME: [
-                MessageHandler(filters.Regex(r'(https?://[^\s]+)'), handle_url),
+                MessageHandler(link_message, handle_url),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ask_save_username)
             ],
             STORE_DATA: [
-                MessageHandler(filters.Regex(r'(https?://[^\s]+)'), handle_url),
+                MessageHandler(link_message, handle_url),
                 CallbackQueryHandler(store_data, pattern=r"[0|1|2]"),
                 CallbackQueryHandler(update_user_valid, pattern=r"^(delete|upgrade|downgrade|retire|invalid)\|")
             ]
