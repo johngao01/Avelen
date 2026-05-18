@@ -363,7 +363,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
-    urls = re.findall(url_pattern, update.message.text_markdown)
+    urls = re.findall(url_pattern, update.message.text_html)
     logger.info(urls)
     url = urls[0]
     logger.info(url)
