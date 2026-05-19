@@ -67,7 +67,7 @@ platform_icons = {
 }
 PAGE_SIZE = 30
 MANAGE_PLATFORMS = ['douyin', 'weibo', 'instagram', 'bilibili']
-url_pattern = r"https?://[^\s]+"
+url_pattern = r'(https?://[^\s"\'<>]+)'
 
 
 def clear_name(text):
@@ -91,8 +91,8 @@ class LinkPreviewMessageFilter(filters.MessageFilter):
         super().__init__(name=keyword)
 
     def filter(self, message) -> bool:
-        if message.text_markdown:
-            urls = re.findall(url_pattern, message.text_markdown)
+        if message.text_html:
+            urls = re.findall(url_pattern, message.text_html)
             return bool(urls)
         return False
 
