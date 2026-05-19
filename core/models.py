@@ -193,6 +193,7 @@ class RunOptions:
 
     use_local_json: bool = False
     no_send: bool = False
+    send_if_text_contains: str | None = None
     download_progress: bool = True
     send_on_download_failure: bool = False
     scrapy_wait_min_seconds: int = 0

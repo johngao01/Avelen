@@ -234,6 +234,7 @@ MYSQL_DB=nicebot
 valid = 2
 sort = scrapy_time:desc
 download_progress = true
+send_if_text_contains = 抽奖
 
 [weibo]
 no_send = true
@@ -259,6 +260,7 @@ python main.py weibo --send --name 某个用户
 - 可用 `-c / --config` 指定别的配置文件路径
 - 可用 `--ignore-config` 完全忽略配置文件
 - 多值参数如 `valid`、`user_ids`、`usernames`、`rate_limit` 支持逗号分隔或换行
+- `send_if_text_contains` / `--stc` 用于控制“仅当 `BasePost.text_raw` 包含指定字符串时才发送到 Telegram”，未匹配时仍会下载，但不会发送
 - 时间格式统一为 `YYYY-MM-DD HH:MM:SS`
 
 ### 5.4 Cookie 文件
@@ -430,6 +432,8 @@ python main.py -l -s valid:desc
   只抓取和下载，不发 Telegram；仍会更新 `user.latest_time` 和 `user.scrapy_time`
 - `--send`
   显式开启发送，可覆盖配置文件里的 `no_send=true`
+- `--stc`, `--send-if-text-contains`
+  仅当 `BasePost.text_raw` 包含指定字符串时才发送到 Telegram；未匹配时仍会下载，但不会发送
 - `--send-on-download-failure`
   下载失败时仍继续发送
 - `--no-send-on-download-failure`
@@ -904,6 +908,7 @@ python ops/process_posts.py "https://weibo.com/6700307821/QzO3foQZa"
 python ops/process_posts.py "https://weibo.com/6700307821/QzO3foQZa" "https://www.instagram.com/p/DP94GyDE0np/"
 python ops/process_posts.py --input logs/error.txt
 python ops/process_posts.py --input urls.txt --no-send
+python ops/process_posts.py --input urls.txt --stc 抽奖
 ```
 
 当前行为：
@@ -911,6 +916,7 @@ python ops/process_posts.py --input urls.txt --no-send
 - 不传参数时，默认处理 `logs/error.txt`
 - 传位置参数时，可一次传多个 URL
 - 传 `--input` 时，会从指定文件逐行提取所有可识别 URL
+- 传 `--stc` 时，只有 `BasePost.text_raw` 包含指定字符串的 post 才会发送；未匹配的 post 仍会下载
 - 处理完成后会输出中英文字段的汇总表格
 - 汇总中包含处理闭环、解析闭环、来源闭环和一致性检查
 

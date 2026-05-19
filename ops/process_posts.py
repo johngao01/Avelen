@@ -640,6 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("url", nargs="*", help="直接处理一个或多个 post URL")
     parser.add_argument("-i", "--input", help="从文本文件中提取并处理所有可用 post URL")
     parser.add_argument("-n", "--no-send", action="store_true", help="仅下载，不发送")
+    parser.add_argument("--stc", "--send-if-text-contains", help="仅当 BasePost.text_raw 包含指定字符串时才发送到 Telegram")
     parser.add_argument("-x", "--send-on-download-failure", action="store_false", help="下载不完整时也继续发送已下载内容")
     parser.add_argument("--no-skip-sent", action="store_true", help="即使数据库里已有发送记录也继续处理")
     return parser
@@ -690,7 +691,11 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     validate_args(args, parser)
-    options = RunOptions(no_send=args.no_send, send_on_download_failure=args.send_on_download_failure)
+    options = RunOptions(
+        no_send=args.no_send,
+        send_if_text_contains=args.send_if_text_contains,
+        send_on_download_failure=args.send_on_download_failure,
+    )
     processor = PostBatchProcessor(options, skip_sent=not args.no_skip_sent)
     default_error_mode = not args.url and not args.input
     input_file = Path(args.input).resolve() if args.input else (ERROR_FILE.resolve() if default_error_mode else None)

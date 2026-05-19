@@ -42,6 +42,7 @@ COMMON_CLI_DEFAULTS = {
     'sort_option': 'scrapy_time:desc',
     'set_latest_time': None,
     'no_send': False,
+    'send_if_text_contains': None,
     'send_on_download_failure': False,
     'download_progress': True,
     'local_json': False,
@@ -68,6 +69,7 @@ CONFIG_KEY_ALIASES = {
     'sort_option': 'sort_option',
     'set_latest_time': 'set_latest_time',
     'no_send': 'no_send',
+    'send_if_text_contains': 'send_if_text_contains',
     'send_on_download_failure': 'send_on_download_failure',
     'download_progress': 'download_progress',
     'local_json': 'local_json',
@@ -273,6 +275,17 @@ def send_post_to_telegram(
             'post_data': post_data,
             'messages': [],
         }
+    if options.send_if_text_contains and options.send_if_text_contains not in (post.text_raw or ''):
+        logger.info(
+            f"跳过 Telegram 发送: post.text_raw 未包含指定内容 "
+            f"send_if_text_contains={options.send_if_text_contains!r} url={post.url}"
+        )
+        return {
+            'ok': True,
+            'error': None,
+            'post_data': post_data,
+            'messages': [],
+        }
 
     result = send_post_payload_to_telegram(post_data)
     return result
@@ -384,6 +397,9 @@ def build_common_cli_parser():
                         help='仅爬取和下载，不发送 Telegram；仍会更新用户 latest_time 和 scrapy_time')
     parser.add_argument('--send', action='store_false', dest='no_send', default=argparse.SUPPRESS,
                         help='显式开启发送，可覆盖配置文件中的 no_send=true')
+    parser.add_argument('-stc', '--stc', '--send-if-text-contains', dest='send_if_text_contains',
+                        default=argparse.SUPPRESS,
+                        help='仅当 BasePost.text_raw 包含指定字符串时才发送到 Telegram；否则只下载不发送')
     parser.add_argument('--send-on-download-failure', action='store_true', dest='send_on_download_failure',
                         default=argparse.SUPPRESS,
                         help='下载出现失败时仍继续发送，默认关闭')
@@ -461,6 +477,7 @@ def build_run_options(platform: str, args: argparse.Namespace) -> RunOptions:
     return RunOptions(
         use_local_json=getattr(args, 'local_json', False),
         no_send=getattr(args, 'no_send', False),
+        send_if_text_contains=getattr(args, 'send_if_text_contains', None),
         download_progress=getattr(args, 'download_progress', True),
         send_on_download_failure=getattr(args, 'send_on_download_failure', False),
         scrapy_wait_min_seconds=max(0, wait_min),
@@ -596,6 +613,8 @@ def build_args_log_summary(args: argparse.Namespace) -> str:
         summary.append("local_json=True")
     if args.no_send:
         summary.append("no_send=True")
+    if args.send_if_text_contains:
+        summary.append(f"send_if_text_contains={args.send_if_text_contains!r}")
     if args.send_on_download_failure:
         summary.append("send_on_download_failure=True")
     if args.rate_limit is not None:
@@ -642,6 +661,7 @@ def run_platform_main(platform: str,
         f"{platform} 运行模式: "
         f"local_json={options.use_local_json}, "
         f"no_send={options.no_send}, "
+        f"send_if_text_contains={options.send_if_text_contains!r}, "
         f"download_progress={options.download_progress}, "
         f"send_on_download_failure={options.send_on_download_failure}, "
         f"scrapy_wait={options.scrapy_wait_min_seconds}-{options.scrapy_wait_max_seconds}s"
