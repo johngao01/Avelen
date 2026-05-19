@@ -251,9 +251,14 @@ def rate_control(send_result, logger):
         sleep(sleep_time)
 
 
-def log_error(url, text=''):
+def log_error(url, username, text=''):
+    ERROR_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if ERROR_FILE.exists():
+        existing_content = ERROR_FILE.read_text(encoding='utf-8')
+        if url in existing_content:
+            return
     with open(ERROR_FILE, 'a', encoding='utf-8') as f:
-        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 处理 {url} 失败  {text}\n")
+        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 处理 {username} 的 {url} 失败  {text}\n")
 
 
 def find_file_by_name(root_dir, target_filename):

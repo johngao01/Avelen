@@ -384,6 +384,7 @@ class BasePlatform(ABC):
                 dispatch_result,
                 self.logger,
                 post.url,
+                post.username,
                 context=context,
             )
             if status == 'success':

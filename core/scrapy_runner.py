@@ -295,6 +295,7 @@ def handle_dispatch_result(
         result,
         logger,
         url: str,
+        username: str,
         on_success_update=None,
         on_failure_update=None,
         *,
@@ -313,7 +314,7 @@ def handle_dispatch_result(
     if on_failure_update:
         on_failure_update()
     error_text = result.get('error') if isinstance(result, dict) else result
-    log_error(url, error_text)
+    log_error(url, username, error_text)
     logger.error(f"处理 {url} 失败")
     return 'failure'
 

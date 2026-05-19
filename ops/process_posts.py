@@ -521,6 +521,7 @@ class PostBatchProcessor:
             dispatch_result,
             process_posts_logger,
             post.url,
+            post.username,
             context=self.context,
         )
         if status in {"success", "skip"}:
@@ -534,7 +535,7 @@ class PostBatchProcessor:
         self.summary.send_failed += 1
         self.summary.platform_failed[result.platform] += 1
         if record_error:
-            log_error(post.url, f"process_posts 发送失败 platform={result.platform}")
+            log_error(post.url, post.username, f"process_posts 发送失败 platform={result.platform}")
         return "send_failed"
 
     def process_task(
@@ -562,8 +563,11 @@ class PostBatchProcessor:
                     self.summary.local_failed += 1
                 self.summary.platform_failed[task.platform] += 1
                 if record_error:
-                    log_error(task.normalized_url,
-                              f"process_posts 解析失败 api={result.api_error or '-'} local={result.local_error or '-'}")
+                    log_error(
+                        task.normalized_url,
+                        "favorite",
+                        f"process_posts 解析失败 api={result.api_error or '-'} local={result.local_error or '-'}"
+                    )
                 process_posts_logger.error(
                     f"{index_text} 解析失败 platform={task.platform} url={task.normalized_url} api_error={result.api_error or '-'} local_error={result.local_error or '-'}")
                 return "parse_failed"
@@ -579,7 +583,7 @@ class PostBatchProcessor:
             self.summary.exception_failed += 1
             self.summary.platform_failed[task.platform] += 1
             if record_error:
-                log_error(task.normalized_url, "process_posts 处理异常")
+                log_error(task.normalized_url, "favorite", "process_posts 处理异常")
             process_posts_logger.error(
                 f"{index_text} 处理异常 source={task.source} url={task.normalized_url}\n{traceback.format_exc()}")
             return "exception_failed"
