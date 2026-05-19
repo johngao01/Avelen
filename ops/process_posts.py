@@ -692,9 +692,9 @@ def main() -> int:
     args = parser.parse_args()
     validate_args(args, parser)
     options = RunOptions(
-        no_send=args.no_send,
-        send_if_text_contains=args.send_if_text_contains,
-        send_on_download_failure=args.send_on_download_failure,
+        no_send=getattr(args, "no_send", False),
+        send_if_text_contains=getattr(args, "send_if_text_contains", None),
+        send_on_download_failure=getattr(args, "send_on_download_failure", True),
     )
     processor = PostBatchProcessor(options, skip_sent=not args.no_skip_sent)
     default_error_mode = not args.url and not args.input
