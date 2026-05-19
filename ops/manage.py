@@ -2,6 +2,7 @@ import re
 import emoji
 import json
 import html
+import traceback
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -19,6 +20,7 @@ from typing import Any, cast
 from core.database import *
 from core.models import get_platform_logger
 from core.settings import LOGS_DIR
+from core.utils import send_error_notification
 from ops.process_posts import resolve_single_post
 from urllib.parse import urlparse
 from core.downloader import Downloader
@@ -66,6 +68,7 @@ platform_icons = {
 PAGE_SIZE = 30
 MANAGE_PLATFORMS = ['douyin', 'weibo', 'instagram', 'bilibili']
 url_pattern = r"https?://[^\s]+"
+
 
 def clear_name(text):
     # 去除中英文小括号及其内容
@@ -346,6 +349,34 @@ async def stop(application):
     print("bot stop ------------------->")
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a telegram message to notify the developer."""
+    # Log the error before we do anything else, so we can see it even if something breaks.
+    logger.error("Exception while handling an update:", exc_info=context.error)
+
+    # traceback.format_exception returns the usual python message about an exception, but as a
+    # list of strings rather than a single string, so we have to join them together.
+    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
+    tb_string = "".join(tb_list)
+
+    # Build the message with some markup and additional information about what happened.
+    # You might need to add some logic to deal with messages longer than the 4096 character limit.
+    update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    message = (
+        "An exception was raised while handling an update\n"
+        f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
+        "</pre>\n\n"
+        f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
+        f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
+        f"<pre>{html.escape(tb_string)}</pre>"
+    )
+
+    # Finally, send the message
+    await context.bot.send_message(
+        chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML
+    )
+
+
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     def expand_url(short_url: str) -> str:
         try:
@@ -453,9 +484,10 @@ async def store_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     valid = cast(str, query.data)
+    valid_str = follow_types[valid]
     if context.user_data["type"] == 'new':
         add_user(user_id, username, platform, valid)
-        await query.edit_message_text(f"✅ 新增 {valid_str} <a href=\"{safe_url}\">{safe_username}</a> 成功",
+        await query.edit_message_text(f"✅ 新增 {valid_str} <a href=\"{url}\">{username}</a> 成功",
                                       parse_mode=ParseMode.HTML)
     return ConversationHandler.END
 
@@ -664,6 +696,7 @@ def main() -> None:
     builder.persistence(persistence)
     builder.arbitrary_callback_data(True)
     application = builder.build()
+    application.add_error_handler(error_handler)
     link_message = LinkPreviewMessageFilter()
     pure_text_message = filters.Text() & ~filters.COMMAND & ~link_message
     manage_follow_handler = ConversationHandler(
