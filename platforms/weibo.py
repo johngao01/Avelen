@@ -231,6 +231,8 @@ class WeiboPost(BasePost):
     def start(self, expected_userid: str | None = None):
         """判断微博是否应进入统一发送流水线，并返回用于日志的类型描述。"""
         weibo_dict = self.data
+        if self.following.username != 'favorite' and (self.following.userid != self.userid):
+            return False, self.__str__() + ' 作品非本人'
         if weibo_dict.get('mblog_vip_type') == 1:
             return False, self.__str__() + ' V+微博'
         if isinstance(weibo_dict.get('retweeted_status'), dict) and isinstance(
