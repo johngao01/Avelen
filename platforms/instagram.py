@@ -317,27 +317,27 @@ class InstagramScrapy(BasePlatform):
         self.session = requests.Session()
         self._ensure_rotation_policy()
         if self.cookies:
-            self.cookie_index = self._rotation_policy.current_cookie_index()  # type: ignore[union-attr]
+            self.cookie_index = InstagramScrapy._rotation_policy.current_cookie_index()  # type: ignore[union-attr]
         self._apply_cookie(self._current_cookie())
         self.fb_dtsg = ''
         self.logger = instagram_logger
         self.post: list[InstagramPost] = []
 
     def _ensure_rotation_policy(self) -> None:
-        with self._policy_lock:
+        with InstagramScrapy._policy_lock:
             if (
-                    self._rotation_policy is None
-                    or self._rotation_policy.cookie_count != len(self.cookies)
+                    InstagramScrapy._rotation_policy is None
+                    or InstagramScrapy._rotation_policy.cookie_count != len(self.cookies)
             ):
-                self._rotation_policy = CookieRotationPolicy.from_config(len(self.cookies))
+                InstagramScrapy._rotation_policy = CookieRotationPolicy.from_config(len(self.cookies))
 
     def _choose_cookie_for_user(self) -> None:
         if not self.cookies:
             return
-        with self._policy_lock:
-            self.cookie_index, switched = self._rotation_policy.choose_cookie_for_next_user()  # type: ignore[union-attr]
-            remaining_users = self._rotation_policy.remaining_users_on_current  # type: ignore[union-attr]
-            active_count = self._rotation_policy.active_cookie_count()  # type: ignore[union-attr]
+        with InstagramScrapy._policy_lock:
+            self.cookie_index, switched = InstagramScrapy._rotation_policy.choose_cookie_for_next_user()  # type: ignore[union-attr]
+            remaining_users = InstagramScrapy._rotation_policy.remaining_users_on_current  # type: ignore[union-attr]
+            active_count = InstagramScrapy._rotation_policy.active_cookie_count()  # type: ignore[union-attr]
         if switched:
             cookie = self._current_cookie()
             instagram_logger.info(
@@ -357,9 +357,9 @@ class InstagramScrapy(BasePlatform):
         self.fb_dtsg = ''
 
     def _switch_next_cookie(self) -> bool:
-        with self._policy_lock:
-            next_index = self._rotation_policy.mark_current_cookie_invalid()  # type: ignore[union-attr]
-            active_count = self._rotation_policy.active_cookie_count()  # type: ignore[union-attr]
+        with InstagramScrapy._policy_lock:
+            next_index = InstagramScrapy._rotation_policy.mark_current_cookie_invalid()  # type: ignore[union-attr]
+            active_count = InstagramScrapy._rotation_policy.active_cookie_count()  # type: ignore[union-attr]
         if next_index is None:
             return False
         self.cookie_index = next_index
