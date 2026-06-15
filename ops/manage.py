@@ -21,7 +21,7 @@ from core.database import *
 from core.models import get_platform_logger
 from core.settings import LOGS_DIR
 from core.utils import send_error_notification
-from ops.process_posts import resolve_single_post
+from ops.process_posts import extract_candidate_urls, resolve_single_post
 from urllib.parse import urlparse
 from core.downloader import Downloader
 from core.sender_dispatcher import execute_task
@@ -67,7 +67,7 @@ platform_icons = {
 }
 PAGE_SIZE = 30
 MANAGE_PLATFORMS = ['douyin', 'weibo', 'instagram', 'bilibili']
-url_pattern = r"https?://[^\s]+"
+url_pattern = r'(https?://[^\s"\'<>]+)'
 
 
 def clear_name(text):
@@ -91,8 +91,8 @@ class LinkPreviewMessageFilter(filters.MessageFilter):
         super().__init__(name=keyword)
 
     def filter(self, message) -> bool:
-        if message.text_markdown:
-            urls = re.findall(url_pattern, message.text_markdown)
+        if message.text_html:
+            urls = re.findall(url_pattern, message.text_html)
             return bool(urls)
         return False
 
@@ -109,6 +109,31 @@ def parse_url_platform(url):
     else:
         return None
     return platform
+
+
+def extract_profile_user_id(platform: str, parsed_url) -> str | None:
+    host = (parsed_url.hostname or '').lower()
+    segments = [item for item in parsed_url.path.rstrip('/').split('/') if item]
+    if platform == 'bilibili':
+        if host == 'space.bilibili.com' and len(segments) == 1 and segments[0].isdigit():
+            return segments[0]
+        return None
+    if platform == 'douyin':
+        if host.endswith('douyin.com') and len(segments) >= 2 and segments[0] == 'user':
+            return segments[1]
+        return None
+    if platform == 'weibo':
+        if host.endswith('weibo.com') and len(segments) >= 2 and segments[0] in {'u', 'n'}:
+            return segments[1]
+        if host.endswith('weibo.com') and len(segments) == 1 and segments[0].isdigit():
+            return segments[0]
+        return None
+    if platform == 'instagram':
+        if host.endswith('instagram.com') and len(segments) == 1:
+            blocked_segments = {'p', 'reel', 'tv', 'explore', 'accounts', 'stories'}
+            return None if segments[0] in blocked_segments else segments[0]
+        return None
+    return None
 
 
 async def start_manage(update, context: ContextTypes.DEFAULT_TYPE):
@@ -387,37 +412,87 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return short_url
 
     def extract_url(text: str) -> str | None:
-        # 提取第一个 http(s) 开头的 URL
         match = re.search(r'(https?://[^\s]+)', text)
         return match.group(0) if match else None
 
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
-    urls = re.findall(url_pattern, update.message.text_html)
+    message_text = update.message.text_html or update.message.text or ''
+    urls = []
+    seen_urls = set()
+    for raw_url in re.findall(url_pattern, message_text):
+        clean_url = raw_url.rstrip(").,]>\"'")
+        if clean_url not in seen_urls:
+            seen_urls.add(clean_url)
+            urls.append(clean_url)
+
+    post_urls = []
+    seen_post_urls = set()
+    for _, post_url in extract_candidate_urls(message_text):
+        if post_url not in seen_post_urls:
+            seen_post_urls.add(post_url)
+            post_urls.append(post_url)
+    if post_urls:
+        total = len(post_urls)
+        show_progress = total > 1
+        succeeded = 0
+        skipped = 0
+        failed = 0
+        if show_progress:
+            await update.message.reply_text(f"检测到 {total} 个 post URL，开始处理")
+        for index, post_url in enumerate(post_urls, start=1):
+            await context.bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.TYPING)
+            try:
+                resolve_result = resolve_single_post(post_url)
+                if resolve_result.post_id and has_sent_post(resolve_result.post_id):
+                    skipped += 1
+                    logger.info(f"{post_url} 已发送过，跳过。")
+                    await update.message.reply_text(
+                        f"⏭️ 已发送过，跳过 {index}/{total}\n{post_url}" if show_progress else f"⏭️ 已发送过，跳过\n{post_url}"
+                    )
+                    continue
+                if resolve_result.post is None:
+                    failed += 1
+                    logger.info(f"{post_url} 获取数据失败，处理失败。")
+                    await update.message.reply_text(
+                        f"❌ 处理失败 {index}/{total}\n{post_url}" if show_progress else f"❌ 处理失败\n{post_url}"
+                    )
+                    continue
+                if resolve_result.post.idstr and resolve_result.post.idstr != resolve_result.post_id and has_sent_post(
+                        resolve_result.post.idstr):
+                    skipped += 1
+                    logger.info(f"{post_url} 已发送过，跳过。")
+                    await update.message.reply_text(
+                        f"⏭️ 已发送过，跳过 {index}/{total}\n{post_url}" if show_progress else f"⏭️ 已发送过，跳过\n{post_url}"
+                    )
+                    continue
+                logger.info(resolve_result.post)
+                downloader = Downloader(logger=logger)
+                post_data = downloader.download(resolve_result.post)
+                await execute_task(post_data)
+            except Exception as exc:
+                failed += 1
+                logger.exception(f"{post_url} 处理异常: {exc}")
+                await update.message.reply_text(
+                    f"❌ 发送失败 {index}/{total}\n{post_url}" if show_progress else f"❌ 发送失败\n{post_url}"
+                )
+            else:
+                succeeded += 1
+                await update.message.reply_text(
+                    f"✅ 发送成功 {index}/{total}\n{post_url}" if show_progress else f"✅ 发送成功\n{post_url}"
+                )
+        if show_progress:
+            await update.message.reply_text(f"处理完成：成功 {succeeded}，跳过 {skipped}，失败 {failed}，共 {total}")
+        urls = [item for item in urls if item not in seen_post_urls]
+        if not urls:
+            return ConversationHandler.END
+
     logger.info(urls)
+    if not urls:
+        return ConversationHandler.END
     url = urls[0]
     logger.info(url)
-    # TODO 提取出url后，先判断是用户主页地址还是post链接
-    try:
-        # 成功的话是post链接处理post
-        resolve_result = resolve_single_post(url)
-        if resolve_result.post is None:
-            logger.info(f"{url} 获取数据失败，处理失败。")
-            return ConversationHandler.END
-        logger.info(resolve_result.post)
-        downloader = Downloader(logger=logger)
-        post_data = downloader.download(resolve_result.post)
-        try:
-            send_result = await execute_task(post_data)
-        except Exception:
-            await update.message.reply_text("发送失败")
-            return ConversationHandler.END
-        else:
-            await update.message.reply_text("发送成功")
-        return ConversationHandler.END
-    except Exception as e:
-        pass
     short_domains = ('v.douyin.com', 'b23.tv', 'bili2233.cn')
     if any(domain in url for domain in short_domains) or '哔哩哔哩' in url:
         url = extract_url(url)
@@ -435,17 +510,10 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     platform = parse_url_platform(host)
     if platform is None: return ConversationHandler.END
 
-    url_path = parsed_url.path.rstrip('/')
-    segments = [item for item in url_path.split('/') if item]
-    if platform == 'bilibili' and len(segments) >= 1 and segments[0].isdigit():
-        user_id = segments[0]
-    elif segments:
-        user_id = segments[-1]
-    else:
-        user_id = ''
+    user_id = extract_profile_user_id(platform, parsed_url)
 
     if not user_id:
-        await update.message.reply_text("❌ 无法提取到用户id")
+        await update.message.reply_text("❌ 不是可识别的用户主页，已跳过")
         return ConversationHandler.END
 
     context.user_data["user_id"] = user_id
