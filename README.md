@@ -261,7 +261,7 @@ python main.py weibo --send --name 某个用户
 - 可用 `--ignore-config` 完全忽略配置文件
 - 多值参数如 `valid`、`user_ids`、`usernames`、`rate_limit` 支持逗号分隔或换行
 - `send_if_text_contains` / `--stc` 用于控制“仅当 `BasePost.text_raw` 包含指定字符串时才发送到 Telegram”，未匹配时仍会下载，但不会发送
-- 时间格式统一为 `YYYY-MM-DD HH:MM:SS`
+- 时间格式支持绝对时间 `YYYY-MM-DD HH:MM:SS`（或 `YYYY-MM-DD`），以及带符号的相对时间。其中 `+` 表示“大于/更久之前”（如 `+7d` 表示7天前的数据），`-` 表示“小于/最近”（如 `-7d` 表示最近7天内的数据）。
 
 ### 5.4 Cookie 文件
 
@@ -384,11 +384,25 @@ python main.py weibo -slt
 python main.py weibo -slt "2024-01-01 00:00:00"
 ```
 
-按时间范围筛选：
+按时间范围筛选（绝对时间）：
 
 ```bash
 python main.py weibo --lts "2026-03-01 00:00:00" --lte "2026-03-31 23:59:59"
 python main.py douyin --sts "2026-03-01 00:00:00"
+```
+
+使用智能相对时间筛选（支持 `+` 和 `-` 符号覆盖默认方向）：
+
+```bash
+# 筛选 scrapy_time 超过7天没有抓取过的记录（即 scrapy_time <= 7天前）
+python main.py -ste +7d -l
+
+# 筛选 latest_time 在最近3天内有更新的记录（即 latest_time >= 3天前）
+python main.py -lts -3d -l
+
+# 区间筛选：筛选 scrapy_time 距今 7天 到 30天 之间的记录
+# （-30d 带有 '-'，映射为起始 >= 30天前；+7d 带有 '+'，映射为截止 <= 7天前）
+python main.py -sts -30d -ste +7d -l
 ```
 
 自定义排序：
@@ -417,6 +431,15 @@ python main.py -l -s valid:desc
 - `--lte`, `--latest-time-end`
 - `--sts`, `--scrapy-time-start`
 - `--ste`, `--scrapy-time-end`
+  以上四个时间参数除了支持绝对时间，也具备**智能的相对时间路由功能**（支持如 `12h`, `30m`, `7d`）：
+  - `+` 表示“超过/更久之前”，例如 `+7d` 永远表示查询超过7天前的数据（自动映射为 `<= 7天前`）。
+  - `-` 表示“以内/最近”，例如 `-7d` 永远表示查询最近7天内的数据（自动映射为 `>= 7天前`）。
+  
+  **注意事项**：
+  由于 `+` 和 `-` 的符号语义会完全覆盖原本 `start / end` 参数自带的方向，你可以随意使用任何时间参数传入。
+  - 直接输入 `-ste +7d` 或 `-sts +7d`，效果完全一样，都会筛选**大于7天（更久前）**的数据。
+  - 直接输入 `-ste -7d` 或 `-sts -7d`，效果完全一样，都会筛选**7天内（最近）**的数据。
+  - 如果同时传入，可完美组合成区间：例如 `-sts -30d -ste +7d` 会自动将 `>= 30天前` 作为起始，`<= 7天前` 作为截止，查出距今 7~30 天之间的数据。
 
 ### 8.2 行为控制参数
 

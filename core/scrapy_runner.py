@@ -1,6 +1,7 @@
 import argparse
 import configparser
 import random
+import re
 import sys
 import traceback
 from datetime import datetime, timedelta
@@ -107,6 +108,8 @@ def _convert_config_value(dest: str, raw_value: str):
         return argparse_sort_option(value)
     if dest == 'set_latest_time':
         return argparse_latest_time_override(value)
+    if dest in {'latest_time_start', 'latest_time_end', 'scrapy_time_start', 'scrapy_time_end'}:
+        return argparse_datetime_with_relative(value)
     if dest in {'no_send', 'send_on_download_failure', 'download_progress', 'local_json', 'show'}:
         return _parse_config_bool(value)
     if dest == 'rate_limit':
@@ -153,7 +156,41 @@ def _build_default_args() -> argparse.Namespace:
     })
 
 
+def _preprocess_argv_for_negative_time(argv: list[str]) -> list[str]:
+    """将 -ste / --ste -7d 等转换为 --ste=-7d，避免 argparse 报错或将其当做短选项聚合"""
+    alias_map = {
+        '-lts': '--lts',
+        '-lte': '--lte',
+        '-sts': '--sts',
+        '-ste': '--ste',
+    }
+    time_args = {'--lts', '--latest-time-start', '--lte', '--latest-time-end',
+                 '--sts', '--scrapy-time-start', '--ste', '--scrapy-time-end'}
+    
+    processed = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        
+        if arg in alias_map:
+            arg = alias_map[arg]
+            
+        if arg in time_args and i + 1 < len(argv) and argv[i+1].startswith('-') and not argv[i+1].startswith('--'):
+            processed.append(f"{arg}={argv[i+1]}")
+            i += 2
+            continue
+            
+        if arg.startswith(('-ste=', '-sts=', '-lte=', '-lts=')):
+            k, v = arg.split('=', 1)
+            arg = f"{alias_map[k]}={v}"
+            
+        processed.append(arg)
+        i += 1
+    return processed
+
+
 def _preparse_common_cli(argv: list[str]) -> argparse.Namespace:
+    argv = _preprocess_argv_for_negative_time(argv)
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument('-c', '--config', dest='config')
     pre_parser.add_argument('--ignore-config', action='store_true')
@@ -181,6 +218,7 @@ def parse_cli_args(
         entry_name: str,
         include_position_platform: bool = False,
 ) -> argparse.Namespace:
+    argv = _preprocess_argv_for_negative_time(argv)
     defaults = vars(_build_default_args())
     cli_probe = _preparse_common_cli(argv)
     cli_values = vars(parser.parse_args(argv))
@@ -209,6 +247,27 @@ def argparse_sort_option(value: str) -> str:
         return normalize_sort_option(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def argparse_datetime_with_relative(value: str) -> str:
+    """解析时间参数，支持绝对时间 'YYYY-MM-DD HH:MM:SS' 
+    或带有符号的相对时间如 '+7d', '-7d', '+12h', '-30m'。"""
+    value = value.strip()
+    if not value:
+        return ''
+    
+    match = re.match(r'^([+-])(\d+)([dhm])$', value, re.IGNORECASE)
+    if match:
+        return value
+
+    try:
+        if len(value) <= 10:
+            dt = datetime.strptime(value, "%Y-%m-%d")
+        else:
+            dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError('时间格式无效，应为 YYYY-MM-DD [HH:MM:SS] 或带有符号的相对时间如 +7d, -7d') from exc
 
 
 def argparse_latest_time_override(value: str) -> datetime:
@@ -382,13 +441,17 @@ def build_common_cli_parser():
     parser.add_argument('-rn', '--rename', dest='username_like', default=argparse.SUPPRESS,
                         help='按 user.username 模糊筛选，支持输入部分用户名')
     parser.add_argument('--lts', '--latest-time-start', dest='latest_time_start', default=argparse.SUPPRESS,
-                        help='筛选 latest_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+                        type=argparse_datetime_with_relative,
+                        help='筛选 latest_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS 或相对时间 (如 -7d, +12h)')
     parser.add_argument('--lte', '--latest-time-end', dest='latest_time_end', default=argparse.SUPPRESS,
-                        help='筛选 latest_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+                        type=argparse_datetime_with_relative,
+                        help='筛选 latest_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS 或相对时间 (如 -7d, +12h)')
     parser.add_argument('--sts', '--scrapy-time-start', dest='scrapy_time_start', default=argparse.SUPPRESS,
-                        help='筛选 scrapy_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+                        type=argparse_datetime_with_relative,
+                        help='筛选 scrapy_time >= 该时间，格式: YYYY-MM-DD HH:MM:SS 或相对时间 (如 -7d, +12h)')
     parser.add_argument('--ste', '--scrapy-time-end', dest='scrapy_time_end', default=argparse.SUPPRESS,
-                        help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS')
+                        type=argparse_datetime_with_relative,
+                        help='筛选 scrapy_time <= 该时间，格式: YYYY-MM-DD HH:MM:SS 或相对时间 (如 -7d, +12h)')
     parser.add_argument('-s', '--sort', dest='sort_option', type=argparse_sort_option, default=argparse.SUPPRESS,
                         help='排序字段[:asc|desc]，默认 scrapy_time:desc')
     parser.add_argument('-slt', '--set-latest-time', dest='set_latest_time', nargs='?', default=argparse.SUPPRESS,
@@ -427,18 +490,67 @@ def build_common_cli_parser():
     return parser
 
 
+def _parse_relative_and_route(start_val: str | None, end_val: str | None) -> tuple[str | None, str | None]:
+    """处理带有符号的相对时间并路由到正确的 start/end 字段。"""
+    def process(val: str, default_is_start: bool) -> tuple[str | None, str | None]:
+        if not val:
+            return None, None
+        match = re.match(r'^([+-])(\d+)([dhm])$', val, re.IGNORECASE)
+        if match:
+            sign, amount_str, unit = match.groups()
+            amount = int(amount_str)
+            unit = unit.lower()
+            if unit == 'd':
+                delta = timedelta(days=amount)
+            elif unit == 'h':
+                delta = timedelta(hours=amount)
+            elif unit == 'm':
+                delta = timedelta(minutes=amount)
+            else:
+                delta = timedelta()
+            
+            # target is ALWAYS now - delta
+            target_time = datetime.now() - delta
+            target_str = target_time.strftime("%Y-%m-%d %H:%M:%S")
+            # + means older than (<=), maps to end
+            # - means within (>=), maps to start
+            if sign == '+':
+                return None, target_str
+            else:
+                return target_str, None
+        
+        if default_is_start:
+            return val, None
+        else:
+            return None, val
+
+    final_start, final_end = None, None
+    if start_val:
+        s, e = process(start_val, default_is_start=True)
+        if s: final_start = s
+        if e: final_end = e
+    if end_val:
+        s, e = process(end_val, default_is_start=False)
+        if s: final_start = s
+        if e: final_end = e
+    return final_start, final_end
+
 def build_following_filters(args) -> dict[str, Any]:
     """把 CLI 参数整理成统一的数据库筛选参数。"""
     has_user_search = bool(args.user_ids or args.usernames or args.username_like)
+    
+    l_start, l_end = _parse_relative_and_route(args.latest_time_start, args.latest_time_end)
+    s_start, s_end = _parse_relative_and_route(args.scrapy_time_start, args.scrapy_time_end)
+    
     return {
         'valid_list': [] if has_user_search else args.valid,
         'user_ids': args.user_ids,
         'usernames': args.usernames,
         'username_like': args.username_like,
-        'latest_time_start': args.latest_time_start,
-        'latest_time_end': args.latest_time_end,
-        'scrapy_time_start': args.scrapy_time_start,
-        'scrapy_time_end': args.scrapy_time_end,
+        'latest_time_start': l_start,
+        'latest_time_end': l_end,
+        'scrapy_time_start': s_start,
+        'scrapy_time_end': s_end,
         'sort_option': args.sort_option,
     }
 

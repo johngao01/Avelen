@@ -28,8 +28,6 @@ def build_parser():
         "platform",
         type=str,
         nargs="?",
-        default=argparse.SUPPRESS,
-        choices=sorted(PLATFORM_REGISTRY.keys()),
         help="Platform to run; omit to auto-detect from matched users",
     )
     return parser
