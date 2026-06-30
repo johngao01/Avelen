@@ -180,6 +180,8 @@ def get_post_platform_and_idstr(text: str) -> tuple[str, str, str]:
     if not candidates:
         raise ValueError(f"未找到有效的 4 平台 post URL: {text}")
     _, actual_url = candidates[0]
+    if "v.douyin.com" in actual_url or "iesdouyin.com" in actual_url:
+        actual_url = resolve_redirect_url(actual_url)
     parsed = urlparse(actual_url)
     host = parsed.netloc.lower()
     path_parts = [part for part in parsed.path.split("/") if part]

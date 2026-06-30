@@ -21,7 +21,7 @@ from core.database import *
 from core.models import get_platform_logger
 from core.settings import LOGS_DIR
 from core.utils import send_error_notification
-from ops.process_posts import extract_candidate_urls, resolve_single_post
+from ops.process_posts import extract_candidate_urls, resolve_single_post, resolve_redirect_url
 from urllib.parse import urlparse
 from core.downloader import Downloader
 from core.sender_dispatcher import execute_task
@@ -119,8 +119,11 @@ def extract_profile_user_id(platform: str, parsed_url) -> str | None:
             return segments[0]
         return None
     if platform == 'douyin':
-        if host.endswith('douyin.com') and len(segments) >= 2 and segments[0] == 'user':
-            return segments[1]
+        if host.endswith('douyin.com'):
+            if len(segments) >= 2 and segments[0] == 'user':
+                return segments[1]
+            if len(segments) >= 3 and segments[0] == 'share' and segments[1] == 'user':
+                return segments[2]
         return None
     if platform == 'weibo':
         if host.endswith('weibo.com') and len(segments) >= 2 and segments[0] in {'u', 'n'}:
@@ -403,21 +406,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    def expand_url(short_url: str) -> str:
-        try:
-            response = requests.get(short_url, timeout=5, allow_redirects=True, headers=headers)
-            return response.url
-        except requests.RequestException as e:
-            print(f"获取真实地址失败: {e}")
-            return short_url
-
-    def extract_url(text: str) -> str | None:
-        match = re.search(r'(https?://[^\s]+)', text)
-        return match.group(0) if match else None
-
     if update.effective_chat.id != DEVELOPER_CHAT_ID:
         await update.message.reply_text("你没有权限使用此命令")
         return ConversationHandler.END
+    short_domains = ('v.douyin.com', 'b23.tv', 'bili2233.cn')
     message_text = update.message.text_html or update.message.text or ''
     urls = []
     seen_urls = set()
@@ -430,6 +422,18 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     post_urls = []
     seen_post_urls = set()
     for _, post_url in extract_candidate_urls(message_text):
+        resolved_url = post_url
+        if any(domain in post_url for domain in short_domains) or '哔哩哔哩' in post_url:
+            resolved_url = resolve_redirect_url(post_url)
+
+        parsed_resolved = urlparse(resolved_url)
+        host_resolved = parsed_resolved.hostname or ''
+        platform_resolved = parse_url_platform(host_resolved)
+        if platform_resolved:
+            user_id = extract_profile_user_id(platform_resolved, parsed_resolved)
+            if user_id:
+                logger.info(f"Skipping post processing for {post_url} as it is a user homepage: {resolved_url}")
+                continue
         if post_url not in seen_post_urls:
             seen_post_urls.add(post_url)
             post_urls.append(post_url)
@@ -493,15 +497,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     url = urls[0]
     logger.info(url)
-    short_domains = ('v.douyin.com', 'b23.tv', 'bili2233.cn')
     if any(domain in url for domain in short_domains) or '哔哩哔哩' in url:
-        url = extract_url(url)
-        print(url)
-        if not url:
-            await update.message.reply_text("未提取到用户主页地址，请重新开始。")
-            return ConversationHandler.END
-        url = expand_url(url)
-        print(url)
+        url = resolve_redirect_url(url)
+        logger.info(url)
     if url[-1] == '/':
         url = url[:-1]
     context.user_data["url"] = url.split('?')[0]
