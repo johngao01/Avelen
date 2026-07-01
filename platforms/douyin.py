@@ -1081,6 +1081,7 @@ class DouyinScrapy(BasePlatform):
                 "cookie_enabled": "true",
                 "platform": "PC",
                 "downlink": "10",
+                'publish_video_strategy_type': '2',
             }
             if self.username == 'favorite':
                 params.update({
@@ -1092,7 +1093,7 @@ class DouyinScrapy(BasePlatform):
                     "version_code": "170400",
                     "version_name": "17.4.0",
                 })
-            params['X-Bogus'] = self.new_xbogus.get_x_bogus(params, ((86, 138), (238, 238,)), 23)
+            params['a_bogus'] = ABogus().ab_model_2_endpoint(params)
             if self.username == 'favorite':
                 if self.user_sec_uid.endswith('WeSiDAItgr_J1c'):
                     resp = requests.get(
@@ -1119,8 +1120,7 @@ class DouyinScrapy(BasePlatform):
             if resp.text == '':
                 raise CookieExpiredError('抖音爬取失败，空响应')
             try:
-                resp = resp.text.encode('utf-8').decode('utf-8')
-                data_json = json.loads(resp)
+                data_json = resp.json()
             except Exception:
                 raise CookieExpiredError('抖音爬取数据失败，返回数据无效。')
             if 'aweme_list' in data_json and data_json['aweme_list'] is None:
