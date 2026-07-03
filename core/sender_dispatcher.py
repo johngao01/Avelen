@@ -311,7 +311,7 @@ def send_post_payload_to_telegram(data: PostData, *, logger: 'Logger'):
     - `error`: 失败原因，成功时为 `None`
     - `messages`: 已落库的消息记录列表
     """
-    lock = FileLock(LOCK_FILE, timeout=3600)
+    lock = FileLock(LOCK_FILE, timeout=120)
     try:
         with lock:
             persisted_messages = asyncio.run(execute_task(data, logger=logger))
