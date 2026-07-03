@@ -474,7 +474,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(resolve_result.post)
                 downloader = Downloader(logger=logger)
                 post_data = downloader.download(resolve_result.post)
-                await execute_task(post_data)
+                await execute_task(post_data, logger=logger)
             except Exception as exc:
                 failed += 1
                 logger.exception(f"{post_url} 处理异常: {exc}")
@@ -709,7 +709,7 @@ async def handle_post_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
         downloader = Downloader(logger=logger)
         post_data = downloader.download(resolve_result.post)
         try:
-            send_result = await execute_task(post_data)
+            send_result = await execute_task(post_data, logger=logger)
         except Exception:
             await query.edit_message_text("发送失败")
             return ConversationHandler.END

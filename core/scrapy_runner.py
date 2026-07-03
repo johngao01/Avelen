@@ -346,7 +346,7 @@ def send_post_to_telegram(
             'messages': [],
         }
 
-    result = send_post_payload_to_telegram(post_data)
+    result = send_post_payload_to_telegram(post_data, logger=logger)
     return result
 
 

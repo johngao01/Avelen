@@ -8,8 +8,8 @@
 import asyncio
 import os
 import re
-import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
+from logging import Logger
 from typing import Any
 import emoji
 import telegram
@@ -19,7 +19,7 @@ from telegram.constants import ChatAction, ParseMode
 from core.database import insert_data, get_db_conn, TGMSG, POST
 from core.models import DownloadedFile, PostData
 from core.settings import TELEGRAM_BASE_FILE_URL, TELEGRAM_BASE_URL, TELEGRAM_LOCAL_MODE
-from filelock import FileLock
+from filelock import FileLock, Timeout as FileLockTimeout
 
 DEVELOPER_CHAT_ID = 708424141
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
@@ -60,18 +60,24 @@ def replace_char(text):
     return text
 
 
-async def retry_send(fun, **kwargs) -> telegram.Message | list[telegram.Message] | None:
+async def retry_send(fun, *, logger: Logger, **kwargs) -> telegram.Message | list[telegram.Message] | None:
     try:
         return await fun(**kwargs, read_timeout=600, write_timeout=600, connect_timeout=600, pool_timeout=600)
-    except telegram.error.TimedOut:
-        print('Get TimeoutError')
-    except telegram.error.BadRequest:
-        print('Get BadRequest Error')
+    except telegram.error.TimedOut as e:
+        logger.error(f'Telegram 发送超时: {e}')
+    except telegram.error.BadRequest as e:
+        logger.error(f'Telegram 请求错误: {e}')
     except telegram.error.RetryAfter as e:
-        if 'Flood control exceeded. Retry in' in e.message:
-            second = int(e.message.split(' ')[-2])
+        error_message = getattr(e, 'message', '') or str(e)
+        retry_after = getattr(e, 'retry_after', 0)
+        second = int(retry_after)
+        resume_time = datetime.now() + timedelta(seconds=second)
+        logger.error(
+            f'Telegram 触发限流: sleep {second} 秒，'
+            f'直到 {resume_time.strftime("%Y-%m-%d %H:%M:%S")}, error={e}'
+        )
+        if second > 0 and 'Flood control exceeded. Retry in' in error_message:
             await asyncio.sleep(second)
-        print('Get RetryAfter Error')
     return None
 
 
@@ -154,6 +160,7 @@ async def process_and_send_media(
         media_list: list[DownloadedFile],
         data: PostData,
         persisted_messages: list[dict[str, Any]],
+        logger: 'Logger',
 ):
     """处理同类型媒体并在发送后立即落库。"""
     if not media_list:
@@ -169,13 +176,31 @@ async def process_and_send_media(
         with open(path, 'rb') as f:
             if filetype == 'document':
                 await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_DOCUMENT)
-                res = await retry_send(tg_bot.send_document, chat_id=DEVELOPER_CHAT_ID, document=f, caption=caption)
+                res = await retry_send(
+                    tg_bot.send_document,
+                    logger=logger,
+                    chat_id=DEVELOPER_CHAT_ID,
+                    document=f,
+                    caption=caption,
+                )
             elif filetype == 'video' or ext in ['mp4', 'mov', 'gif']:
                 await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_VIDEO)
-                res = await retry_send(tg_bot.send_video, chat_id=DEVELOPER_CHAT_ID, video=f, caption=caption)
+                res = await retry_send(
+                    tg_bot.send_video,
+                    logger=logger,
+                    chat_id=DEVELOPER_CHAT_ID,
+                    video=f,
+                    caption=caption,
+                )
             else:
                 await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_PHOTO)
-                res = await retry_send(tg_bot.send_photo, chat_id=DEVELOPER_CHAT_ID, photo=f, caption=caption)
+                res = await retry_send(
+                    tg_bot.send_photo,
+                    logger=logger,
+                    chat_id=DEVELOPER_CHAT_ID,
+                    photo=f,
+                    caption=caption,
+                )
 
         if not res:
             raise Exception(f"发送单个文件失败: {path}")
@@ -210,7 +235,12 @@ async def process_and_send_media(
                     await tg_bot.send_chat_action(DEVELOPER_CHAT_ID, ChatAction.UPLOAD_DOCUMENT)
 
                 # 发送媒体组
-                res_msgs = await retry_send(tg_bot.send_media_group, chat_id=DEVELOPER_CHAT_ID, media=medias)
+                res_msgs = await retry_send(
+                    tg_bot.send_media_group,
+                    logger=logger,
+                    chat_id=DEVELOPER_CHAT_ID,
+                    media=medias,
+                )
 
                 if not res_msgs:
                     raise Exception(f"发送相册失败，包含文件数: {len(medias)}")
@@ -223,7 +253,7 @@ async def process_and_send_media(
                     f.close()
 
 
-async def execute_task(data: PostData):
+async def execute_task(data: PostData, *, logger: 'Logger'):
     tg_bot = _build_bot()
     raw_files = data.files
     photos, videos, documents = [], [], []
@@ -240,9 +270,9 @@ async def execute_task(data: PostData):
     persisted_messages: list[dict[str, Any]] = []
     persist_post(data)
     # 按类别分批发送媒体 (图片 -> 视频 -> 文档)
-    await process_and_send_media(tg_bot, 'photo', photos, data, persisted_messages)
-    await process_and_send_media(tg_bot, 'video', videos, data, persisted_messages)
-    await process_and_send_media(tg_bot, 'document', documents, data, persisted_messages)
+    await process_and_send_media(tg_bot, 'photo', photos, data, persisted_messages, logger)
+    await process_and_send_media(tg_bot, 'video', videos, data, persisted_messages, logger)
+    await process_and_send_media(tg_bot, 'document', documents, data, persisted_messages, logger)
 
     # 最后发送总结/文字信息
     raw_msg = data.text_raw or ''
@@ -254,6 +284,7 @@ async def execute_task(data: PostData):
 
     send_response = await retry_send(
         tg_bot.sendMessage,
+        logger=logger,
         chat_id=DEVELOPER_CHAT_ID,
         text=text,
         parse_mode=ParseMode.MARKDOWN_V2,
@@ -266,7 +297,7 @@ async def execute_task(data: PostData):
     return persisted_messages
 
 
-def send_post_payload_to_telegram(data: PostData):
+def send_post_payload_to_telegram(data: PostData, *, logger: 'Logger'):
     """发送标准化 payload 到 Telegram，并返回统一结果字典。
 
     入参 `data` 是平台层整理好的标准化 payload，常见字段包括：
@@ -281,20 +312,29 @@ def send_post_payload_to_telegram(data: PostData):
     - `messages`: 已落库的消息记录列表
     """
     lock = FileLock(LOCK_FILE, timeout=3600)
-    with lock:
-        try:
-            persisted_messages = asyncio.run(execute_task(data))
+    try:
+        with lock:
+            persisted_messages = asyncio.run(execute_task(data, logger=logger))
             return {
                 'ok': True,
                 'error': None,
                 'post_data': data,
                 'messages': persisted_messages,
             }
-        except Exception as e:
-            traceback.print_exc()
-            return {
-                'ok': False,
-                'error': str(e),
-                'post_data': data,
-                'messages': [],
-            }
+    except FileLockTimeout as e:
+        error = f'等待 Telegram 发送锁超时: {e}'
+        logger.error(error)
+        return {
+            'ok': False,
+            'error': error,
+            'post_data': data,
+            'messages': [],
+        }
+    except Exception as e:
+        logger.exception(f'Telegram 发送流程失败: {data.url}')
+        return {
+            'ok': False,
+            'error': str(e),
+            'post_data': data,
+            'messages': [],
+        }
