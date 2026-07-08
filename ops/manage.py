@@ -4,6 +4,7 @@ import json
 import html
 import traceback
 import requests
+from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application,
@@ -19,7 +20,7 @@ from telegram.constants import ParseMode, ChatAction
 from typing import Any, cast
 from core.database import *
 from core.models import get_platform_logger
-from core.settings import LOGS_DIR
+from core.settings import COOKIES_DIR, LOGS_DIR
 from core.utils import send_error_notification
 from ops.process_posts import extract_candidate_urls, resolve_single_post, resolve_redirect_url
 from urllib.parse import urlparse
@@ -43,6 +44,7 @@ logger.info("avelen bot token is: " + MANAGE_BOT_TOKEN, '')
 SELECTING_PLATFORM, SELECTING_USER, MANAGING_USER = range(3)
 ASK_SAVE_USERNAME, ASK_OPERATION, STORE_DATA = range(3)
 POST_PROCESS_ACTION = range(1)
+SETCOOKIES_SELECT_FILE, SETCOOKIES_INPUT_COOKIE = range(2)
 MARKDOWN_CHARS = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 follows = {}
 follow_types = {
@@ -363,8 +365,142 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+def list_cookie_files() -> list[str]:
+    if not COOKIES_DIR.exists():
+        return []
+    return sorted(item.name for item in COOKIES_DIR.iterdir() if item.is_file())
+
+
+async def download_document_bytes(document) -> bytes:
+    tg_file = await document.get_file()
+    if tg_file.file_path and Path(tg_file.file_path).is_file():
+        return Path(tg_file.file_path).read_bytes()
+
+    try:
+        return bytes(await tg_file.download_as_bytearray())
+    except Exception as exc:
+        logger.warning(f"local bot api file download failed, fallback to official api: {exc}")
+
+    try:
+        response = requests.get(
+            f"https://api.telegram.org/bot{MANAGE_BOT_TOKEN}/getFile",
+            params={"file_id": document.file_id},
+            timeout=30
+        )
+        response.raise_for_status()
+        file_path = response.json()["result"]["file_path"]
+        file_response = requests.get(
+            f"https://api.telegram.org/file/bot{MANAGE_BOT_TOKEN}/{file_path}",
+            timeout=30
+        )
+        file_response.raise_for_status()
+    except Exception:
+        raise RuntimeError("official telegram file api download failed") from None
+    return file_response.content
+
+
+async def start_setcookies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await update.message.reply_text("你没有权限使用此命令")
+        return ConversationHandler.END
+
+    cookie_files = list_cookie_files()
+    if not cookie_files:
+        await update.message.reply_text("cookies 文件夹里没有可修改的文件")
+        return ConversationHandler.END
+
+    context.user_data['setcookies_files'] = cookie_files
+    keyboard = []
+    row = []
+    for index, filename in enumerate(cookie_files):
+        row.append(InlineKeyboardButton(filename, callback_data=f"setcookies|{index}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    await update.message.reply_text(
+        "选择要修改的 cookies 文件：",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return SETCOOKIES_SELECT_FILE
+
+
+async def select_cookie_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return ConversationHandler.END
+    await query.answer()
+
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await query.edit_message_text("你没有权限执行该操作")
+        return ConversationHandler.END
+
+    data = cast(str, query.data)
+    _, index_text = data.split("|", 1)
+    cookie_files = context.user_data.get('setcookies_files', [])
+    try:
+        filename = cookie_files[int(index_text)]
+    except (ValueError, IndexError):
+        await query.edit_message_text("❌ 无效的 cookies 文件选择，请重新执行 /setcookies")
+        return ConversationHandler.END
+
+    cookie_path = (COOKIES_DIR / filename).resolve()
+    if cookie_path.parent != COOKIES_DIR.resolve() or not cookie_path.is_file():
+        await query.edit_message_text("❌ cookies 文件不存在或路径无效")
+        return ConversationHandler.END
+
+    context.user_data['setcookies_file'] = filename
+    await query.edit_message_text(f"已选择 {filename}\n请发送新的 cookies 内容，或上传包含 cookies 的 txt 文件。发送 /cancel 取消。")
+    return SETCOOKIES_INPUT_COOKIE
+
+
+async def save_cookie_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != DEVELOPER_CHAT_ID:
+        await update.message.reply_text("你没有权限使用此命令")
+        return ConversationHandler.END
+
+    filename = context.user_data.get('setcookies_file')
+    if not filename:
+        await update.message.reply_text("未选择 cookies 文件，请重新执行 /setcookies")
+        return ConversationHandler.END
+
+    cookie_path = (COOKIES_DIR / filename).resolve()
+    if cookie_path.parent != COOKIES_DIR.resolve() or not cookie_path.is_file():
+        await update.message.reply_text("❌ cookies 文件不存在或路径无效")
+        return ConversationHandler.END
+
+    message = update.message
+    if message.document:
+        document = message.document
+        if document.file_size and document.file_size > 2 * 1024 * 1024:
+            await message.reply_text("❌ 文件太大，请上传 2MB 以内的 txt 文件")
+            return SETCOOKIES_INPUT_COOKIE
+        try:
+            cookie_bytes = await download_document_bytes(document)
+        except Exception:
+            logger.exception("下载 cookies 文件失败")
+            await message.reply_text("❌ 文件下载失败，请稍后重试，或改用文本方式发送")
+            return SETCOOKIES_INPUT_COOKIE
+        try:
+            cookie_text = cookie_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            await message.reply_text("❌ 文件不是 UTF-8 文本，请重新上传 txt 文件")
+            return SETCOOKIES_INPUT_COOKIE
+    else:
+        cookie_text = message.text or ''
+
+    cookie_path.write_text(cookie_text, encoding='utf-8')
+    context.user_data.pop('setcookies_file', None)
+    context.user_data.pop('setcookies_files', None)
+    await update.message.reply_text(f"✅ 已替换 {filename}，新内容长度 {len(cookie_text)} 字符")
+    return ConversationHandler.END
+
+
 async def edit_commands(application):
     command = [BotCommand("manage", "管理关注"),
+               BotCommand("setcookies", "修改 cookies 文件"),
                BotCommand("cancel", "取消操作"),
                BotCommand("clear", "清理")]
     await application.bot.set_my_commands(commands=command)
@@ -765,6 +901,18 @@ def main() -> None:
     application.add_error_handler(error_handler)
     link_message = LinkPreviewMessageFilter()
     pure_text_message = filters.Text() & ~filters.COMMAND & ~link_message
+    setcookies_handler = ConversationHandler(
+        entry_points=[CommandHandler("setcookies", start_setcookies)],
+        states={
+            SETCOOKIES_SELECT_FILE: [
+                CallbackQueryHandler(select_cookie_file, pattern=r"^setcookies\|")
+            ],
+            SETCOOKIES_INPUT_COOKIE: [
+                MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.Document.ALL, save_cookie_file)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
     manage_follow_handler = ConversationHandler(
         entry_points=[CommandHandler("manage", start_manage),
                       MessageHandler(pure_text_message, query_data)],
@@ -815,6 +963,7 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
+    application.add_handler(setcookies_handler)
     application.add_handler(post_handler)
     application.add_handler(add_follower_handler)
     application.add_handler(manage_follow_handler)
