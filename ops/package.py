@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 import time
-from zipfile import ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -20,6 +20,7 @@ from core.models import get_platform_logger
 DEFAULT_FOLDER = "/root/download/"
 DEFAULT_PACKAGE_PATH = "/root/download/download.zip"
 PACKAGE_LOG_PATH = LOGS_DIR / "package.log"
+CHECKPOINT_SUFFIX = ".checkpoint"
 
 
 @dataclass(slots=True)
@@ -77,6 +78,68 @@ def ensure_parent_dir(file_path: str):
     parent_dir = os.path.dirname(file_path)
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
+
+
+def fsync_parent_dir(file_path: str) -> None:
+    if os.name == "nt":
+        return
+    dir_path = os.path.dirname(os.path.abspath(file_path)) or "."
+    dir_fd = os.open(dir_path, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def save_zip_checkpoint(output_path: str) -> None:
+    checkpoint_path = f"{output_path}{CHECKPOINT_SUFFIX}"
+    temp_path = f"{checkpoint_path}.tmp"
+
+    if os.path.exists(output_path):
+        with ZipFile(output_path, "r") as zip_file:
+            start_dir = zip_file.start_dir
+        with open(output_path, "rb") as file_obj:
+            file_obj.seek(start_dir)
+            central_directory = file_obj.read()
+    else:
+        start_dir = -1
+        central_directory = b""
+
+    with open(temp_path, "wb") as file_obj:
+        file_obj.write(start_dir.to_bytes(8, "little", signed=True))
+        file_obj.write(central_directory)
+        file_obj.flush()
+        os.fsync(file_obj.fileno())
+    os.replace(temp_path, checkpoint_path)
+    fsync_parent_dir(checkpoint_path)
+
+
+def recover_zip_checkpoint(output_path: str, logger=None) -> None:
+    checkpoint_path = f"{output_path}{CHECKPOINT_SUFFIX}"
+    if not os.path.exists(checkpoint_path):
+        return
+
+    with open(checkpoint_path, "rb") as file_obj:
+        start_dir = int.from_bytes(file_obj.read(8), "little", signed=True)
+        central_directory = file_obj.read()
+
+    if start_dir < 0:
+        try:
+            os.remove(output_path)
+        except FileNotFoundError:
+            pass
+    else:
+        with open(output_path, "r+b") as file_obj:
+            file_obj.truncate(start_dir)
+            file_obj.seek(start_dir)
+            file_obj.write(central_directory)
+            file_obj.flush()
+            os.fsync(file_obj.fileno())
+
+    os.remove(checkpoint_path)
+    fsync_parent_dir(checkpoint_path)
+    if logger is not None:
+        logger.warning("检测到上次未完成的批次，已将 ZIP 恢复到该批次开始前")
 
 
 def cleanup_empty_dirs(folder: str, logger) -> int:
@@ -185,7 +248,6 @@ def format_bytes(size: int) -> str:
 
 def process_folder(
         folder: str,
-        zip_file: ZipFile | None,
         output_path: str,
         sent_captions: set[str],
         sent_idstrs: set[str],
@@ -198,13 +260,25 @@ def process_folder(
         detail_logger,
 ):
     stats = PackageStats()
-    output_realpath = os.path.realpath(output_path)
+    candidates: list[tuple[str, str, int]] = []
+    output = Path(output_path).resolve()
+
+    def is_package_artifact(file_path: str) -> bool:
+        path = Path(file_path).resolve()
+        if path.parent != output.parent:
+            return False
+        checkpoint_name = f"{output.name}{CHECKPOINT_SUFFIX}"
+        if path.name in {output.name, checkpoint_name, f"{checkpoint_name}.tmp"}:
+            return True
+        part_prefix = f"{output.stem}.part"
+        return path.name.startswith(part_prefix) and (
+            path.name.endswith(output.suffix) or path.name.endswith(f"{output.suffix}.tmp")
+        )
 
     for root, _, files in os.walk(folder):
         for file_name in files:
             file_path = os.path.join(root, file_name)
-            real_path = os.path.realpath(file_path)
-            if real_path == output_realpath:
+            if is_package_artifact(file_path):
                 continue
 
             file_size = os.path.getsize(file_path)
@@ -231,26 +305,88 @@ def process_folder(
 
             stats.packaged += 1
             stats.packaged_bytes += file_size
+            candidates.append((file_path, relative_path, file_size))
 
-            if dry_run:
-                continue
+    if dry_run:
+        return stats
 
+    while candidates:
+        free_bytes = shutil.disk_usage(output.parent).free
+        batch_limit = free_bytes // 2
+        batch: list[tuple[str, str, int]] = []
+        batch_bytes = 0
+        remaining: list[tuple[str, str, int]] = []
+
+        for candidate in candidates:
+            if batch_bytes + candidate[2] <= batch_limit:
+                batch.append(candidate)
+                batch_bytes += candidate[2]
+            else:
+                remaining.append(candidate)
+
+        if not batch:
+            reason = f"磁盘空间不足：剩余 {format_bytes(free_bytes)}，单批上限 {format_bytes(batch_limit)}"
+            logger.error(reason)
+            stats.failed += len(candidates)
+            stats.failed_files.extend((item[0], reason) for item in candidates)
+            break
+
+        logger.info(
+            f"开始新批次: {output_path} | 可用空间: {format_bytes(free_bytes)} | "
+            f"批次上限: {format_bytes(batch_limit)} | 文件数: {len(batch)} | "
+            f"原始大小: {format_bytes(batch_bytes)}"
+        )
+
+        try:
+            save_zip_checkpoint(output_path)
+            write_mode = "a" if os.path.exists(output_path) else "w"
+            with ZipFile(
+                    output_path,
+                    write_mode,
+                    compression=ZIP_DEFLATED,
+                    compresslevel=6,
+                    allowZip64=True,
+            ) as zip_file:
+                for file_path, relative_path, _ in batch:
+                    zip_file.write(file_path, relative_path)
+
+            with open(output_path, "r+b") as file_obj:
+                file_obj.flush()
+                os.fsync(file_obj.fileno())
+            with ZipFile(output_path, "r") as zip_file:
+                bad_file = zip_file.testzip()
+                if bad_file is not None:
+                    raise RuntimeError(f"ZIP 校验失败: {bad_file}")
+                compressed_bytes = sum(
+                    zip_file.getinfo(relative_path).compress_size
+                    for _, relative_path, _ in batch
+                )
+
+            checkpoint_path = f"{output_path}{CHECKPOINT_SUFFIX}"
+            os.remove(checkpoint_path)
+            fsync_parent_dir(checkpoint_path)
+        except Exception as exc:
             try:
-                if zip_file is None:
-                    raise RuntimeError("压缩包未打开")
-                zip_file.write(file_path, relative_path)
-                zip_info = zip_file.getinfo(relative_path)
-                stats.compressed_bytes += zip_info.compress_size
+                recover_zip_checkpoint(output_path)
+            except Exception as recovery_exc:
+                logger.exception(f"恢复 ZIP 检查点失败: {recovery_exc}")
+            reason = str(exc)
+            logger.error(f"批次写入失败，源文件全部保留: {reason}")
+            stats.failed += len(batch)
+            stats.failed_files.extend((item[0], reason) for item in batch)
+            break
+
+        stats.compressed_bytes += compressed_bytes
+        for file_path, _, _ in batch:
+            try:
                 os.remove(file_path)
                 stats.deleted += 1
-            except FileNotFoundError:
-                stats.failed += 1
-                stats.failed_files.append((file_path, "文件不存在"))
-                logger.warning(f"压缩文件失败: {file_path} - 文件不存在")
-            except Exception as exc:
+            except OSError as exc:
                 stats.failed += 1
                 stats.failed_files.append((file_path, str(exc)))
-                logger.warning(f"压缩文件失败: {file_path} - {exc}")
+                logger.warning(f"批次已保存，但删除源文件失败: {file_path} - {exc}")
+        logger.info(f"批次已保存并释放源文件空间: {output_path}")
+        candidates = remaining
 
     return stats
 
@@ -291,7 +427,6 @@ def main():
         if args.dry_run:
             stats = process_folder(
                 folder,
-                None,
                 package_path,
                 sent_captions,
                 sent_idstrs,
@@ -303,21 +438,19 @@ def main():
                 detail_logger=detail_logger,
             )
         else:
-            write_mode: Literal["a", "w"] = "a" if os.path.exists(package_path) else "w"
-            with ZipFile(package_path, write_mode) as zip_file:
-                stats = process_folder(
-                    folder,
-                    zip_file,
-                    package_path,
-                    sent_captions,
-                    sent_idstrs,
-                    sent_mblogids,
-                    args.include,
-                    args.exclude,
-                    dry_run=False,
-                    logger=logger,
-                    detail_logger=detail_logger,
-                )
+            recover_zip_checkpoint(package_path, logger)
+            stats = process_folder(
+                folder,
+                package_path,
+                sent_captions,
+                sent_idstrs,
+                sent_mblogids,
+                args.include,
+                args.exclude,
+                dry_run=False,
+                logger=logger,
+                detail_logger=detail_logger,
+            )
     except KeyboardInterrupt:
         logger.warning("检测到 Ctrl+C，程序已停止。已经成功保存并删除的文件不会回滚，未处理文件保留在原目录。")
         return 130
