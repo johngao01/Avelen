@@ -31,6 +31,10 @@ class PackageStats:
     packaged_bytes: int = 0
     skipped_unsent: int = 0
     skipped_unsent_bytes: int = 0
+    skipped_json: int = 0
+    skipped_json_bytes: int = 0
+    skipped_media: int = 0
+    skipped_media_bytes: int = 0
     deleted: int = 0
     failed: int = 0
     compressed_bytes: int = 0
@@ -66,6 +70,7 @@ def parse_args():
         help="只统计将要处理的文件，不实际写入 zip，也不删除源文件。默认开启。",
     )
     parser.add_argument(
+        "-ex",
         "--execute",
         dest="dry_run",
         action="store_false",
@@ -301,6 +306,12 @@ def process_folder(
             if not can_package:
                 stats.skipped_unsent += 1
                 stats.skipped_unsent_bytes += file_size
+                if "json" in relative_path.replace("\\", "/").split("/"):
+                    stats.skipped_json += 1
+                    stats.skipped_json_bytes += file_size
+                else:
+                    stats.skipped_media += 1
+                    stats.skipped_media_bytes += file_size
                 continue
 
             stats.packaged += 1
@@ -475,6 +486,12 @@ def main():
     )
     logger.info(
         f"未发送跳过数    : {stats.skipped_unsent}   总大小：{format_bytes(stats.skipped_unsent_bytes)} ({stats.skipped_unsent_bytes} bytes)"
+    )
+    logger.info(
+        f"JSON 跳过数      : {stats.skipped_json}   总大小：{format_bytes(stats.skipped_json_bytes)} ({stats.skipped_json_bytes} bytes)"
+    )
+    logger.info(
+        f"媒体跳过数       : {stats.skipped_media}   总大小：{format_bytes(stats.skipped_media_bytes)} ({stats.skipped_media_bytes} bytes)"
     )
     if stats.deleted:
         logger.info(f"删除文件数      : {stats.deleted}")
