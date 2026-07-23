@@ -1130,7 +1130,8 @@ class DouyinScrapy(BasePlatform):
             self.max_cursor = data_json['max_cursor']
             for aweme in data_json['aweme_list']:
                 aweme = Aweme(self.scraping, aweme)
-                aweme.save_json()
+                if self.post_matches_text_filter(aweme):
+                    aweme.save_json()
                 self.post.append(aweme)
                 if self.username != 'favorite' and not aweme.is_top and aweme.create_time < self.scraping.latest_time:
                     KEEP = False

@@ -346,7 +346,8 @@ class WeiboScrapy(BasePlatform):
                     if not weibo_id:
                         continue
                     weibo = WeiboPost(self.scraping, weibo_info)
-                    weibo.save_json()
+                    if self.post_matches_text_filter(weibo):
+                        weibo.save_json()
                     self.post.append(weibo)
                     if not weibo.is_top and weibo.create_time < self.scraping.latest_time:
                         KEEP = False

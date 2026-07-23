@@ -167,7 +167,6 @@ class BilibiliPost(BasePost):
             desc = api.get_opus_desc(self.idstr)
             if desc:
                 self.node['describe'] = desc
-                self.save_json()
             return desc
         return get(self.node, 'describe') or ''
 
@@ -228,7 +227,8 @@ class BilibiliScrapy(BasePlatform):
                 item['user_id'] = self.scraping.userid
                 item['username'] = self.scraping.username
                 post = BilibiliPost(self.scraping, item, self)
-                post.save_json()
+                if self.post_matches_text_filter(post):
+                    post.save_json()
                 self.post.append(post)
                 if post.create_time <= self.scraping.latest_time and not post.is_top:
                     keep = False

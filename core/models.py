@@ -218,6 +218,12 @@ class BasePlatform(ABC):
     scraping: Any
     post: list[Any]
     logger: Any
+    run_options: RunOptions | None = None
+
+    def post_matches_text_filter(self, post: Any) -> bool:
+        """Return whether a post is eligible for persistence and processing."""
+        needle = self.run_options.send_if_text_contains if self.run_options else None
+        return not needle or needle in (post.text_raw or '')
 
     @classmethod
     def all_names(cls) -> tuple[str, ...]:
@@ -285,6 +291,7 @@ class BasePlatform(ABC):
         )
 
         options = context.options
+        self.run_options = options
 
         if options.use_local_json:
             self.get_post_from_local()
@@ -347,6 +354,16 @@ class BasePlatform(ABC):
                 clear_error_notification(dedupe_key, logger=self.logger)
 
         new_posts = self.filter_new_post(sent_post)
+        if options.send_if_text_contains:
+            unmatched_count = sum(
+                1 for post in new_posts if not self.post_matches_text_filter(post)
+            )
+            new_posts = [post for post in new_posts if self.post_matches_text_filter(post)]
+            if unmatched_count:
+                self.logger.info(
+                    f"跳过 {unmatched_count} 条内容: post.text_raw 未包含指定内容 "
+                    f"send_if_text_contains={options.send_if_text_contains!r}"
+                )
         stats = context.stats
         stats.fetched_posts += len(self.post)
         stats.new_posts += len(new_posts)

@@ -317,6 +317,17 @@ def send_post_to_telegram(
     - `messages`: 已落库的消息记录列表
     """
     options = context.options
+    if options.send_if_text_contains and options.send_if_text_contains not in (post.text_raw or ''):
+        logger.info(
+            f"跳过内容处理: post.text_raw 未包含指定内容 "
+            f"send_if_text_contains={options.send_if_text_contains!r} url={post.url}"
+        )
+        return {
+            'ok': True,
+            'error': None,
+            'post_data': None,
+            'messages': [],
+        }
     downloader = Downloader(logger=logger, show_progress=options.download_progress)
     post_data = downloader.download(post)
     download_ok = post_data.ok
@@ -334,18 +345,6 @@ def send_post_to_telegram(
             'post_data': post_data,
             'messages': [],
         }
-    if options.send_if_text_contains and options.send_if_text_contains not in (post.text_raw or ''):
-        logger.info(
-            f"跳过 Telegram 发送: post.text_raw 未包含指定内容 "
-            f"send_if_text_contains={options.send_if_text_contains!r} url={post.url}"
-        )
-        return {
-            'ok': True,
-            'error': None,
-            'post_data': post_data,
-            'messages': [],
-        }
-
     result = send_post_payload_to_telegram(post_data, logger=logger)
     return result
 
@@ -463,7 +462,7 @@ def build_common_cli_parser():
                         help='显式开启发送，可覆盖配置文件中的 no_send=true')
     parser.add_argument('-stc', '--stc', '--send-if-text-contains', dest='send_if_text_contains',
                         default=argparse.SUPPRESS,
-                        help='仅当 BasePost.text_raw 包含指定字符串时才发送到 Telegram；否则只下载不发送')
+                        help='仅处理 BasePost.text_raw 包含指定字符串的内容；否则不保存 JSON、不下载、不发送')
     parser.add_argument('--send-on-download-failure', action='store_true', dest='send_on_download_failure',
                         default=argparse.SUPPRESS,
                         help='下载出现失败时仍继续发送，默认关闭')

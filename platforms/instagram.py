@@ -452,7 +452,8 @@ class InstagramScrapy(BasePlatform):
                         if not post.is_top and post.create_time <= self.scraping.latest_time:
                             keep = False
                             break
-                        post.save_json()
+                        if self.post_matches_text_filter(post):
+                            post.save_json()
 
                     instagram_logger.info(f'{self.scraping.username} 第 {page} 页完成，获取到 {page_added} 个内容')
 

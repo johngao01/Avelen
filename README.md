@@ -260,7 +260,7 @@ python main.py weibo --send --name 某个用户
 - 可用 `-c / --config` 指定别的配置文件路径
 - 可用 `--ignore-config` 完全忽略配置文件
 - 多值参数如 `valid`、`user_ids`、`usernames`、`rate_limit` 支持逗号分隔或换行
-- `send_if_text_contains` / `--stc` 用于控制“仅当 `BasePost.text_raw` 包含指定字符串时才发送到 Telegram”，未匹配时仍会下载，但不会发送
+- `send_if_text_contains` / `--stc` 用于控制“仅处理 `BasePost.text_raw` 包含指定字符串的内容”，未匹配时不保存 JSON、不下载、不发送
 - 时间格式支持绝对时间 `YYYY-MM-DD HH:MM:SS`（或 `YYYY-MM-DD`），以及带符号的相对时间。其中 `+` 表示“大于/更久之前”（如 `+7d` 表示7天前的数据），`-` 表示“小于/最近”（如 `-7d` 表示最近7天内的数据）。
 
 ### 5.4 Cookie 文件
@@ -456,7 +456,7 @@ python main.py -l -s valid:desc
 - `--send`
   显式开启发送，可覆盖配置文件里的 `no_send=true`
 - `--stc`, `--send-if-text-contains`
-  仅当 `BasePost.text_raw` 包含指定字符串时才发送到 Telegram；未匹配时仍会下载，但不会发送
+  仅处理 `BasePost.text_raw` 包含指定字符串的内容；未匹配时不保存 JSON、不下载、不发送
 - `--send-on-download-failure`
   下载失败时仍继续发送
 - `--no-send-on-download-failure`
@@ -939,7 +939,7 @@ python ops/process_posts.py --input urls.txt --stc 抽奖
 - 不传参数时，默认处理 `logs/error.txt`
 - 传位置参数时，可一次传多个 URL
 - 传 `--input` 时，会从指定文件逐行提取所有可识别 URL
-- 传 `--stc` 时，只有 `BasePost.text_raw` 包含指定字符串的 post 才会发送；未匹配的 post 仍会下载
+- 传 `--stc` 时，只有 `BasePost.text_raw` 包含指定字符串的 post 才会保存 JSON、下载并发送
 - 处理完成后会输出中英文字段的汇总表格
 - 汇总中包含处理闭环、解析闭环、来源闭环和一致性检查
 
