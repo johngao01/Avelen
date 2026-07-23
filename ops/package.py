@@ -4,9 +4,6 @@ import argparse
 import os
 import shutil
 import sys
-import time
-from zipfile import ZIP_DEFLATED, ZipFile
-from dataclasses import dataclass, field
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -18,39 +15,14 @@ from core.settings import LOGS_DIR
 from core.models import get_platform_logger
 
 DEFAULT_FOLDER = "/root/download/"
-DEFAULT_PACKAGE_PATH = "/root/download/download.zip"
+DEFAULT_DEST_FOLDER = "/root/result/"
 PACKAGE_LOG_PATH = LOGS_DIR / "package.log"
-CHECKPOINT_SUFFIX = ".checkpoint"
-
-
-@dataclass(slots=True)
-class PackageStats:
-    total: int = 0
-    total_bytes: int = 0
-    packaged: int = 0
-    packaged_bytes: int = 0
-    skipped_unsent: int = 0
-    skipped_unsent_bytes: int = 0
-    skipped_json: int = 0
-    skipped_json_bytes: int = 0
-    skipped_media: int = 0
-    skipped_media_bytes: int = 0
-    deleted: int = 0
-    failed: int = 0
-    compressed_bytes: int = 0
-    failed_files: list[tuple[str, str]] = field(default_factory=list)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="打包已发送文件到 zip，并在成功后删除源文件。")
     parser.add_argument("--folder", default=DEFAULT_FOLDER, help="待打包目录")
-    parser.add_argument("--output", default=DEFAULT_PACKAGE_PATH, help="zip 输出路径")
-    parser.add_argument(
-        "-s",
-        "--silent",
-        action="store_true",
-        help="安静输出：逐文件判定结果不输出到控制台，只写入日志文件。",
-    )
+    parser.add_argument("--output", default=DEFAULT_DEST_FOLDER, help="")
     parser.add_argument(
         "--include",
         nargs="*",
@@ -63,88 +35,7 @@ def parse_args():
         default=[],
         help="强制跳过规则：只要文件路径包含任一字符串，就直接不打包，例如 --exclude json mp4",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=True,
-        help="只统计将要处理的文件，不实际写入 zip，也不删除源文件。默认开启。",
-    )
-    parser.add_argument(
-        "-ex",
-        "--execute",
-        dest="dry_run",
-        action="store_false",
-        help="实际执行压缩、删除源文件并清理空目录。",
-    )
     return parser.parse_args()
-
-
-def ensure_parent_dir(file_path: str):
-    parent_dir = os.path.dirname(file_path)
-    if parent_dir:
-        os.makedirs(parent_dir, exist_ok=True)
-
-
-def fsync_parent_dir(file_path: str) -> None:
-    if os.name == "nt":
-        return
-    dir_path = os.path.dirname(os.path.abspath(file_path)) or "."
-    dir_fd = os.open(dir_path, os.O_RDONLY)
-    try:
-        os.fsync(dir_fd)
-    finally:
-        os.close(dir_fd)
-
-
-def save_zip_checkpoint(output_path: str) -> None:
-    checkpoint_path = f"{output_path}{CHECKPOINT_SUFFIX}"
-    temp_path = f"{checkpoint_path}.tmp"
-
-    if os.path.exists(output_path):
-        with ZipFile(output_path, "r") as zip_file:
-            start_dir = zip_file.start_dir
-        with open(output_path, "rb") as file_obj:
-            file_obj.seek(start_dir)
-            central_directory = file_obj.read()
-    else:
-        start_dir = -1
-        central_directory = b""
-
-    with open(temp_path, "wb") as file_obj:
-        file_obj.write(start_dir.to_bytes(8, "little", signed=True))
-        file_obj.write(central_directory)
-        file_obj.flush()
-        os.fsync(file_obj.fileno())
-    os.replace(temp_path, checkpoint_path)
-    fsync_parent_dir(checkpoint_path)
-
-
-def recover_zip_checkpoint(output_path: str, logger=None) -> None:
-    checkpoint_path = f"{output_path}{CHECKPOINT_SUFFIX}"
-    if not os.path.exists(checkpoint_path):
-        return
-
-    with open(checkpoint_path, "rb") as file_obj:
-        start_dir = int.from_bytes(file_obj.read(8), "little", signed=True)
-        central_directory = file_obj.read()
-
-    if start_dir < 0:
-        try:
-            os.remove(output_path)
-        except FileNotFoundError:
-            pass
-    else:
-        with open(output_path, "r+b") as file_obj:
-            file_obj.truncate(start_dir)
-            file_obj.seek(start_dir)
-            file_obj.write(central_directory)
-            file_obj.flush()
-            os.fsync(file_obj.fileno())
-
-    os.remove(checkpoint_path)
-    fsync_parent_dir(checkpoint_path)
-    if logger is not None:
-        logger.warning("检测到上次未完成的批次，已将 ZIP 恢复到该批次开始前")
 
 
 def cleanup_empty_dirs(folder: str, logger) -> int:
@@ -167,14 +58,8 @@ def fetch_sent_file_markers() -> tuple[set[str], set[str], set[str]]:
     conn = get_db_conn()
     try:
         with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT COALESCE(CAPTION, ''),
-                       COALESCE(IDSTR, ''),
-                       COALESCE(MBLOGID, '')
-                FROM messages
-                """
-            )
+            cursor.execute(""" SELECT COALESCE(CAPTION, ''), COALESCE(IDSTR, ''), COALESCE(MBLOGID, '')
+                               FROM messages""")
             rows = cursor.fetchall()
     finally:
         conn.close()
@@ -241,190 +126,20 @@ def is_sent_file(
     return False, "未发送媒体"
 
 
-def format_bytes(size: int) -> str:
-    units = ["B", "KB", "MB", "GB", "TB"]
-    value = float(size)
-    for unit in units:
-        if value < 1024 or unit == units[-1]:
-            return f"{value:.2f} {unit}"
-        value /= 1024
-    return f"{size} B"
-
-
-def process_folder(
-        folder: str,
-        output_path: str,
-        sent_captions: set[str],
-        sent_idstrs: set[str],
-        sent_mblogids: set[str],
-        include_keywords: list[str],
-        exclude_keywords: list[str],
-        *,
-        dry_run: bool,
-        logger,
-        detail_logger,
-):
-    stats = PackageStats()
-    candidates: list[tuple[str, str, int]] = []
-    output = Path(output_path).resolve()
-
-    def is_package_artifact(file_path: str) -> bool:
-        path = Path(file_path).resolve()
-        if path.parent != output.parent:
-            return False
-        checkpoint_name = f"{output.name}{CHECKPOINT_SUFFIX}"
-        if path.name in {output.name, checkpoint_name, f"{checkpoint_name}.tmp"}:
-            return True
-        part_prefix = f"{output.stem}.part"
-        return path.name.startswith(part_prefix) and (
-            path.name.endswith(output.suffix) or path.name.endswith(f"{output.suffix}.tmp")
-        )
-
-    for root, _, files in os.walk(folder):
-        for file_name in files:
-            file_path = os.path.join(root, file_name)
-            if is_package_artifact(file_path):
-                continue
-
-            file_size = os.path.getsize(file_path)
-            stats.total += 1
-            stats.total_bytes += file_size
-
-            relative_path = os.path.relpath(file_path, folder)
-            can_package, reason = is_sent_file(
-                relative_path,
-                file_name,
-                sent_captions,
-                sent_idstrs,
-                sent_mblogids,
-                include_keywords,
-                exclude_keywords,
-            )
-            detail_logger.info(
-                f"{stats.total}: {file_path} | 判定结果: {'打包' if can_package else '跳过'} | 命中规则: {reason} | 大小: {format_bytes(file_size)}"
-            )
-            if not can_package:
-                stats.skipped_unsent += 1
-                stats.skipped_unsent_bytes += file_size
-                if "json" in relative_path.replace("\\", "/").split("/"):
-                    stats.skipped_json += 1
-                    stats.skipped_json_bytes += file_size
-                else:
-                    stats.skipped_media += 1
-                    stats.skipped_media_bytes += file_size
-                continue
-
-            stats.packaged += 1
-            stats.packaged_bytes += file_size
-            candidates.append((file_path, relative_path, file_size))
-
-    if dry_run:
-        return stats
-
-    while candidates:
-        free_bytes = shutil.disk_usage(output.parent).free
-        batch_limit = free_bytes // 2
-        batch: list[tuple[str, str, int]] = []
-        batch_bytes = 0
-        remaining: list[tuple[str, str, int]] = []
-
-        for candidate in candidates:
-            if batch_bytes + candidate[2] <= batch_limit:
-                batch.append(candidate)
-                batch_bytes += candidate[2]
-            else:
-                remaining.append(candidate)
-
-        if not batch:
-            reason = f"磁盘空间不足：剩余 {format_bytes(free_bytes)}，单批上限 {format_bytes(batch_limit)}"
-            logger.error(reason)
-            stats.failed += len(candidates)
-            stats.failed_files.extend((item[0], reason) for item in candidates)
-            break
-
-        logger.info(
-            f"开始新批次: {output_path} | 可用空间: {format_bytes(free_bytes)} | "
-            f"批次上限: {format_bytes(batch_limit)} | 文件数: {len(batch)} | "
-            f"原始大小: {format_bytes(batch_bytes)}"
-        )
-
-        try:
-            save_zip_checkpoint(output_path)
-            write_mode = "a" if os.path.exists(output_path) else "w"
-            with ZipFile(
-                    output_path,
-                    write_mode,
-                    compression=ZIP_DEFLATED,
-                    compresslevel=6,
-                    allowZip64=True,
-            ) as zip_file:
-                for file_path, relative_path, _ in batch:
-                    zip_file.write(file_path, relative_path)
-
-            with open(output_path, "r+b") as file_obj:
-                file_obj.flush()
-                os.fsync(file_obj.fileno())
-            with ZipFile(output_path, "r") as zip_file:
-                bad_file = zip_file.testzip()
-                if bad_file is not None:
-                    raise RuntimeError(f"ZIP 校验失败: {bad_file}")
-                compressed_bytes = sum(
-                    zip_file.getinfo(relative_path).compress_size
-                    for _, relative_path, _ in batch
-                )
-
-            checkpoint_path = f"{output_path}{CHECKPOINT_SUFFIX}"
-            os.remove(checkpoint_path)
-            fsync_parent_dir(checkpoint_path)
-        except Exception as exc:
-            try:
-                recover_zip_checkpoint(output_path)
-            except Exception as recovery_exc:
-                logger.exception(f"恢复 ZIP 检查点失败: {recovery_exc}")
-            reason = str(exc)
-            logger.error(f"批次写入失败，源文件全部保留: {reason}")
-            stats.failed += len(batch)
-            stats.failed_files.extend((item[0], reason) for item in batch)
-            break
-
-        stats.compressed_bytes += compressed_bytes
-        for file_path, _, _ in batch:
-            try:
-                os.remove(file_path)
-                stats.deleted += 1
-            except OSError as exc:
-                stats.failed += 1
-                stats.failed_files.append((file_path, str(exc)))
-                logger.warning(f"批次已保存，但删除源文件失败: {file_path} - {exc}")
-        logger.info(f"批次已保存并释放源文件空间: {output_path}")
-        candidates = remaining
-
-    return stats
-
-
 def main():
     logger = get_platform_logger("package", LOGS_DIR)
     args = parse_args()
-    folder = args.folder
-    package_path = args.output
+    folder = str(args.folder)
+    dest_folder = str(args.output)
 
     if not os.path.isdir(folder):
         logger.error(f"目录不存在: {folder}")
-        return 1
-
-    ensure_parent_dir(package_path)
+        return 0
 
     logger.info(f"待打包目录    : {folder}")
-    logger.info(f"输出文件      : {package_path}")
     logger.info(f"包含规则      : {args.include}")
     logger.info(f"排除规则      : {args.exclude}")
-    logger.info(f"安静输出      : {args.silent}")
-    logger.info(f"仅统计模式    : {args.dry_run}")
     logger.info(f"日志文件      : {PACKAGE_LOG_PATH}")
-
-    detail_logger = logger.bind(file_only=True) if args.silent else logger
-
-    start = time.time()
 
     try:
         logger.info("从数据库中查询已发送的数据")
@@ -433,81 +148,19 @@ def main():
     except Exception as exc:
         logger.exception(f"获取已发送标记失败: {exc}")
         return 1
-    stats = PackageStats()
-    try:
-        if args.dry_run:
-            stats = process_folder(
-                folder,
-                package_path,
-                sent_captions,
-                sent_idstrs,
-                sent_mblogids,
-                args.include,
-                args.exclude,
-                dry_run=True,
-                logger=logger,
-                detail_logger=detail_logger,
-            )
-        else:
-            recover_zip_checkpoint(package_path, logger)
-            stats = process_folder(
-                folder,
-                package_path,
-                sent_captions,
-                sent_idstrs,
-                sent_mblogids,
-                args.include,
-                args.exclude,
-                dry_run=False,
-                logger=logger,
-                detail_logger=detail_logger,
-            )
-    except KeyboardInterrupt:
-        logger.warning("检测到 Ctrl+C，程序已停止。已经成功保存并删除的文件不会回滚，未处理文件保留在原目录。")
-        return 130
-    except Exception as exc:
-        logger.exception(f"处理文件夹时发生异常: {exc}")
-        return 1
-
-    removed_empty_dirs = 0
-    if not args.dry_run:
-        removed_empty_dirs = cleanup_empty_dirs(folder, logger)
-
-    end = time.time()
-    ratio = 0.0 if stats.packaged_bytes == 0 else stats.compressed_bytes / stats.packaged_bytes
-
-    if stats.packaged == 0:
-        logger.info("没有匹配到可打包的已发送文件。")
-
-    logger.info(
-        f"扫描文件数      : {stats.total}   总大小：{format_bytes(stats.total_bytes)} ({stats.total_bytes} bytes)")
-    logger.info(
-        f"命中文件数      : {stats.packaged}   总大小：{format_bytes(stats.packaged_bytes)} ({stats.packaged_bytes} bytes)"
-    )
-    logger.info(
-        f"未发送跳过数    : {stats.skipped_unsent}   总大小：{format_bytes(stats.skipped_unsent_bytes)} ({stats.skipped_unsent_bytes} bytes)"
-    )
-    logger.info(
-        f"JSON 跳过数      : {stats.skipped_json}   总大小：{format_bytes(stats.skipped_json_bytes)} ({stats.skipped_json_bytes} bytes)"
-    )
-    logger.info(
-        f"媒体跳过数       : {stats.skipped_media}   总大小：{format_bytes(stats.skipped_media_bytes)} ({stats.skipped_media_bytes} bytes)"
-    )
-    if stats.deleted:
-        logger.info(f"删除文件数      : {stats.deleted}")
-    if stats.failed:
-        logger.info(f"压缩失败数      : {stats.failed}")
-    logger.info(f"压缩后大小      : {format_bytes(stats.compressed_bytes)} ({stats.compressed_bytes} bytes)")
-    logger.info(f"压缩率          : {ratio:.2%}")
-    logger.info(f"清理空目录数    : {removed_empty_dirs}")
-    logger.info(f"耗时            : {end - start:.2f} 秒")
-
-    if stats.failed > 0:
-        logger.warning("压缩失败文件列表:")
-        for index, (file_path, reason) in enumerate(stats.failed_files, start=1):
-            logger.warning(f"{index}. 文件: {file_path}")
-            logger.warning(f"   原因: {reason}")
-    return 0
+    for root, _, files in os.walk(folder):
+        for file_name in files:
+            file_path = os.path.join(str(root), file_name)
+            relative_path = os.path.relpath(file_path, folder)
+            can_package, reason = is_sent_file(relative_path, file_name, sent_captions, sent_idstrs, sent_mblogids,
+                                               args.include, args.exclude, )
+            if not can_package:
+                continue
+            new_path = os.path.join(dest_folder, relative_path)
+            logger.info(f"{file_path}  ----->  {new_path}")
+            os.makedirs(os.path.dirname(new_path), exist_ok=True)
+            shutil.move(file_path, new_path)
+    return None
 
 
 if __name__ == "__main__":
