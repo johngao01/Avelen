@@ -15,6 +15,7 @@ cookie_file = "johnjohn01.txt"
 base_url = "https://weibo.com"
 web_base_url = "https://www.weibo.com"
 favorite_referer = "https://weibo.com/u/page/like/7767780215"
+favorite_limit = 100
 
 [platforms.douyin]
 cookie_file = "小号.txt"
@@ -23,6 +24,7 @@ base_url = "https://www.douyin.com"
 video_url = "https://www.douyin.com/video/"
 note_url = "https://www.douyin.com/note/"
 user_url = "https://www.douyin.com/user/"
+favorite_limit = 100
 
 [platforms.bilibili]
 cookie_file = "bl.txt"

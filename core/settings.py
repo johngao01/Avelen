@@ -30,7 +30,6 @@ MAX_VIDEO_SIZE = 500 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 500 * 1024 * 1024
 ERROR_TOKEN = os.getenv('ERROR_TELEGRAM_BOT_TOKEN', '')
 DEVELOPER_CHAT_ID = 708424141
-SCRAPY_FAVORITE_LIMIT = 100
 RATE_LIMIT_STATE = {
     'count': 0,
     'times': 0,
@@ -44,6 +43,10 @@ COMMON_HEADERS = dict(PLATFORM_SETTINGS['headers']['common'])
 PLATFORM_CONFIGS = {
     name: dict(config)
     for name, config in PLATFORM_SETTINGS['platforms'].items()
+}
+SCRAPY_FAVORITE_LIMIT = {
+    platform: int(PLATFORM_CONFIGS[platform]['favorite_limit'])
+    for platform in ('douyin', 'weibo')
 }
 DOWNLOAD_ROOT = os.getenv('DOWNLOAD_ROOT', PLATFORM_SETTINGS['paths']['download_root'])
 

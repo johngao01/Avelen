@@ -1136,7 +1136,7 @@ class DouyinScrapy(BasePlatform):
                 if self.username != 'favorite' and not aweme.is_top and aweme.create_time < self.scraping.latest_time:
                     KEEP = False
             scrapy_info = f'{self.username} 获取第{self.page}页完成，一共有{len(data_json['aweme_list'])}个抖音'
-            if self.username == 'favorite' and len(self.post) >= SCRAPY_FAVORITE_LIMIT:
+            if self.username == 'favorite' and len(self.post) >= SCRAPY_FAVORITE_LIMIT['douyin']:
                 scrapy_info += "，获取新喜欢完成。"
                 douyin_logger.info(scrapy_info)
                 break

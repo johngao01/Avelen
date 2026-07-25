@@ -303,7 +303,7 @@ class WeiboScrapy(BasePlatform):
                     weibo = WeiboPost(self.scraping, weibo_info)
                     self.post.append(weibo)
                 scrapy_info = f'{self.username} 获取第{page}页完成，有{len(mblogs)}个微博, 共获取 {len(self.post)} 个微博'
-                if len(self.post) >= SCRAPY_FAVORITE_LIMIT:
+                if len(self.post) >= SCRAPY_FAVORITE_LIMIT['weibo']:
                     scrapy_info += ",获取新喜欢完成。"
                     weibo_logger.info(scrapy_info)
                     break

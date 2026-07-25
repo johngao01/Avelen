@@ -515,7 +515,7 @@ python main.py -l -s valid:desc
 - 会保存微博原始 JSON 到本地
 - 过滤掉转发微博、纯文字微博、V+ 微博
 - 普通用户会以 `latest_time` 做增量过滤
-- `favorite` 模式会抓取一定数量上限，默认上限来自 `SCRAPY_FAVORITE_LIMIT`
+- `favorite` 模式会抓取一定数量上限，抖音和微博分别读取 `platforms.toml` 中对应平台的 `favorite_limit`
 
 ### 9.2 抖音 `platforms/douyin.py`
 
