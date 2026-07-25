@@ -226,3 +226,4 @@ logs
 .vscode
 .idea
 ops/me.session
+/config/platforms.toml
