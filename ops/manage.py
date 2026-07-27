@@ -119,6 +119,8 @@ def extract_profile_user_id(platform: str, parsed_url) -> str | None:
     if platform == 'bilibili':
         if host == 'space.bilibili.com' and len(segments) == 1 and segments[0].isdigit():
             return segments[0]
+        if host == 'm.bilibili.com' and len(segments) == 2 and segments[1].isdigit():
+            return segments[1]
         return None
     if platform == 'douyin':
         if host.endswith('douyin.com'):
@@ -551,6 +553,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     seen_urls = set()
     for raw_url in re.findall(url_pattern, message_text):
         clean_url = raw_url.rstrip(").,]>\"'")
+        if any(domain in clean_url for domain in short_domains) or '哔哩哔哩' in clean_url:
+            clean_url = resolve_redirect_url(clean_url)
+            message_text = message_text.replace(raw_url, clean_url)
         if clean_url not in seen_urls:
             seen_urls.add(clean_url)
             urls.append(clean_url)
@@ -559,9 +564,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     seen_post_urls = set()
     for _, post_url in extract_candidate_urls(message_text):
         resolved_url = post_url
-        if any(domain in post_url for domain in short_domains) or '哔哩哔哩' in post_url:
-            resolved_url = resolve_redirect_url(post_url)
-
+        
         parsed_resolved = urlparse(resolved_url)
         host_resolved = parsed_resolved.hostname or ''
         platform_resolved = parse_url_platform(host_resolved)
