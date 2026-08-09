@@ -315,23 +315,31 @@ def resolve_instagram_post(normalized_url: str, post_id: str) -> ResolveResult:
         raise ValueError("未找到完整的 Instagram 内嵌 JSON 对象")
 
     try:
-        cookie_header = read_text_file(INSTAGRAM_COOKIE_PATHS[0]).strip()
-        headers = build_browser_headers(referer=f"{INSTAGRAM_HOME_URL}/", cookie=cookie_header,
-                                        accept="text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                                        extra={"Cache-Control": "no-cache", "Pragma": "no-cache",
-                                               "Upgrade-Insecure-Requests": "1", "sec-fetch-dest": "document",
-                                               "sec-fetch-mode": "navigate", "sec-fetch-site": "none",
-                                               "sec-fetch-user": "?1"})
-        normalized_url = normalized_url.replace("/reel/", '/p/')
-        response = requests.get(normalized_url, headers=headers, timeout=30)
-        response.raise_for_status()
-        key_index = response.text.find('"xdt_api__v1__media__shortcode__web_info"')
-        if key_index < 0:
+        result = ''
+        key_index = -1
+        for cookies in INSTAGRAM_COOKIE_PATHS:
+            cookie_header = read_text_file(cookies)
+            headers = build_browser_headers(referer=f"{INSTAGRAM_HOME_URL}/", cookie=cookie_header,
+                                            accept="text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                                            extra={"Cache-Control": "no-cache", "Pragma": "no-cache",
+                                                   "Upgrade-Insecure-Requests": "1", "sec-fetch-dest": "document",
+                                                   "sec-fetch-mode": "navigate", "sec-fetch-site": "none",
+                                                   "sec-fetch-user": "?1"})
+            normalized_url = normalized_url.replace("/reel/", '/p/')
+            response = requests.get(normalized_url, headers=headers, timeout=30)
+            response.raise_for_status()
+            result = response.text
+            key_index = result.find('"xdt_api__v1__media__shortcode__web_info"')
+            if key_index < 0:
+                continue
+            else:
+                break
+        if not result or key_index < 0:
             raise ValueError("Instagram 页面中未找到 shortcode web info")
-        begin = response.text.find("{", key_index)
+        begin = result.find("{", key_index)
         if begin < 0:
             raise ValueError("Instagram 页面中未找到内嵌 JSON 起点")
-        data = json.loads(_extract_instagram_json_object(response.text, begin))
+        data = json.loads(_extract_instagram_json_object(result, begin))
         items = data.get("items") or []
         if not items:
             raise ValueError("Instagram 页面中未找到 items")
