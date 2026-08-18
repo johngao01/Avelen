@@ -29,7 +29,7 @@ from datetime import datetime
 
 DOUYIN_HOME_URL = f"{DOUYIN_CONFIG['base_url']}/"
 DOUYIN_POST_API_URL = f"{DOUYIN_CONFIG['base_url']}/aweme/v1/web/aweme/post/"
-DOUYIN_FAVORITE_API_URL = f"{DOUYIN_CONFIG['base_url']}/aweme/v1/web/aweme/favorite/"
+DOUYIN_FAVORITE_API_URL = f"https://www-hj.douyin.com/aweme/v1/web/aweme/favorite"
 DOUYIN_DETAIL_API_URL = f"{DOUYIN_CONFIG['base_url']}/aweme/v1/web/aweme/detail/?"
 VIDEO_URL = DOUYIN_CONFIG['video_url']
 NOTE_URL = DOUYIN_CONFIG['note_url']
@@ -1174,7 +1174,6 @@ class DouyinScrapy(BasePlatform):
                 aweme_create_time = datetime.strptime(aweme['create_time_str'], "%Y-%m-%d %H:%M:%S")
             else:
                 aweme_create_time = datetime.now()
-     
 
             aweme['username'] = self.username
             aweme['user_sec_uid'] = self.user_sec_uid
